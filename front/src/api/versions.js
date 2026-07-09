@@ -1,4 +1,4 @@
-import request from './request'
+import request from './index'
 
 // 获取版本列表
 export function getVersionList(params) {

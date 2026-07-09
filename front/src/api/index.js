@@ -78,3 +78,29 @@ service.interceptors.response.use(
 // 导出统一的 API 方法
 export default service
 export { service }
+
+// 创建 Gitea API 实例（直接调用 Gitea REST API）
+const giteaService = axios.create({
+  baseURL: import.meta.env.VITE_GITEA_URL || 'http://123.60.219.19:3000/api/v1',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Gitea 请求拦截器
+giteaService.interceptors.request.use(
+  config => {
+    const token = Cookies.get('gitea_token')
+    if (token) {
+      config.headers['Authorization'] = `token ${token}`
+    }
+    return config
+  },
+  error => Promise.reject(error)
+)
+
+export { giteaService }
+
+// BFF Service 别名（与默认导出相同的实例）
+export const bffService = service
