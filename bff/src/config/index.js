@@ -47,7 +47,8 @@ const config = {
   gitea: {
     url: process.env.GITEA_URL || 'http://123.60.219.19:3000',
     apiVersion: process.env.GITEA_API_VERSION || 'v1',
-    apiPrefix: process.env.GITEA_API_PREFIX || '/api/v1'
+    apiPrefix: process.env.GITEA_API_PREFIX || '/api/v1',
+    token: process.env.GITEA_ADMIN_TOKEN || ''
   },
   
   // 审计配置

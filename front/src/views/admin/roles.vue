@@ -5,8 +5,6 @@
     </div>
 
     <el-table :data="roleList" stripe border>
-      <el-table-column prop="role_name" label="角色名称" width="150" />
-      <el-table-column prop="role_code" label="角色代码" width="150" />
       <el-table-column prop="description" label="描述" show-overflow-tooltip />
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
@@ -36,7 +34,6 @@
 
     <el-dialog v-model="showPermissionDialog" title="角色权限" width="600px">
       <div v-if="currentRole">
-        <h4>{{ currentRole.role_name }}</h4>
         <p class="role-desc">{{ currentRole.description }}</p>
         <el-divider />
         <div class="permission-list">

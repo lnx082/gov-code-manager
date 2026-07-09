@@ -147,10 +147,44 @@ export function createDeprecation(data) {
   return bffService.post('/version-deprecations', data)
 }
 
+// ============ 用户管理 ============
+
+export function getUserList(params) {
+  return bffService.get('/users', { params })
+}
+
+export function getUserDetail(userId) {
+  return bffService.get(`/users/${userId}`)
+}
+
+export function createUser(data) {
+  return bffService.post('/users', data)
+}
+
+export function updateUser(userId, data) {
+  return bffService.put(`/users/${userId}`, data)
+}
+
+export function deleteUser(userId) {
+  return bffService.delete(`/users/${userId}`)
+}
+
+export function lockUser(userId, locked) {
+  return bffService.post(`/users/${userId}/lock`, { locked })
+}
+
+export function resetUserPassword(userId, data) {
+  return bffService.post(`/users/${userId}/reset-password`, data)
+}
+
+export function getCurrentUser() {
+  return bffService.get('/users/me')
+}
+
 // ============ 角色管理 ============
 
-export function getRoles() {
-  return bffService.get('/roles')
+export function getRoles(params) {
+  return bffService.get('/roles', { params })
 }
 
 export function getRoleDetail(roleId) {

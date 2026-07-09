@@ -40,7 +40,7 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { repoOwner, repoName, tagName, archiveType, reason } = req.body;
     
-    const [archiveId] = await db('archives').insert({
+    await db('archives').insert({
       repo_owner: repoOwner,
       repo_name: repoName,
       tag_name: tagName,
@@ -50,8 +50,8 @@ router.post('/', authenticate, async (req, res, next) => {
       archived_by: req.user.userId,
       created_at: new Date(),
     });
-    
-    res.json({ code: 200, message: '归档成功', data: { archiveId } });
+
+    res.json({ code: 200, message: '归档成功' });
   } catch (error) {
     next(error);
   }

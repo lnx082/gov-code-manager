@@ -35,7 +35,7 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { repoOwner, repoName, tagName, reason, deprecationType } = req.body;
     
-    const [id] = await db('version_deprecations').insert({
+    await db('version_deprecations').insert({
       repo_owner: repoOwner,
       repo_name: repoName,
       tag_name: tagName,
@@ -45,8 +45,8 @@ router.post('/', authenticate, async (req, res, next) => {
       deprecated_by: req.user.userId,
       created_at: new Date(),
     });
-    
-    res.json({ code: 200, message: '版本已废弃', data: { id } });
+
+    res.json({ code: 200, message: '版本已废弃' });
   } catch (error) {
     next(error);
   }

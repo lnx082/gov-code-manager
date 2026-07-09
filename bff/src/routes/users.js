@@ -1,28 +1,33 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
+import bcrypt from 'bcryptjs';
+import config from '../config/index.js';
 
 const router = Router();
 
 // 获取用户列表
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 20, username, role } = req.query;
+    const { page = 1, pageSize = 20, username, role, deptId } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
-    
+
     let query = db('user_profiles')
       .select('user_profiles.*', 'roles.name as role_name', 'departments.name as department_name')
       .leftJoin('roles', 'user_profiles.role_code', 'roles.code')
       .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id');
-    
+
     if (username) {
       query = query.where('gitea_username', 'like', `%${username}%`);
     }
     if (role) {
       query = query.where('role_code', role);
     }
-    
-    // 单独统计总数（避免 LEFT JOIN 和 count(*) 的 GROUP BY 冲突）
+    if (deptId) {
+      query = query.where('user_profiles.department_id', parseInt(deptId));
+    }
+
+    // 单独统计总数
     let countQuery = db('user_profiles');
     if (username) {
       countQuery = countQuery.where('gitea_username', 'like', `%${username}%`);
@@ -30,9 +35,12 @@ router.get('/', authenticate, async (req, res, next) => {
     if (role) {
       countQuery = countQuery.where('role_code', role);
     }
+    if (deptId) {
+      countQuery = countQuery.where('department_id', parseInt(deptId));
+    }
     const total = await countQuery.count('* as count').first();
     
-    const users = await query.orderBy('user_profiles.created_at', 'desc')
+    const users = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize))
       .offset(offset);
     
@@ -57,7 +65,6 @@ router.get('/me', authenticate, async (req, res, next) => {
       .select('user_profiles.*', 'departments.name as department_name')
       .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
       .where('user_id', req.user.userId)
-      .first();
     
     if (!profile) {
       return res.status(404).json({ code: 404, message: '用户不存在' });
@@ -72,17 +79,110 @@ router.get('/me', authenticate, async (req, res, next) => {
   }
 });
 
+// 创建用户（管理员）
+router.post('/', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const { username, email, password, nickname, roleCode, departmentId, secretLevel, sendNotify } = req.body;
+    
+    // 验证必填字段
+    if (!username) {
+      return res.status(400).json({ code: 400, message: '用户名不能为空' });
+    }
+    if (!password) {
+      return res.status(400).json({ code: 400, message: '密码不能为空' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ code: 400, message: '密码长度不能少于6位' });
+    }
+    
+    // 检查用户名是否已存在
+    const existingUser = await db('user_profiles')
+      .where('gitea_username', username)
+      .first();
+    
+    if (existingUser) {
+      return res.status(400).json({ code: 400, message: '用户名已存在' });
+    }
+    
+    // 生成邮箱（如果未提供）
+    const userEmail = email || `${username}@gov.local`;
+    
+    // 哈希密码
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // 获取 Gitea 的用户 ID（通过 Gitea API）
+    let giteaUserId = null;
+    const giteaAdminToken = config.gitea?.token;
+    if (giteaAdminToken) {
+      try {
+        const giteaUrl = config.gitea.url;
+        // 调用 Gitea API 创建用户
+        const giteaRes = await fetch(`${giteaUrl}/api/v1/admin/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${giteaAdminToken}`
+          },
+          body: JSON.stringify({
+            login_name: username,
+            email: userEmail,
+            password: password,
+            send_notify: sendNotify !== false,
+            must_change_password: false
+          })
+        });
+        
+        if (giteaRes.ok) {
+          const giteaUser = await giteaRes.json();
+          giteaUserId = giteaUser.id;
+        }
+      } catch (giteaError) {
+        console.warn('Gitea 用户创建失败，将仅创建本地记录:', giteaError.message);
+      }
+    }
+    
+    // 在本地数据库创建用户记录
+    // 若 Gitea 未提供用户 ID，使用负时间戳作为本地标识（避免 NULL 违反 NOT NULL）
+    const localUserId = giteaUserId || -(Date.now() % 2147483647);
+    await db('user_profiles').insert({
+      user_id: localUserId,
+      gitea_username: username,
+      nickname: nickname || username,
+      password_hash: hashedPassword,
+      email: userEmail,
+      department_id: departmentId || null,
+      role_code: roleCode || 'user',
+      secret_level: secretLevel || 'internal',
+      permissions: JSON.stringify([]),
+      is_active: true,
+      account_locked: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    
+    res.json({
+      code: 200,
+      message: '用户创建成功',
+      data: { userId: localUserId }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 更新用户
 router.put('/:id', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { nickname, role_code, department_id, is_active } = req.body;
+    const { nickname, role_code, department_id, is_active, email, secret_level } = req.body;
 
     const updateData = { updated_at: new Date() };
     if (nickname !== undefined) updateData.nickname = nickname;
     if (role_code !== undefined) updateData.role_code = role_code;
     if (department_id !== undefined) updateData.department_id = department_id;
     if (is_active !== undefined) updateData.is_active = is_active;
+    if (email !== undefined) updateData.email = email;
+    if (secret_level !== undefined) updateData.secret_level = secret_level;
 
     await db('user_profiles')
       .where('user_id', id)
@@ -97,8 +197,38 @@ router.put('/:id', authenticate, async (req, res, next) => {
   }
 });
 
+// 重置用户密码（管理员）
+router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '新密码长度不能少于6位' 
+      });
+    }
+    
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db('user_profiles')
+      .where('user_id', id)
+      .update({
+        password_hash: hashedPassword,
+        updated_at: new Date(),
+      });
+    
+    res.json({
+      code: 200,
+      message: '密码重置成功',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 锁定/解锁用户
-router.post('/:id/lock', authenticate, async (req, res, next) => {
+router.post('/:id/lock', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { locked } = req.body;
@@ -109,6 +239,7 @@ router.post('/:id/lock', authenticate, async (req, res, next) => {
       .where('user_id', id)
       .update({
         locked_until: lockedUntil,
+        account_locked: locked ? true : false,
         updated_at: new Date(),
       });
 
@@ -121,10 +252,19 @@ router.post('/:id/lock', authenticate, async (req, res, next) => {
   }
 });
 
-// 删除用户
-router.delete('/:id', authenticate, async (req, res, next) => {
+// 删除用户（管理员）
+router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // 检查是否是删除自己
+    if (parseInt(id) === req.user.userId) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '不能删除当前登录用户' 
+      });
+    }
+    
     await db('user_profiles').where('user_id', id).delete();
     
     res.json({
@@ -136,18 +276,36 @@ router.delete('/:id', authenticate, async (req, res, next) => {
   }
 });
 
-// 修改密码
+// 修改密码（本人）
 router.post('/change-password', authenticate, async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
+    
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '原密码和新密码不能为空' 
+      });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '新密码长度不能少于6位' 
+      });
+    }
     
     // 验证旧密码
     const profile = await db('user_profiles')
       .where('user_id', req.user.userId)
       .first();
     
+    if (!profile) {
+      return res.status(404).json({ code: 404, message: '用户不存在' });
+    }
+    
+    // 如果有保存密码，验证旧密码
     if (profile.password_hash) {
-      const bcrypt = await import('bcryptjs');
       const isValid = await bcrypt.compare(oldPassword, profile.password_hash);
       if (!isValid) {
         return res.status(400).json({

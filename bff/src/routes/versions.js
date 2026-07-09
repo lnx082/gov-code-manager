@@ -80,7 +80,7 @@ router.post('/', authenticate, async (req, res, next) => {
     const { repoOwner, repoName, tagName, message, targetBranch } = req.body;
     
     // 创建审批申请
-    const [approvalId] = await db('approvals').insert({
+    await db('approvals').insert({
       operation_type: 'version',
       title: `创建版本 ${tagName}`,
       description: message || '',
@@ -95,11 +95,10 @@ router.post('/', authenticate, async (req, res, next) => {
       created_at: new Date(),
       updated_at: new Date(),
     });
-    
+
     res.json({
       code: 200,
       message: '版本创建申请已提交，等待审批',
-      data: { approvalId },
     });
   } catch (error) {
     next(error);
@@ -113,7 +112,7 @@ router.post('/:tagName/baseline', authenticate, async (req, res, next) => {
     const { repoOwner, repoName, description } = req.body;
     
     // 创建基线记录
-    const [baselineId] = await db('baselines').insert({
+    await db('baselines').insert({
       name: `Baseline-${tagName}`,
       version: tagName,
       repo_owner: repoOwner,
@@ -128,11 +127,10 @@ router.post('/:tagName/baseline', authenticate, async (req, res, next) => {
       updated_at: new Date(),
       locked_at: new Date(),
     });
-    
+
     res.json({
       code: 200,
       message: '已标记为基线版本',
-      data: { baselineId },
     });
   } catch (error) {
     next(error);

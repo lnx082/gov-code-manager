@@ -61,3 +61,23 @@ export function requirePermission(...permissions) {
     next();
   };
 }
+
+// 管理员权限检查中间件
+export function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      code: 401,
+      message: '未登录',
+    });
+  }
+  
+  // 检查是否是管理员
+  if (req.user.roleCode === 'admin' || req.user.permissions?.includes('*')) {
+    return next();
+  }
+  
+  return res.status(403).json({
+    code: 403,
+    message: '需要管理员权限',
+  });
+}

@@ -25,6 +25,96 @@ let db = null;
 let dbInitialized = false;
 
 /**
+ * 检查并修复数据库表结构
+ */
+async function fixDatabaseSchema(database) {
+  console.log('🔍 检查数据库表结构...');
+
+  // 按表检查缺失的列：每张表可能缺失的列清单
+  const tableColumns = {
+    user_profiles: [
+      { name: 'account_locked', def: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'failed_login_attempts', def: 'INTEGER DEFAULT 0' },
+      { name: 'last_login_ip', def: 'VARCHAR(50)' },
+      { name: 'last_login_time', def: 'TIMESTAMP' },
+      { name: 'locked_until', def: 'TIMESTAMP' },
+      { name: 'email', def: 'VARCHAR(255)' },
+      { name: 'password_hash', def: 'VARCHAR(255)' },
+      { name: 'secret_level', def: 'VARCHAR(20) DEFAULT \'internal\'' },
+      { name: 'permissions', def: 'TEXT' },
+    ],
+    roles: [
+      { name: 'sort_order', def: 'INTEGER DEFAULT 0' },
+      { name: 'is_system', def: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'is_active', def: 'BOOLEAN DEFAULT TRUE' },
+    ],
+    departments: [
+      { name: 'sort_order', def: 'INTEGER DEFAULT 0' },
+      { name: 'parent_id', def: 'INTEGER' },
+      { name: 'leader', def: 'VARCHAR(100)' },
+      { name: 'description', def: 'TEXT' },
+      { name: 'is_active', def: 'BOOLEAN DEFAULT TRUE' },
+    ],
+  };
+
+  for (const [tableName, columns] of Object.entries(tableColumns)) {
+    for (const col of columns) {
+      try {
+        const result = await database.raw(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_name = '${tableName}' AND column_name = '${col.name}'
+        `);
+        if (result.rows.length === 0) {
+          console.log(`  ➕ 添加列: ${tableName}.${col.name}`);
+          await database.raw(`ALTER TABLE ${tableName} ADD COLUMN ${col.name} ${col.def}`);
+          console.log(`  ✅ ${tableName}.${col.name} 添加成功`);
+        }
+      } catch (err) {
+        console.warn(`  ⚠️  添加列 ${tableName}.${col.name} 失败: ${err.message}`);
+      }
+    }
+  }
+  
+  // 确保 roles 表有数据
+  try {
+    const rolesCount = await database('roles').count('* as count').first();
+    if (parseInt(rolesCount.count) === 0) {
+      console.log('  📥 插入默认角色...');
+      await database('roles').insert([
+        { role_code: 'admin', role_name: '系统管理员', description: '系统管理员，拥有全部权限', permissions: '["*"]', is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
+        { role_code: 'user', role_name: '普通用户', description: '普通用户，基础权限', permissions: '["repo:view", "version:view"]', is_system: true, sort_order: 5 }
+      ]);
+      console.log('  ✅ 默认角色插入成功');
+    }
+  } catch (err) {
+    console.warn(`  ⚠️  插入默认角色失败: ${err.message}`);
+  }
+  
+  // 确保 departments 表有数据
+  try {
+    const deptsCount = await database('departments').count('* as count').first();
+    if (parseInt(deptsCount.count) === 0) {
+      console.log('  📥 插入默认部门...');
+      await database('departments').insert([
+        { name: '技术部', code: 'TECH', description: '技术研发部门', sort_order: 1 },
+        { name: '运维部', code: 'OPS', description: '运维保障部门', sort_order: 2 },
+        { name: '安全部', code: 'SEC', description: '安全审计部门', sort_order: 3 },
+        { name: '综合部', code: 'ADMIN', description: '综合管理部门', sort_order: 4 }
+      ]);
+      console.log('  ✅ 默认部门插入成功');
+    }
+  } catch (err) {
+    console.warn(`  ⚠️  插入默认部门失败: ${err.message}`);
+  }
+  
+  console.log('✅ 数据库表结构检查完成');
+}
+
+/**
  * 初始化数据库连接
  */
 export async function initDatabase() {
@@ -88,7 +178,10 @@ export async function initDatabase() {
   } catch (error) {
     console.error('❌ 数据库连接失败:', error.message);
     console.log('⚠️  将使用模拟数据模式运行');
-    return createMockDb();
+    // ★ 必须赋值给全局 db，否则 getDb() 仍返回断连的 knox 实例导致 500
+    db = createMockDb();
+    dbInitialized = true;
+    return db;
   }
 }
 
@@ -157,6 +250,9 @@ export async function runMigrations() {
   }
 
   console.log('🔄 开始执行数据库迁移...');
+
+  // 修复缺失的列和种子数据
+  await fixDatabaseSchema(database);
   
   try {
     // 创建基础表
@@ -485,67 +581,338 @@ export async function seedDefaultData() {
 
 /**
  * 创建模拟数据库（用于开发/演示）
+ * 必须同时支持：
+ *   mockDb('table_name')        — 通过 default export 调用
+ *   mockDb.table('table_name')  — 通过 knex 风格调用
+ *   mockDb.raw(sql)             — 原生 SQL
+ *   以及 .select/.where/.orderBy/.leftJoin/.limit/.offset/.first/.count 等链式方法
  */
 function createMockDb() {
   console.log('⚠️  启用模拟数据库模式');
-  
-  const mockData = {
-    users: [],
+
+  const mockTables = {
+    user_profiles: [
+      { profile_id: 1, user_id: 1, gitea_username: 'admin', nickname: '管理员', role_code: 'admin', department_id: 1, secret_level: 'internal', is_active: true, account_locked: false, email: 'admin@gov.local', created_at: new Date(), updated_at: new Date() },
+    ],
     roles: [
-      { role_id: 1, role_code: 'admin', role_name: '系统管理员', permissions: JSON.stringify(['*']) },
-      { role_id: 2, role_code: 'project_manager', role_name: '项目管理员', permissions: JSON.stringify(['repo:*', 'branch:*']) },
-      { role_id: 3, role_code: 'developer', role_name: '开发人员', permissions: JSON.stringify(['repo:view', 'branch:create']) }
+      { role_id: 1, role_code: 'admin', role_name: '系统管理员', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
+      { role_id: 2, role_code: 'project_manager', role_name: '项目管理员', permissions: JSON.stringify(['repo:*', 'branch:*']), is_system: true, sort_order: 2 },
+      { role_id: 3, role_code: 'developer', role_name: '开发人员', permissions: JSON.stringify(['repo:view', 'branch:create']), is_system: true, sort_order: 3 },
+      { role_id: 4, role_code: 'auditor', role_name: '审计人员', permissions: JSON.stringify(['audit:*']), is_system: true, sort_order: 4 },
+      { role_id: 5, role_code: 'user', role_name: '普通用户', permissions: JSON.stringify(['repo:view', 'version:view']), is_system: true, sort_order: 5 },
     ],
     departments: [
-      { dept_id: 1, name: '技术部', code: 'TECH' },
-      { dept_id: 2, name: '运维部', code: 'OPS' },
-      { dept_id: 3, name: '安全部', code: 'SEC' }
+      { dept_id: 1, name: '技术部', code: 'TECH', sort_order: 1 },
+      { dept_id: 2, name: '运维部', code: 'OPS', sort_order: 2 },
+      { dept_id: 3, name: '安全部', code: 'SEC', sort_order: 3 },
+      { dept_id: 4, name: '综合部', code: 'ADMIN', sort_order: 4 },
     ],
     approvals: [],
-    audit_logs: []
+    audit_logs: [],
+    baselines: [],
+    archives: [],
+    notifications: [],
+    risk_warnings: [],
+    version_rules: [],
+    approval_flows: [],
+    system_config: [],
   };
 
-  return {
-    select: () => ({
-      where: (conditions) => ({
-        first: () => mockData.approvals?.[0] || null,
-        orderBy: () => ({
-          limit: () => ({
-            offset: () => ({
-              then: (resolve) => resolve({ list: [], total: 0 })
-            })
-          })
-        }),
-        then: (resolve) => resolve({ list: [], total: 0 })
-      }),
-      then: (resolve) => resolve({ list: [], total: 0 })
-    }),
-    where: (table) => ({
-      where: (conditions) => ({
-        first: () => mockData[table]?.[0] || null,
-        orderBy: () => ({
-          limit: () => ({
-            offset: () => ({
-              then: (resolve) => resolve({ list: [], total: 0 })
-            })
-          })
-        }),
-        then: (resolve) => resolve(mockData[table] || [])
-      }),
-      first: () => mockData[table]?.[0] || null,
-      insert: (data) => Promise.resolve([1]),
-      update: (data) => Promise.resolve(1),
-      delete: () => Promise.resolve(1),
-      then: (resolve) => resolve(mockData[table] || [])
-    }),
-    count: (field) => ({
-      first: () => ({ count: '0' }),
-      then: (resolve) => resolve({ count: '0' })
-    }),
-    insert: (data) => Promise.resolve([1]),
-    update: (data) => Promise.resolve(1),
-    delete: () => Promise.resolve(1),
-    raw: (sql) => Promise.resolve({ rows: [{ '?column?': 1 }] }),
-    destroy: () => Promise.resolve()
+  // 创建一个可调用的函数对象：mockDb('table') 返回 QueryBuilder
+  function getTableBuilder(tableName) {
+    const data = mockTables[tableName] || [];
+    const builder = {
+      _data: [...data],
+      _tableName: tableName,
+      _whereConditions: [],
+      _orderByCol: null,
+      _orderByDir: 'asc',
+      _limitVal: null,
+      _offsetVal: null,
+      _selectCols: [],
+      _joins: [],   // [{ table, col1, col2, joinRows }]
+      _countField: null,
+
+      clone() {
+        const b = Object.create(builder);
+        b._data = [...this._data];
+        b._whereConditions = [...this._whereConditions];
+        b._orderByCol = this._orderByCol;
+        b._orderByDir = this._orderByDir;
+        b._limitVal = this._limitVal;
+        b._offsetVal = this._offsetVal;
+        b._selectCols = [...this._selectCols];
+        b._joins = this._joins.map(j => ({ ...j, joinRows: [...j.joinRows] }));
+        b._countField = this._countField;
+        b._tableName = this._tableName;
+        return b;
+      },
+
+      // 应用过滤条件
+      applyFilters(dataArr) {
+        let result = [...dataArr];
+        for (const cond of this._whereConditions) {
+          if (cond.raw) {
+            // 简单支持 column = value
+            result = result.filter(r => r[cond.col] == cond.val);
+          } else if (cond.like) {
+            const pattern = cond.val.replace(/%/g, '');
+            result = result.filter(r => r[cond.col] && String(r[cond.col]).includes(pattern));
+          }
+        }
+        return result;
+      },
+
+      // ======== 链式方法 ========
+
+      select(...cols) {
+        const b = this.clone();
+        b._selectCols = cols.flat();
+        return b;
+      },
+
+      where(col, val) {
+        const b = this.clone();
+        if (typeof col === 'object') {
+          for (const [k, v] of Object.entries(col)) {
+            b._whereConditions.push({ raw: true, col: k, val: v });
+          }
+        } else if (val === undefined) {
+          // 只有第一个参数，类似 where({col: val}) 的单参数形式
+          // 实际上这是 knex 的高级用法，这里简化处理
+        } else {
+          b._whereConditions.push({ raw: true, col, val });
+        }
+        return b;
+      },
+
+      whereIn(col, vals) {
+        const b = this.clone();
+        b._whereConditions.push({ raw: true, col, val: vals, op: 'in' });
+        return b;
+      },
+
+      leftJoin(table, col1, col2) {
+        const b = this.clone();
+        const joinTable = mockTables[table] || [];
+        b._joins.push({ table, col1, col2, joinRows: [...joinTable] });
+        return b;
+      },
+
+      orderBy(col, dir = 'asc') {
+        const b = this.clone();
+        b._orderByCol = col;
+        b._orderByDir = dir;
+        return b;
+      },
+
+      limit(val) {
+        const b = this.clone();
+        b._limitVal = parseInt(val);
+        return b;
+      },
+
+      offset(val) {
+        const b = this.clone();
+        b._offsetVal = parseInt(val);
+        return b;
+      },
+
+      count(col = '*') {
+        const b = this.clone();
+        b._countField = col;
+        // 返回一个同时支持 .first() 和 await 的 countBuilder
+        const countBuilder = {
+          ...b,
+          first() {
+            const filtered = countBuilder.applyFilters(mockTables[countBuilder._tableName] || []);
+            const cnt = col === '*' ? filtered.length : filtered.filter(r => r[col] !== undefined && r[col] !== null).length;
+            return makeThenable(() => ({ count: String(cnt) }), { count: '0' });
+          },
+          then(resolve, reject) {
+            return countBuilder.first().then(resolve, reject);
+          },
+          catch(reject) {
+            return countBuilder.first().catch(reject);
+          },
+        };
+        return countBuilder;
+      },
+
+      first() {
+        const b = this.clone();
+        return makeThenable(() => {
+          const filtered = b.applyFilters(mockTables[b._tableName] || []);
+          const row = filtered.length > 0 ? { ...filtered[0] } : null;
+          // 多个 LEFT JOIN 扩充
+          if (row) {
+            for (const join of b._joins) {
+              const joinRow = join.joinRows.find(r => {
+                const col1Val = this.resolveCol(join.col1, row);
+                const col2Val = this.resolveCol(join.col2, r);
+                return col1Val == col2Val;
+              });
+              if (joinRow) {
+                for (const [k, v] of Object.entries(joinRow)) {
+                  if (row[k] === undefined) row[k] = v;
+                }
+              }
+            }
+          }
+          return row;
+        }, null);
+      },
+
+      resolveCol(col, row) {
+        if (col.includes('.')) {
+          return row[col.split('.')[1]] || row[col];
+        }
+        return row[col];
+      },
+
+      insert(data) {
+        const arr = Array.isArray(data) ? data : [data];
+        for (const item of arr) {
+          const table = mockTables[this._tableName] || [];
+          const newId = table.length > 0 ? Math.max(...table.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
+          const newRow = { ...item };
+          // 设置主键
+          const pk = this._tableName === 'user_profiles' ? 'profile_id' :
+                     this._tableName === 'roles' ? 'role_id' :
+                     this._tableName === 'departments' ? 'dept_id' : 'id';
+          newRow[pk] = newRow[pk] || newId;
+          if (!newRow.created_at) newRow.created_at = new Date();
+          if (!newRow.updated_at) newRow.updated_at = new Date();
+          table.push(newRow);
+        }
+        return makeThenable(() => [newId || 1], [1]);
+      },
+
+      update(data) {
+        const b = this.clone();
+        return makeThenable(() => {
+          const filtered = b.applyFilters(mockTables[b._tableName] || []);
+          for (const row of filtered) {
+            Object.assign(row, data);
+            row.updated_at = new Date();
+          }
+          return filtered.length;
+        }, 1);
+      },
+
+      delete() {
+        const b = this.clone();
+        return makeThenable(() => {
+          const filtered = b.applyFilters(mockTables[b._tableName] || []);
+          const table = mockTables[b._tableName];
+          if (table) {
+            for (const f of filtered) {
+              const idx = table.indexOf(f);
+              if (idx >= 0) table.splice(idx, 1);
+            }
+          }
+          return filtered.length;
+        }, 1);
+      },
+
+      // Promise 化：执行链式操作
+      then(resolve, reject) {
+        try {
+          let result = this.applyFilters(mockTables[this._tableName] || []);
+
+          // 多个 LEFT JOIN 扩充
+          for (const join of this._joins) {
+            result = result.map(row => {
+              const r = { ...row };
+              const joinRow = join.joinRows.find(jr => {
+                const col1Val = this.resolveCol(join.col1, r);
+                const col2Val = this.resolveCol(join.col2, jr);
+                return col1Val == col2Val;
+              });
+              if (joinRow) {
+                for (const [k, v] of Object.entries(joinRow)) {
+                  if (r[k] === undefined) r[k] = v;
+                }
+              }
+              return r;
+            });
+          }
+
+          // ORDER BY
+          if (this._orderByCol) {
+            result.sort((a, b) => {
+              const av = a[this._orderByCol] || '';
+              const bv = b[this._orderByCol] || '';
+              if (this._orderByDir === 'desc') return av > bv ? -1 : av < bv ? 1 : 0;
+              return av > bv ? 1 : av < bv ? -1 : 0;
+            });
+          }
+
+          // LIMIT / OFFSET
+          if (this._offsetVal) result = result.slice(this._offsetVal);
+          if (this._limitVal) result = result.slice(0, this._limitVal);
+
+          resolve(result);
+        } catch (e) {
+          reject(e);
+        }
+      },
+
+      // catch 支持
+      catch(reject) {
+        return this.then(null, reject);
+      },
+    };
+
+    return builder;
+  }
+
+  // 辅助函数：创建一个 thenable 对象（用于 first/count/insert/update/delete）
+  function makeThenable(fn, defaultVal) {
+    return {
+      then(resolve, reject) {
+        if (!resolve) return this;
+        try {
+          resolve(fn());
+        } catch (e) {
+          if (reject) reject(e);
+        }
+      },
+      catch(reject) {
+        return this.then(null, reject);
+      },
+    };
+  }
+
+  // 核心 mock 函数：可调用，也可作为对象访问方法
+  function mockDb(tableName) {
+    const builder = getTableBuilder(tableName);
+    return builder;
+  }
+
+  // mockDb.table('name') 兼容 knex 风格
+  mockDb.table = function (tableName) {
+    return getTableBuilder(tableName);
   };
+
+  // raw SQL 支持
+  mockDb.raw = function (sql) {
+    return Promise.resolve({ rows: [{ '?column?': 1 }] });
+  };
+
+  // 顶层快捷方法（用于直接调用 mockDb.select(...) 等）
+  mockDb.select = function (...cols) {
+    const b = getTableBuilder('__virtual__');
+    b._selectCols = cols.flat();
+    return b;
+  };
+  mockDb.where = function (col, val) { return getTableBuilder('__virtual__').where(col, val); };
+  mockDb.count = function (col) { return getTableBuilder('__virtual__').count(col); };
+  mockDb.insert = function (data) { return getTableBuilder('__virtual__').insert(data); };
+  mockDb.update = function (data) { return getTableBuilder('__virtual__').update(data); };
+  mockDb.delete = function () { return getTableBuilder('__virtual__').delete(); };
+  mockDb.destroy = function () { return Promise.resolve(); };
+  mockDb.client = {};
+
+  return mockDb;
 }

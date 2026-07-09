@@ -59,7 +59,7 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { name, version, repoOwner, repoName, tagName, description } = req.body;
     
-    const [baselineId] = await db('baselines').insert({
+    await db('baselines').insert({
       name,
       version,
       repo_owner: repoOwner,
@@ -74,11 +74,10 @@ router.post('/', authenticate, async (req, res, next) => {
       updated_at: new Date(),
       locked_at: new Date(),
     });
-    
+
     res.json({
       code: 200,
       message: '基线创建成功',
-      data: { baselineId },
     });
   } catch (error) {
     next(error);

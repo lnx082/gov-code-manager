@@ -117,7 +117,7 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel } = req.body;
     
-    const [approvalId] = await db('approvals').insert({
+    await db('approvals').insert({
       operation_type: operationType,
       title,
       description,
@@ -134,11 +134,10 @@ router.post('/', authenticate, async (req, res, next) => {
       created_at: new Date(),
       updated_at: new Date(),
     });
-    
+
     res.json({
       code: 200,
       message: '审批申请已提交',
-      data: { approvalId },
     });
   } catch (error) {
     next(error);

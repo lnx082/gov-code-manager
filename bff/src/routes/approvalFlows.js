@@ -110,7 +110,7 @@ router.post('/', async (req, res, next) => {
       await db('approval_flows').where('is_default', 1).update({ is_default: 0 });
     }
 
-    const [flowId] = await db('approval_flows').insert({
+    await db('approval_flows').insert({
       name,
       code,
       description,
@@ -123,7 +123,7 @@ router.post('/', async (req, res, next) => {
       updated_at: new Date()
     });
 
-    res.json({ code: 200, message: '审批流程模板创建成功', data: { flowId } });
+    res.json({ code: 200, message: '审批流程模板创建成功' });
   } catch (error) {
     next(error);
   }

@@ -44,7 +44,7 @@ router.post('/', authenticate, requirePermission('admin:manage'), async (req, re
   try {
     const { name, code, parentId, leader, description } = req.body;
     
-    const [deptId] = await db('departments').insert({
+    await db('departments').insert({
       name,
       code,
       parent_id: parentId || null,
@@ -54,8 +54,8 @@ router.post('/', authenticate, requirePermission('admin:manage'), async (req, re
       created_at: new Date(),
       updated_at: new Date(),
     });
-    
-    res.json({ code: 200, message: '部门创建成功', data: { deptId } });
+
+    res.json({ code: 200, message: '部门创建成功' });
   } catch (error) {
     next(error);
   }

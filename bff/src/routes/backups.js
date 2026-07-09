@@ -35,7 +35,7 @@ router.post('/', authenticate, requirePermission('admin:manage'), async (req, re
   try {
     const { name, type = 'manual', scope = 'full' } = req.body;
     
-    const [backupId] = await db('backups').insert({
+    const _insertResult = await db('backups').insert({
       name,
       type,
       scope,
@@ -44,6 +44,7 @@ router.post('/', authenticate, requirePermission('admin:manage'), async (req, re
       created_by: req.user.username,
       start_time: new Date(),
     });
+    const backupId = _insertResult && Array.isArray(_insertResult) ? _insertResult[0] : null;
     
     // 模拟备份过程
     let progress = 0;

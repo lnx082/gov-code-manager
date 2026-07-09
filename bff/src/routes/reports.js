@@ -35,7 +35,7 @@ router.post('/generate', authenticate, requirePermission('audit:view'), async (r
   try {
     const { templateId, name, format, parameters } = req.body;
     
-    const [reportId] = await db('reports').insert({
+    const _insertResult = await db('reports').insert({
       template_id: templateId,
       name,
       format: format || 'pdf',
@@ -44,6 +44,7 @@ router.post('/generate', authenticate, requirePermission('audit:view'), async (r
       created_by: req.user.userId,
       created_at: new Date(),
     });
+    const reportId = _insertResult && Array.isArray(_insertResult) ? _insertResult[0] : null;
     
     // 模拟报表生成
     setTimeout(async () => {
