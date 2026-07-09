@@ -295,7 +295,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { UserFilled } from '@element-plus/icons-vue'
+import { FolderOpened, User, OfficeBuilding, Timer, Download, Terminal, Document, Share, Plus, Collection, Lock, Clock, Merge, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits } from '@/api/gitea'
 
