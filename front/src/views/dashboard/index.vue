@@ -4,12 +4,10 @@
     <div class="welcome-banner">
       <div class="banner-content">
         <div class="banner-left">
-          <div class="emblem-area">
-            <el-icon :size="48" class="banner-emblem"><Monitor /></el-icon>
-          </div>
           <div class="welcome-text">
-            <h2>欢迎回来，{{ userStore.username }}</h2>
-            <p>今天是 {{ currentDate }}，祝您工作顺利</p>
+            <h2>为人民服务</h2>
+            <p>{{ currentDate.date }}</p>
+            <p class="lunar-date">{{ currentDate.lunar }}</p>
           </div>
         </div>
         <div class="banner-right">
@@ -222,13 +220,27 @@ import { getDashboardStats } from '@/api/admin'
 import { getPendingApprovals } from '@/api/approval'
 import { getRiskWarnings, getAuditLogs, getSessions } from '@/api/bff'
 import { getMyRepos } from '@/api/gitea'
+import { Solar } from 'lunar-javascript'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.hasPermission('admin:manage') || userStore.role === 'admin')
 
 const currentDate = computed(() => {
   const now = new Date()
-  return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()]}`
+  const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekDays[now.getDay()]}`
+  // 农历日期
+  let lunarStr = ''
+  try {
+    const solar = Solar.fromDate(now)
+    const lunar = solar.getLunar()
+    const monthCn = lunar.getMonthInChinese()
+    const dayCn = lunar.getDayInChinese()
+    lunarStr = `农历${lunar.getYearInChinese()}年${monthCn}月${dayCn}（${lunar.getYearShengXiao()}年）`
+  } catch {
+    lunarStr = ''
+  }
+  return { date: dateStr, lunar: lunarStr }
 })
 
 // 在线用户弹窗
@@ -387,25 +399,34 @@ function getTypeName(type) {
     align-items: center;
 
     .banner-left {
+      flex: 1;
       display: flex;
       align-items: center;
-      gap: 20px;
-
-      .emblem-area {
-        .banner-emblem {
-          width: 70px;
-          height: 70px;
-        }
-      }
+      justify-content: center;
 
       .welcome-text {
+        text-align: center;
         h2 {
-          font-size: 24px;
-          margin-bottom: 8px;
+          font-size: 52px;
+          margin-bottom: 20px;
+          font-family: 'Ma Shan Zheng', 'STLiti', 'FZXiaoZhuanTi', cursive;
+          font-weight: normal;
+          background: linear-gradient(180deg, #ffd700 0%, #ff8c00 50%, #ffd700 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-shadow: none;
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+          letter-spacing: 8px;
         }
         p {
           opacity: 0.9;
           font-size: 14px;
+          margin: 2px 0;
+        }
+        .lunar-date {
+          font-size: 12px;
+          opacity: 0.7;
         }
       }
     }
