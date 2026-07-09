@@ -177,7 +177,7 @@ const cleanDescription = computed(() => (repoInfo.description||'').replace(/^\[(
 const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
 const sshCloneUrl = computed(() => `git@123.60.219.19:${repoInfo.owner}/${repoInfo.name}.git`)
 
-onMounted(() => { loadRepoDetail() })
+onMounted(() => { loadRepoDetail(); loadBranches(); loadTags(); loadCommits(); loadPulls(); loadMembers() })
 
 async function loadRepoDetail() {
   loading.value = true
