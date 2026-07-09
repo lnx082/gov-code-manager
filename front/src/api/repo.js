@@ -44,3 +44,18 @@ export function getRepoTags(owner, repo, params) {
 export function createTag(owner, repo, data) {
   return request.post('/versions', { ...data, repoOwner: owner, repoName: repo })
 }
+
+// 创建仓库
+export function createRepo(data) {
+  return request.post('/repos', data)
+}
+
+// 删除仓库
+export function deleteRepo(repoId) {
+  return request.delete(`/repos/${repoId}`)
+}
+
+// 更新仓库
+export function updateRepo(repoId, data) {
+  return request.put(`/repos/${repoId}`, data)
+}

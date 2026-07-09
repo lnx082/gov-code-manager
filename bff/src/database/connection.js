@@ -3,6 +3,22 @@
  */
 import knex from 'knex';
 import config from '../config/index.js';
+import { createRequire } from 'module';
+
+// 兼容 openGauss：修复 knex 无法解析 openGauss 版本字符串的问题
+// openGauss version() 返回 "(openGauss 5.0.0 build ...)" 而非 "PostgreSQL ..."
+const require = createRequire(import.meta.url);
+const Client_PG = require('knex/lib/dialects/postgres/index.js');
+Client_PG.prototype._parseVersion = function (versionString) {
+  if (!versionString || typeof versionString !== 'string') return 'unknown';
+  const pgMatch = /^PostgreSQL (.*?)( |$)/.exec(versionString);
+  if (pgMatch) return pgMatch[1];
+  const ogMatch = /openGauss (\S+)/.exec(versionString);
+  if (ogMatch) return ogMatch[1];
+  const fallback = /\(?([\w]+)\s+([\d.]+)/.exec(versionString);
+  if (fallback) return fallback[2];
+  return 'unknown';
+};
 
 // 创建数据库连接
 let db = null;

@@ -180,7 +180,7 @@ async function loadBranches() {
     ElMessage.warning('加载分支列表失败')
   } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleFilter() { loadBranches() }
