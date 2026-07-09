@@ -236,17 +236,35 @@ async function handleCreateBranch() {
     ElMessage.warning('请选择有效的仓库')
     return
   }
+  
+  // 参数验证：分支名称不能为空
+  if (!createForm.name.trim()) {
+    ElMessage.warning('分支名称不能为空')
+    return
+  }
+  
+  // 分支名称格式检查：只能包含字母、数字、下划线、连字符、斜杠
+  const branchNamePattern = /^[a-zA-Z0-9_\-\/]+$/
+  if (!branchNamePattern.test(createForm.name)) {
+    ElMessage.warning('分支名称只能包含字母、数字、下划线、连字符和斜杠')
+    return
+  }
+  
   try {
     const { createBranch } = await import('@/api/gitea')
+    // Gitea API 参数名：new_branch_name 和 old_branch_name
     await createBranch(repo.owner, repo.repo, {
-      branch_name: createForm.name,
+      new_branch_name: createForm.name.trim(),
       old_branch_name: createForm.baseBranch || 'main'
     })
     ElMessage.success('分支创建成功')
     createDialogVisible.value = false
     loadBranches()
-  } catch {
-    ElMessage.warning('分支创建失败')
+  } catch (error) {
+    console.error('创建分支失败:', error)
+    // 显示具体的错误信息
+    const errorMsg = error?.response?.data?.message || error?.message || '分支创建失败'
+    ElMessage.error(`创建失败: ${errorMsg}`)
   }
 }
 

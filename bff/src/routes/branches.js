@@ -50,7 +50,8 @@ router.get('/:owner/:repo/branches', authenticate, async (req, res, next) => {
 router.post('/:owner/:repo/branches', authenticate, async (req, res, next) => {
   try {
     const { owner, repo } = req.params;
-    const { new_branch, old_branch } = req.body;
+    // Gitea API 参数：new_branch_name 和 old_branch_name
+    const { new_branch_name, old_branch_name, new_branch, old_branch } = req.body;
     
     const response = await fetch(
       `${config.gitea.url}/api/v1/repos/${owner}/${repo}/branches`,
@@ -61,8 +62,8 @@ router.post('/:owner/:repo/branches', authenticate, async (req, res, next) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          new_branch,
-          old_branch_name: old_branch,
+          new_branch_name: new_branch_name || new_branch,
+          old_branch_name: old_branch_name || old_branch,
         }),
       }
     );
@@ -209,6 +210,36 @@ router.post('/:owner/:repo/pulls/:index/merge', authenticate, async (req, res, n
     res.json({
       code: 200,
       message: '合并成功',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 获取 PR 变更文件列表
+router.get('/:owner/:repo/pulls/:index/files', authenticate, async (req, res, next) => {
+  try {
+    const { owner, repo, index } = req.params;
+    
+    const response = await fetch(
+      `${config.gitea.url}/api/v1/repos/${owner}/${repo}/pulls/${index}/files`,
+      {
+        headers: {
+          'Authorization': giteaAuth(req),
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('获取文件变更失败');
+    }
+    
+    const files = await response.json();
+    
+    res.json({
+      code: 200,
+      data: files,
     });
   } catch (error) {
     next(error);

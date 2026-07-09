@@ -7,8 +7,6 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "migrate": "node src/database/migrate.js",
-    "seed": "node src/database/seed.js",
     "init-db": "node src/database/init.js"
   },
   "dependencies": {

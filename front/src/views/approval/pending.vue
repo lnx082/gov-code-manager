@@ -219,17 +219,33 @@ function handleReject(row) {
 async function submitApproval() {
   if (!currentApproval.value) return
   
+  // 审批意见不能为空
+  if (!approvalForm.comment || approvalForm.comment.trim() === '') {
+    ElMessage.warning('请填写审批意见')
+    return
+  }
+  
   try {
-    await processApproval(currentApproval.value.approval_id, {
-      action: approvalForm.result,
-      comment: approvalForm.comment
+    const action = approvalForm.result === 'approved' ? 'approved' : 'rejected'
+    const res = await processApproval(currentApproval.value.approval_id, {
+      action,
+      body: approvalForm.comment.trim()
     })
+    
     ElMessage.success(approvalForm.result === 'approved' ? '审批已通过' : '审批已拒绝')
     approvalDialogVisible.value = false
     detailDialogVisible.value = false
-    loadPending()
+    
+    // 审批成功后，从列表中移除该记录（因为已经处理过了）
+    const index = pendingList.value.findIndex(p => p.approval_id === currentApproval.value.approval_id)
+    if (index !== -1) {
+      pendingList.value.splice(index, 1)
+      pagination.total = pendingList.value.length
+    }
   } catch (error) {
-    ElMessage.error('审批提交失败')
+    console.error('审批提交失败:', error)
+    const errorMsg = error?.response?.data?.message || error?.message || '审批提交失败'
+    ElMessage.error(`审批失败: ${errorMsg}`)
   }
 }
 

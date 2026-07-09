@@ -149,15 +149,35 @@ router.post('/', authenticate, async (req, res, next) => {
 router.post('/:id/process', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { action, comment } = req.body;
+    const { action, body } = req.body;
+    
+    // 兼容 Gitea 格式 (APPROVE/REJECT) 和其他格式 (approved/rejected)
+    const normalizedAction = action === 'APPROVE' || action === 'approved' ? 'approved' : 
+                            action === 'REJECT' || action === 'rejected' ? 'rejected' : action;
+    
+    // 审批意见不能为空
+    if (!body || body.trim() === '') {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '审批意见不能为空，请填写审批说明' 
+      });
+    }
     
     const approval = await db('approvals').where('approval_id', id).first();
     if (!approval) {
       return res.status(404).json({ code: 404, message: '审批不存在' });
     }
     
+    // 检查是否已处理过
+    if (approval.status !== 'pending') {
+      return res.status(400).json({ 
+        code: 400, 
+        message: `该审批已处理，当前状态：${approval.status}` 
+      });
+    }
+    
     // 更新审批状态
-    const newStatus = action === 'approved' ? 'approved' : 'rejected';
+    const newStatus = normalizedAction;
     
     await db('approvals')
       .where('approval_id', id)
@@ -172,14 +192,15 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
       approval_id: id,
       step: approval.current_step,
       reviewer_user_id: req.user.userId,
-      action,
-      comment,
+      reviewer_username: req.user.username,
+      action: normalizedAction,
+      comment: body.trim(),
       action_time: new Date(),
     });
     
     res.json({
       code: 200,
-      message: action === 'approved' ? '审批已通过' : '审批已拒绝',
+      message: normalizedAction === 'approved' ? '审批已通过' : '审批已拒绝',
     });
   } catch (error) {
     next(error);

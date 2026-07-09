@@ -64,7 +64,12 @@ export function getBranch(owner, repo, branch) {
 }
 
 export function createBranch(owner, repo, data) {
-  return giteaService.post(`/repos/${owner}/${repo}/branches`, data)
+  // Gitea API: POST /repos/{owner}/{repo}/branches
+  // 参数: new_branch_name (新分支名), old_branch_name (基于的分支)
+  return giteaService.post(`/repos/${owner}/${repo}/branches`, {
+    new_branch_name: data.new_branch_name || data.new_branch,
+    old_branch_name: data.old_branch_name || data.old_branch
+  })
 }
 
 export function deleteBranch(owner, repo, branch) {
@@ -172,6 +177,37 @@ export function mergePullRequest(owner, repo, index, data = {}) {
 export function closePullRequest(owner, repo, index) {
   return giteaService.patch(`/repos/${owner}/${repo}/pulls/${index}`, { state: 'closed' })
 }
+
+// ============ PR 审批 (Gitea 原生) ============
+
+/**
+ * 提交 PR 审批
+ * @param {string} owner - 仓库拥有者
+ * @param {string} repo - 仓库名
+ * @param {number} index - PR 编号
+ * @param {object} data - { event: 'APPROVE' | 'REJECT' | 'COMMENT', body?: string }
+ */
+export function submitPullRequestReview(owner, repo, index, data) {
+  // Gitea API: POST /repos/{owner}/{repo}/pulls/{index}/reviews
+  // event: APPROVE (通过), REJECT (拒绝), COMMENT (评论)
+  // 注意：Gitea 要求 APPROVE/REJECT 必须填写审批意见（body）
+  return giteaService.post(`/repos/${owner}/${repo}/pulls/${index}/reviews`, {
+    event: data.event || 'APPROVE',
+    body: data.body || data.comment || ''
+  })
+}
+
+/**
+ * 获取 PR 审批状态
+ * @param {string} owner - 仓库拥有者
+ * @param {string} repo - 仓库名
+ * @param {number} index - PR 编号
+ */
+export function getPullRequestReviews(owner, repo, index) {
+  return giteaService.get(`/repos/${owner}/${repo}/pulls/${index}/reviews`)
+}
+
+// ============ PR 评论 ============
 
 export function getPullRequestCommits(owner, repo, index) {
   return giteaService.get(`/repos/${owner}/${repo}/pulls/${index}/commits`)
