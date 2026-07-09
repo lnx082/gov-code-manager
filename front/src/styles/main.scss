@@ -1,4 +1,37 @@
-/* 全局样式重置 */
+// ============================================================
+// GovCode Version Control Platform — Global Theme
+// White + Crimson Red · Windows 11 Design Style
+// ============================================================
+
+// Color Palette
+$primary: #c62828;
+$primary-dark: #b71c1c;
+$primary-light: #ffebee;
+$primary-hover-bg: #ef5350;
+$bg-white: #ffffff;
+$bg-content: #f5f5f5;
+$bg-sidebar: #ffffff;
+$bg-card: #ffffff;
+$border-color: #e4e7ed;
+$text-primary: #303133;
+$text-secondary: #606266;
+$text-muted: #909399;
+$text-sidebar: #303133;
+$shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+$shadow-dialog: 0 4px 12px rgba(0, 0, 0, 0.12);
+$shadow-button-hover: 0 2px 8px rgba(198, 40, 40, 0.2);
+
+// Border Radius
+$radius-card: 8px;
+$radius-button: 6px;
+$radius-dialog: 12px;
+$radius-input: 6px;
+
+// Transitions
+$transition-fast: all 0.2s ease;
+$transition-normal: all 0.3s ease;
+
+/* ============ Global Reset ============ */
 * {
   margin: 0;
   padding: 0;
@@ -8,10 +41,10 @@
 html, body {
   width: 100%;
   height: 100%;
-  font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  color: #333;
-  background: #f5f7fa;
+  color: $text-primary;
+  background: $bg-content;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -21,32 +54,33 @@ html, body {
   height: 100%;
 }
 
-/* 滚动条样式 */
+/* ============ Scrollbar ============ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #c1c1c1;
-  border-radius: 4px;
-  
+  border-radius: 3px;
+
   &:hover {
     background: #a8a8a8;
   }
 }
 
-/* 页面容器 */
+/* ============ Page Container ============ */
 .page-container {
   padding: 20px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  background: $bg-white;
+  border-radius: $radius-card;
+  box-shadow: $shadow-card;
+  min-height: calc(100vh - 180px);
 }
 
 .page-header {
@@ -54,13 +88,18 @@ html, body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ebeef5;
-  
+  padding-bottom: 16px;
+  border-bottom: 1px solid $border-color;
+  border-left: 4px solid $primary;
+  padding-left: 16px;
+
   .page-title {
     font-size: 18px;
     font-weight: 600;
-    color: #303133;
+    color: $text-primary;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 
@@ -68,117 +107,353 @@ html, body {
   min-height: calc(100vh - 200px);
 }
 
-/* 表格样式优化 */
-.el-table {
-  border-radius: 8px;
-  overflow: hidden;
-  
-  th {
-    background: #fafafa !important;
-    font-weight: 600;
+/* ============ Element Plus Overrides — Buttons ============ */
+.el-button {
+  border-radius: $radius-button;
+  transition: $transition-fast;
+  font-weight: 500;
+
+  // Default button
+  &--default {
+    background: $bg-white;
+    border-color: $primary;
+    color: $primary;
+
+    &:hover, &:focus {
+      background: $primary-light;
+      border-color: $primary;
+      color: $primary;
+      transform: translateY(-1px);
+      box-shadow: $shadow-button-hover;
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
   }
-  
-  .cell {
-    padding: 12px 16px;
+
+  // Primary button
+  &--primary {
+    background: $primary;
+    border-color: $primary;
+    color: #ffffff;
+
+    &:hover, &:focus {
+      background: $primary-hover-bg;
+      border-color: $primary-hover-bg;
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: $shadow-button-hover;
+    }
+
+    &:active {
+      background: $primary-dark;
+      border-color: $primary-dark;
+      transform: translateY(0);
+    }
+  }
+
+  // Danger button
+  &--danger {
+    background: $primary;
+    border-color: $primary;
+
+    &:hover, &:focus {
+      background: $primary-hover-bg;
+      border-color: $primary-hover-bg;
+    }
+  }
+
+  // Link button
+  &--link {
+    color: $primary;
   }
 }
 
-/* 卡片样式 */
+/* ============ Element Plus Overrides — Table ============ */
+.el-table {
+  border-radius: $radius-card;
+  overflow: hidden;
+
+  th.el-table__cell {
+    background: #fafafa !important;
+    font-weight: 600;
+    color: $text-primary;
+    border-bottom: 2px solid $border-color;
+  }
+
+  .cell {
+    padding: 12px 16px;
+  }
+
+  &--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: #fafafa;
+  }
+}
+
+/* ============ Element Plus Overrides — Card ============ */
+.el-card {
+  border-radius: $radius-card;
+  border: 1px solid $border-color;
+  box-shadow: $shadow-card;
+  transition: $transition-fast;
+
+  .el-card__header {
+    border-bottom: 1px solid $border-color;
+    padding: 16px 20px;
+    font-weight: 600;
+    color: $text-primary;
+    background: #fafafa;
+    border-radius: $radius-card $radius-card 0 0;
+  }
+
+  .el-card__body {
+    padding: 20px;
+  }
+}
+
+/* ============ Element Plus Overrides — Dialog ============ */
+.el-dialog {
+  border-radius: $radius-dialog;
+  box-shadow: $shadow-dialog;
+  overflow: hidden;
+
+  .el-dialog__header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid $border-color;
+    margin-right: 0;
+
+    .el-dialog__title {
+      font-weight: 600;
+      color: $text-primary;
+      font-size: 16px;
+    }
+  }
+
+  .el-dialog__body {
+    padding: 20px;
+  }
+
+  .el-dialog__footer {
+    padding: 12px 20px 20px;
+    border-top: 1px solid $border-color;
+  }
+}
+
+/* ============ Element Plus Overrides — Tabs ============ */
+.el-tabs {
+  .el-tabs__header {
+    margin-bottom: 16px;
+  }
+
+  .el-tabs__item {
+    font-weight: 500;
+    color: $text-secondary;
+    transition: $transition-fast;
+
+    &:hover {
+      color: $primary;
+    }
+
+    &.is-active {
+      color: $primary;
+      font-weight: 600;
+    }
+  }
+
+  .el-tabs__active-bar {
+    background-color: $primary;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+  }
+}
+
+/* ============ Element Plus Overrides — Form ============ */
+.el-form {
+  .el-form-item__label {
+    color: $text-secondary;
+    font-weight: 500;
+  }
+}
+
+.el-input, .el-select {
+  .el-input__wrapper, .el-input__wrapper {
+    border-radius: $radius-input;
+    transition: $transition-fast;
+    box-shadow: 0 0 0 1px $border-color inset;
+
+    &:hover {
+      box-shadow: 0 0 0 1px #c0c4cc inset;
+    }
+
+    &.is-focus {
+      box-shadow: 0 0 0 1px $primary inset !important;
+    }
+  }
+}
+
+.el-textarea {
+  .el-textarea__inner {
+    border-radius: $radius-input;
+    transition: $transition-fast;
+
+    &:focus {
+      border-color: $primary;
+      box-shadow: 0 0 0 1px $primary inset;
+    }
+  }
+}
+
+.el-select .el-input.is-focus .el-input__wrapper {
+  box-shadow: 0 0 0 1px $primary inset !important;
+}
+
+/* ============ Element Plus Overrides — Tag ============ */
+.el-tag {
+  border-radius: 4px;
+  font-weight: 500;
+  transition: $transition-fast;
+
+  &--danger {
+    background: $primary-light;
+    border-color: $primary-light;
+    color: $primary;
+  }
+}
+
+/* ============ Element Plus Overrides — Menu (used in sidebar) ============ */
+.el-menu {
+  border-right: none !important;
+}
+
+/* ============ Element Plus Overrides — Pagination ============ */
+.el-pagination {
+  .el-pager li.is-active {
+    background-color: $primary;
+    color: #ffffff;
+    border-radius: $radius-button;
+  }
+
+  .btn-prev, .btn-next {
+    border-radius: $radius-button;
+    transition: $transition-fast;
+
+    &:hover {
+      color: $primary;
+    }
+  }
+}
+
+/* ============ Stat Cards (Dashboard style) ============ */
 .stat-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+  border-radius: $radius-card;
   padding: 24px;
   color: #fff;
-  transition: transform 0.3s, box-shadow 0.3s;
-  
+  box-shadow: 0 3px 12px rgba(198, 40, 40, 0.2);
+  transition: $transition-fast;
+
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(198, 40, 40, 0.3);
   }
-  
+
   &.success {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
   }
-  
+
   &.warning {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
   }
-  
+
   &.info {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
   }
-  
+
+  &.blue {
+    background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+  }
+
+  &.orange {
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+  }
+
+  &.green {
+    background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+  }
+
   .card-title {
     font-size: 14px;
     opacity: 0.9;
     margin-bottom: 10px;
   }
-  
+
   .card-value {
     font-size: 32px;
     font-weight: 700;
   }
-  
+
   .card-icon {
     font-size: 48px;
-    opacity: 0.3;
+    opacity: 0.25;
     position: absolute;
     right: 20px;
     top: 20px;
+    transition: $transition-fast;
   }
 }
 
-/* 状态标签 */
+/* ============ Status Tags ============ */
 .status-tag {
   display: inline-block;
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
-  
+
   &.pending {
-    background: #ecf5ff;
-    color: #409eff;
+    background: $primary-light;
+    color: $primary;
   }
-  
+
   &.approved {
-    background: #f0f9eb;
-    color: #67c23a;
+    background: #e8f5e9;
+    color: #2e7d32;
   }
-  
+
   &.rejected {
-    background: #fef0f0;
-    color: #f56c6c;
+    background: #ffebee;
+    color: #c62828;
   }
-  
+
   &.merged {
-    background: #fdf6ec;
-    color: #e6a23c;
+    background: #fff3e0;
+    color: #e65100;
   }
-  
+
   &.closed {
-    background: #f4f4f5;
-    color: #909399;
+    background: #f5f5f5;
+    color: #9e9e9e;
   }
 }
 
-/* 空状态 */
+/* ============ Empty State ============ */
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  
+
   .empty-icon {
     font-size: 64px;
-    color: #c0c4cc;
+    color: #d0d0d0;
     margin-bottom: 20px;
   }
-  
+
   .empty-text {
-    color: #909399;
+    color: $text-muted;
     font-size: 14px;
   }
 }
 
-/* 搜索区域 */
+/* ============ Search / Filter Bar ============ */
 .search-bar {
   display: flex;
   flex-wrap: wrap;
@@ -186,171 +461,96 @@ html, body {
   margin-bottom: 20px;
   padding: 20px;
   background: #fafafa;
-  border-radius: 8px;
-  
+  border-radius: $radius-card;
+  border: 1px solid $border-color;
+
   .search-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    
+
     .search-label {
-      color: #606266;
+      color: $text-secondary;
       font-size: 14px;
       white-space: nowrap;
     }
   }
 }
 
-/* 按钮组 */
+.filter-card {
+  margin-bottom: 20px;
+}
+
+/* ============ Button Group ============ */
 .button-group {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-/* 弹窗样式优化 */
-.el-dialog {
-  border-radius: 12px;
-  
-  .el-dialog__header {
-    padding: 20px 20px 10px;
-    border-bottom: 1px solid #ebeef5;
-  }
-  
-  .el-dialog__body {
-    padding: 20px;
-  }
-  
-  .el-dialog__footer {
-    padding: 10px 20px 20px;
-    border-top: 1px solid #ebeef5;
-  }
-}
-
-/* 步骤条样式 */
-.process-steps {
-  padding: 20px 0;
-  
-  .step-item {
-    position: relative;
-    
-    &::after {
-      content: '';
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      width: 100%;
-      height: 2px;
-      background: #dcdfe6;
-    }
-    
-    &:last-child::after {
-      display: none;
-    }
-  }
-}
-
-/* 代码块样式 */
+/* ============ Code Block ============ */
 .code-block {
-  background: #282c34;
-  border-radius: 8px;
+  background: #1e1e1e;
+  border-radius: $radius-card;
   padding: 16px;
   overflow-x: auto;
-  
+
   pre {
     margin: 0;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-family: 'Cascadia Code', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 13px;
     line-height: 1.6;
-    color: #abb2bf;
-  }
-  
-  .keyword {
-    color: #c678dd;
-  }
-  
-  .string {
-    color: #98c379;
-  }
-  
-  .comment {
-    color: #5c6370;
-    font-style: italic;
+    color: #d4d4d4;
   }
 }
 
-/* 文件树样式 */
-.file-tree {
-  font-family: 'Monaco', 'Menlo', monospace;
-  
-  .tree-item {
-    display: flex;
-    align-items: center;
-    padding: 6px 10px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.2s;
-    
-    &:hover {
-      background: #f5f7fa;
-    }
-    
-    .file-icon {
-      margin-right: 8px;
-      color: #909399;
-    }
-    
-    .file-name {
-      flex: 1;
-    }
-    
-    .file-size {
-      color: #c0c4cc;
-      font-size: 12px;
-    }
-  }
+/* ============ Pagination Wrapper ============ */
+.pagination-wrapper {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 
-/* diff 样式 */
+/* ============ Diff View ============ */
 .diff-view {
-  font-family: 'Monaco', 'Menlo', monospace;
+  font-family: 'Cascadia Code', 'Fira Code', 'Monaco', 'Menlo', monospace;
   font-size: 13px;
   line-height: 1.6;
-  
+
   .diff-line {
     display: flex;
     padding: 0 10px;
-    
+
     &.added {
       background: #e6ffec;
-      
+
       .line-num {
         background: #b7f0b1;
-        color: #22863a;
+        color: #2e7d32;
       }
-      
+
       .line-content::before {
         content: '+';
-        color: #22863a;
+        color: #2e7d32;
         margin-right: 10px;
       }
     }
-    
+
     &.removed {
       background: #ffebe9;
-      
+
       .line-num {
         background: #f0b1b1;
-        color: #cb2431;
+        color: #c62828;
       }
-      
+
       .line-content::before {
         content: '-';
-        color: #cb2431;
+        color: #c62828;
         margin-right: 10px;
       }
     }
-    
+
     .line-num {
       width: 50px;
       text-align: right;
@@ -359,7 +559,7 @@ html, body {
       background: #f6f8fa;
       user-select: none;
     }
-    
+
     .line-content {
       flex: 1;
       white-space: pre-wrap;
@@ -368,13 +568,13 @@ html, body {
   }
 }
 
-/* 时间线样式 */
+/* ============ Timeline ============ */
 .timeline {
   .timeline-item {
     position: relative;
     padding-left: 30px;
     padding-bottom: 30px;
-    
+
     &::before {
       content: '';
       position: absolute;
@@ -382,11 +582,11 @@ html, body {
       top: 6px;
       width: 10px;
       height: 10px;
-      background: #409eff;
+      background: $primary;
       border-radius: 50%;
       z-index: 1;
     }
-    
+
     &::after {
       content: '';
       position: absolute;
@@ -394,57 +594,85 @@ html, body {
       top: 20px;
       bottom: 0;
       width: 2px;
-      background: #e4e7ed;
+      background: $border-color;
     }
-    
+
     &:last-child::after {
       display: none;
     }
-    
+
     .timeline-time {
-      color: #909399;
+      color: $text-muted;
       font-size: 12px;
       margin-bottom: 5px;
     }
-    
+
     .timeline-content {
       background: #fafafa;
-      border-radius: 8px;
+      border-radius: $radius-card;
       padding: 15px;
+      border: 1px solid $border-color;
     }
   }
 }
 
-/* 表单验证样式 */
+/* ============ Form Required Indicator ============ */
 .form-required::before {
   content: '*';
-  color: #f56c6c;
+  color: $primary;
   margin-right: 4px;
 }
 
-/* 响应式布局 */
+/* ============ Alert Styles ============ */
+.info-alert {
+  margin-bottom: 20px;
+  border-radius: $radius-card;
+}
+
+.warning-alert {
+  margin-bottom: 20px;
+  border-radius: $radius-card;
+}
+
+.security-alert {
+  margin-bottom: 20px;
+  border-radius: $radius-card;
+}
+
+/* ============ Page Transition ============ */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ============ Responsive ============ */
 @media screen and (max-width: 768px) {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
-  
+
   .search-bar {
     flex-direction: column;
-    
+
     .search-item {
       width: 100%;
-      
+
       .el-select, .el-input {
         width: 100%;
       }
     }
   }
-  
+
   .button-group {
     width: 100%;
-    
+
     .el-button {
       width: 100%;
     }

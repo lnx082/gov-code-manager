@@ -1,9 +1,9 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2 class="page-title">🌿 分支列表</h2>
+      <h2 class="page-title"><el-icon><Share /></el-icon> 分支列表</h2>
       <div class="button-group">
-        <el-button type="danger" @click="showCreateDialog">➕ 创建分支</el-button>
+        <el-button type="danger" @click="showCreateDialog"><el-icon><Plus /></el-icon> 创建分支</el-button>
       </div>
     </div>
 
@@ -52,8 +52,8 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="danger" @click="handleFilter">🔍 筛选</el-button>
-          <el-button @click="resetFilter">🔄 重置</el-button>
+          <el-button type="danger" @click="handleFilter"><el-icon><Search /></el-icon> 筛选</el-button>
+          <el-button @click="resetFilter"><el-icon><Refresh /></el-icon> 重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -62,7 +62,7 @@
       <el-table-column label="分支名称" min-width="180">
         <template #default="{ row }">
           <div class="branch-cell">
-            <span>🌿</span>
+            <el-icon><Share /></el-icon>
             <span class="branch-name" @click="viewBranch(row)">{{ row.name }}</span>
             <el-tag v-if="row.isDefault" type="danger" size="small">默认</el-tag>
             <el-tag v-if="row.isProtected" type="warning" size="small">保护</el-tag>
@@ -86,9 +86,9 @@
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewBranch(row)">👁️ 查看</el-button>
-          <el-button type="primary" link @click="createMerge(row)">🔀 合并</el-button>
-          <el-button type="danger" link @click="deleteBranch(row)">🗑️ 删除</el-button>
+          <el-button type="primary" link @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
+          <el-button type="primary" link @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
+          <el-button type="danger" link @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -102,7 +102,7 @@
       />
     </div>
 
-    <el-dialog v-model="createDialogVisible" title="🌿 创建分支" width="500px">
+    <el-dialog v-model="createDialogVisible" title="创建分支" width="500px">
       <el-form :model="createForm" :rules="createRules" label-width="100px">
         <el-form-item label="分支名称" prop="name">
           <el-input v-model="createForm.name" placeholder="feature/xxx" />
@@ -131,6 +131,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBranches as getGiteaBranches, getMyRepos } from '@/api/gitea'
+import { Share, Plus, Search, Refresh, View, Connection, Delete } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const loading = ref(false)

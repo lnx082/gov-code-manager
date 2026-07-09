@@ -1,13 +1,13 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2 class="page-title">📁 仓库列表</h2>
+      <h2 class="page-title"><el-icon><Folder /></el-icon> 仓库列表</h2>
       <div class="button-group">
         <el-button type="primary" @click="$router.push('/repos/create')">
-          <span>➕</span> 创建仓库
+          <el-icon><Plus /></el-icon> 创建仓库
         </el-button>
         <el-button @click="loadRepos">
-          <span>🔄</span> 刷新
+          <el-icon><Refresh /></el-icon> 刷新
         </el-button>
       </div>
     </div>
@@ -39,7 +39,7 @@
       <el-table-column prop="name" label="仓库名称" min-width="180">
         <template #default="{ row }">
           <div class="repo-name-cell" @click="viewRepo(row)">
-            <span class="repo-icon">📁</span>
+            <el-icon class="repo-icon"><Folder /></el-icon>
             <span class="repo-name">{{ row.displayName || row.full_name || row.name }}</span>
           </div>
         </template>
@@ -115,6 +115,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { Folder, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyRepos, searchRepos } from '@/api/gitea'

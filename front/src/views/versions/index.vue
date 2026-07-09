@@ -1,9 +1,9 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2 class="page-title">🏷️ 版本列表</h2>
+      <h2 class="page-title"><el-icon><Collection /></el-icon> 版本列表</h2>
       <div class="button-group">
-        <el-button type="danger" @click="showCreateTag">➕ 创建版本</el-button>
+        <el-button type="danger" @click="showCreateTag"><el-icon><Plus /></el-icon> 创建版本</el-button>
       </div>
     </div>
 
@@ -29,8 +29,8 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="danger" @click="handleFilter">🔍 筛选</el-button>
-          <el-button @click="resetFilter">🔄 重置</el-button>
+          <el-button type="danger" @click="handleFilter"><el-icon><Search /></el-icon> 筛选</el-button>
+          <el-button @click="resetFilter"><el-icon><Refresh /></el-icon> 重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -39,7 +39,7 @@
       <el-table-column label="版本号" width="150">
         <template #default="{ row }">
           <div class="version-cell">
-            <span>🏷️</span>
+            <el-icon><Collection /></el-icon>
             <span class="version-name">{{ row.name }}</span>
           </div>
         </template>
@@ -55,7 +55,7 @@
       </el-table-column>
       <el-table-column label="是否基线" width="100">
         <template #default="{ row }">
-          <el-tag v-if="row.isBaseline" type="success" size="small">✅ 基线</el-tag>
+          <el-tag v-if="row.isBaseline" type="success" size="small"><el-icon><CircleCheck /></el-icon> 基线</el-tag>
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
@@ -67,8 +67,8 @@
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewVersionDetail(row)">👁️ 详情</el-button>
-          <el-button type="primary" link @click="downloadVersion(row)">📥 下载</el-button>
+          <el-button type="primary" link @click="viewVersionDetail(row)"><el-icon><View /></el-icon> 详情</el-button>
+          <el-button type="primary" link @click="downloadVersion(row)"><el-icon><Download /></el-icon> 下载</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -82,7 +82,7 @@
       />
     </div>
 
-    <el-dialog v-model="createTagDialogVisible" title="🏷️ 创建版本" width="600px">
+    <el-dialog v-model="createTagDialogVisible" title="创建版本" width="600px">
       <el-form :model="createForm" :rules="createRules" label-width="100px">
         <el-form-item label="所属仓库" prop="repoId" class="form-required">
           <el-select v-model="createForm.repoId" placeholder="选择仓库" style="width: 100%">
@@ -99,8 +99,8 @@
         </el-form-item>
         <el-form-item label="版本类型">
           <el-radio-group v-model="createForm.type">
-            <el-radio label="release">🏷️ 正式版本</el-radio>
-            <el-radio label="beta">🧪 测试版本</el-radio>
+            <el-radio label="release"><el-icon><Collection /></el-icon> 正式版本</el-radio>
+            <el-radio label="beta"><el-icon><VideoPlay /></el-icon> 测试版本</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="关联审批">
@@ -120,6 +120,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTags, getMyRepos } from '@/api/gitea'
+import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)

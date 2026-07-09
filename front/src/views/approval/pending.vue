@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2 class="page-title">📋 待我审批</h2>
+      <h2 class="page-title"><el-icon><DocumentChecked /></el-icon> 待我审批</h2>
       <el-badge :value="pendingCount" :hidden="pendingCount === 0">
         <span class="pending-tip">共 {{ pendingCount }} 条待审批</span>
       </el-badge>
@@ -127,6 +127,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { DocumentChecked } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getPendingApprovals, getApprovalDetail, processApproval } from '@/api/approval'
 

@@ -14,10 +14,10 @@
         </div>
         <div class="banner-right">
           <el-button type="primary" size="large" @click="$router.push('/repos/create')">
-            <span>➕</span> 创建仓库
+            <el-icon><Plus /></el-icon> 创建仓库
           </el-button>
           <el-button size="large" @click="$router.push('/approval/pending')">
-            <span>📋</span> 待我审批
+            <el-icon><DocumentChecked /></el-icon> 待我审批
             <el-badge :value="pendingApprovals" :hidden="pendingApprovals === 0" />
           </el-button>
         </div>
@@ -27,31 +27,31 @@
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card red">
-        <div class="stat-icon">📁</div>
+        <div class="stat-icon"><el-icon><Folder /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.repoCount }}</div>
           <div class="stat-label">仓库总数</div>
         </div>
       </div>
-      
+
       <div class="stat-card blue">
-        <div class="stat-icon">🏷️</div>
+        <div class="stat-icon"><el-icon><Collection /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.versionCount }}</div>
           <div class="stat-label">版本总数</div>
         </div>
       </div>
-      
+
       <div class="stat-card orange">
-        <div class="stat-icon">📋</div>
+        <div class="stat-icon"><el-icon><DocumentChecked /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.pendingApprovals }}</div>
           <div class="stat-label">待审批</div>
         </div>
       </div>
-      
+
       <div class="stat-card green">
-        <div class="stat-icon">👥</div>
+        <div class="stat-icon"><el-icon><User /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.onlineUsers }}</div>
           <div class="stat-label">在线用户</div>
@@ -67,20 +67,20 @@
         <el-card class="panel-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📋 待处理审批</span>
+              <span><el-icon><DocumentChecked /></el-icon> 待处理审批</span>
               <el-link type="danger" @click="$router.push('/approval/pending')">查看全部</el-link>
             </div>
           </template>
           <div class="pending-list" v-if="pendingList.length > 0">
             <div v-for="item in pendingList" :key="item.id" class="pending-item" @click="$router.push('/approval/pending')">
               <div class="item-icon" :class="item.type">
-                {{ item.type === 'merge' ? '🌿' : item.type === 'version' ? '🏷️' : '📄' }}
+                <el-icon v-if="item.type === 'merge'"><Share /></el-icon><el-icon v-else-if="item.type === 'version'"><Collection /></el-icon><el-icon v-else><Document /></el-icon>
               </div>
               <div class="item-content">
                 <div class="item-title">{{ item.title }}</div>
                 <div class="item-info">
-                  <span>👤 {{ item.applicant }}</span>
-                  <span>⏰ {{ item.createTime }}</span>
+                  <span><el-icon><User /></el-icon> {{ item.applicant }}</span>
+                  <span><el-icon><Clock /></el-icon> {{ item.createTime }}</span>
                 </div>
               </div>
               <el-tag :type="getTypeTagType(item.type)" size="small">
@@ -94,7 +94,7 @@
         <!-- 最新动态 -->
         <el-card class="panel-card" shadow="hover">
           <template #header>
-            <span>📰 最新动态</span>
+            <span><el-icon><Notebook /></el-icon> 最新动态</span>
           </template>
           <div class="activity-list">
             <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
@@ -105,7 +105,7 @@
                   {{ activity.action }}
                   <span class="target-name">{{ activity.target }}</span>
                 </div>
-                <div class="activity-time">⏰ {{ activity.time }}</div>
+                <div class="activity-time"><el-icon><Clock /></el-icon> {{ activity.time }}</div>
               </div>
             </div>
           </div>
@@ -117,23 +117,23 @@
         <!-- 快捷入口 -->
         <el-card class="panel-card" shadow="hover">
           <template #header>
-            <span>⚡ 快捷入口</span>
+            <span><el-icon><Lightning /></el-icon> 快捷入口</span>
           </template>
           <div class="quick-links">
             <div class="quick-link-item" @click="$router.push('/repos')">
-              <div class="link-icon blue">📁</div>
+              <div class="link-icon blue"><el-icon><Folder /></el-icon></div>
               <span>仓库管理</span>
             </div>
             <div class="quick-link-item" @click="$router.push('/branches/merge')">
-              <div class="link-icon green">🌿</div>
+              <div class="link-icon green"><el-icon><Share /></el-icon></div>
               <span>合并请求</span>
             </div>
             <div class="quick-link-item" @click="$router.push('/versions')">
-              <div class="link-icon orange">🏷️</div>
+              <div class="link-icon orange"><el-icon><Collection /></el-icon></div>
               <span>版本管理</span>
             </div>
             <div class="quick-link-item" @click="$router.push('/audit/logs')">
-              <div class="link-icon red">🔍</div>
+              <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>审计日志</span>
             </div>
           </div>
@@ -142,7 +142,7 @@
         <!-- 系统状态 -->
         <el-card class="panel-card" shadow="hover">
           <template #header>
-            <span>💻 系统状态</span>
+            <span><el-icon><Monitor /></el-icon> 系统状态</span>
           </template>
           <div class="system-status">
             <div class="status-item">
@@ -172,16 +172,16 @@
         <el-card class="panel-card" shadow="hover" v-if="userStore.hasPermission('audit:view')">
           <template #header>
             <div class="card-header">
-              <span>⚠️ 风险预警</span>
+              <span><el-icon><WarningFilled /></el-icon> 风险预警</span>
               <el-badge :value="riskCount" :hidden="riskCount === 0" />
             </div>
           </template>
           <div class="risk-list" v-if="risks.length > 0">
             <div v-for="risk in risks" :key="risk.id" class="risk-item">
-              <span class="risk-icon">⚠️</span>
+              <el-icon class="risk-icon"><WarningFilled /></el-icon>
               <div class="risk-content">
                 <div class="risk-title">{{ risk.title }}</div>
-                <div class="risk-time">⏰ {{ risk.time }}</div>
+                <div class="risk-time"><el-icon><Clock /></el-icon> {{ risk.time }}</div>
               </div>
             </div>
           </div>
@@ -195,6 +195,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, WarningFilled, Search } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getPendingApprovals } from '@/api/approval'

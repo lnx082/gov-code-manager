@@ -22,28 +22,28 @@
           <p class="subtitle">GovCode Version Control Platform</p>
           <div class="feature-list">
             <div class="feature-item">
-              <div class="feature-icon">🔒</div>
+              <el-icon class="feature-icon"><Lock /></el-icon>
               <div class="feature-text">
                 <h4>安全可控</h4>
                 <p>符合等保2.0三级要求，全流程审计溯源</p>
               </div>
             </div>
             <div class="feature-item">
-              <div class="feature-icon">📋</div>
+              <el-icon class="feature-icon"><DocumentChecked /></el-icon>
               <div class="feature-text">
                 <h4>合规审批</h4>
                 <p>多级审批流程，版本管控规范化</p>
               </div>
             </div>
             <div class="feature-item">
-              <div class="feature-icon">🛡️</div>
+              <el-icon class="feature-icon"><Checked /></el-icon>
               <div class="feature-text">
                 <h4>信创适配</h4>
                 <p>国产化环境适配，麒麟鲲鹏兼容</p>
               </div>
             </div>
             <div class="feature-item">
-              <div class="feature-icon">📊</div>
+              <el-icon class="feature-icon"><DataAnalysis /></el-icon>
               <div class="feature-text">
                 <h4>全程溯源</h4>
                 <p>防篡改审计日志，操作永久留存</p>
@@ -73,7 +73,7 @@
           >
             <el-form-item prop="username">
               <div class="input-wrapper">
-                <span class="input-icon">👤</span>
+                <el-icon class="input-icon"><User /></el-icon>
                 <el-input
                   v-model="loginForm.username"
                   placeholder="请输入用户名"
@@ -85,7 +85,7 @@
 
             <el-form-item prop="password">
               <div class="input-wrapper">
-                <span class="input-icon">🔒</span>
+                <el-icon class="input-icon"><Lock /></el-icon>
                 <el-input
                   v-model="loginForm.password"
                   type="password"
@@ -116,7 +116,7 @@
 
           <div class="login-footer">
             <div class="security-notice">
-              <span class="notice-icon">⚠️</span>
+              <el-icon class="notice-icon"><WarningFilled /></el-icon>
               <span>本系统处于安全监控下，请使用本人账号登录</span>
             </div>
           </div>
@@ -139,6 +139,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { Lock, DocumentChecked, Checked, DataAnalysis, User, WarningFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()

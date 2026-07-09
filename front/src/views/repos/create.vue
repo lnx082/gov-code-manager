@@ -1,8 +1,8 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2 class="page-title">➕ 创建仓库</h2>
-      <el-button @click="$router.back()">← 返回</el-button>
+      <h2 class="page-title"><el-icon><Plus /></el-icon> 创建仓库</h2>
+      <el-button @click="$router.back()"><el-icon><Back /></el-icon> 返回</el-button>
     </div>
 
     <el-card class="form-card">
@@ -26,9 +26,9 @@
 
         <el-form-item label="仓库类型" prop="type" class="form-required">
           <el-radio-group v-model="form.type">
-            <el-radio label="source">📝 源码仓库</el-radio>
-            <el-radio label="docs">📄 文档仓库</el-radio>
-            <el-radio label="config">⚙️ 配置仓库</el-radio>
+            <el-radio label="source"><el-icon><Edit /></el-icon> 源码仓库</el-radio>
+            <el-radio label="docs"><el-icon><Document /></el-icon> 文档仓库</el-radio>
+            <el-radio label="config"><el-icon><Setting /></el-icon> 配置仓库</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -39,22 +39,22 @@
             <el-option label="涉密" value="secret" />
             <el-option label="机密" value="top-secret" />
           </el-select>
-          <span class="warning-tip">⚠️ 涉密及以上等级需要额外审批</span>
+          <span class="warning-tip"><el-icon><WarningFilled /></el-icon> 涉密及以上等级需要额外审批</span>
         </el-form-item>
 
         <el-form-item label="访问控制">
           <el-switch v-model="form.private" />
-          <span class="switch-label">{{ form.private ? '🔒 私有仓库' : '🌍 公开仓库' }}</span>
+          <span class="switch-label">{{ form.private ? '私有仓库' : '公开仓库' }}</span>
         </el-form-item>
 
         <el-form-item label="初始化仓库">
           <el-switch v-model="form.autoInit" />
-          <span class="switch-label">{{ form.autoInit ? '✅ 添加README文件' : '⬜ 空仓库' }}</span>
+          <span class="switch-label">{{ form.autoInit ? '添加README文件' : '空仓库' }}</span>
         </el-form-item>
 
         <el-form-item>
           <el-button type="danger" size="large" @click="handleSubmit" :loading="submitting">
-            ✅ 创建仓库
+            <el-icon><CircleCheck /></el-icon> 创建仓库
           </el-button>
           <el-button size="large" @click="$router.back()">取消</el-button>
         </el-form-item>
@@ -65,6 +65,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
+import { Plus, Back, Edit, Document, Setting, WarningFilled, CircleCheck } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createRepo } from '@/api/gitea'

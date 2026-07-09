@@ -15,21 +15,21 @@
         
         <div class="feature-list">
           <div class="feature-item">
-            <div class="feature-icon">📋</div>
+            <el-icon class="feature-icon"><DocumentChecked /></el-icon>
             <div class="feature-text">
               <h3>版本管控</h3>
               <p>规范的软件版本管理流程</p>
             </div>
           </div>
           <div class="feature-item">
-            <div class="feature-icon">🔒</div>
+            <el-icon class="feature-icon"><Lock /></el-icon>
             <div class="feature-text">
               <h3>安全可控</h3>
               <p>分级分类的安全管控体系</p>
             </div>
           </div>
           <div class="feature-item">
-            <div class="feature-icon">📊</div>
+            <el-icon class="feature-icon"><DataAnalysis /></el-icon>
             <div class="feature-text">
               <h3>全程追溯</h3>
               <p>完整的操作审计记录</p>
@@ -113,7 +113,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, CircleCheck } from '@element-plus/icons-vue'
+import { User, Lock, CircleCheck, DocumentChecked, DataAnalysis } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const loginFormRef = ref(null)

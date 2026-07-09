@@ -12,7 +12,7 @@
       <div class="header-right">
         <el-badge :value="noticeCount" :hidden="noticeCount === 0" class="notice-badge">
           <el-button class="header-btn" @click="showNoticeDialog = true">
-            <span class="btn-icon">🔔</span>
+            <el-icon class="btn-icon"><Bell /></el-icon>
             <span class="btn-text">通知</span>
           </el-button>
         </el-badge>
@@ -25,13 +25,13 @@
               <span class="username">{{ userStore.username }}</span>
               <span class="user-role">{{ userStore.role }}</span>
             </div>
-            <span class="dropdown-arrow">▼</span>
+            <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile">👤 个人中心</el-dropdown-item>
-              <el-dropdown-item command="settings">⚙️ 系统设置</el-dropdown-item>
-              <el-dropdown-item divided command="logout">🚪 退出登录</el-dropdown-item>
+              <el-dropdown-item command="profile"><el-icon><User /></el-icon> 个人中心</el-dropdown-item>
+              <el-dropdown-item command="settings"><el-icon><Setting /></el-icon> 系统设置</el-dropdown-item>
+              <el-dropdown-item divided command="logout"><el-icon><SwitchButton /></el-icon> 退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -47,18 +47,18 @@
           :collapse="sidebarCollapsed"
           router
           class="sidebar-menu"
-          background-color="#8b0000"
-          text-color="#fff"
-          active-text-color="#ffd700"
+          background-color="#ffffff"
+          text-color="#303133"
+          active-text-color="#ffffff"
         >
           <el-menu-item index="/dashboard">
-            <span class="menu-icon">🏠</span>
+            <el-icon class="menu-icon"><HomeFilled /></el-icon>
             <template #title>工作台</template>
           </el-menu-item>
 
           <el-sub-menu index="repositories">
             <template #title>
-              <span class="menu-icon">📁</span>
+              <el-icon class="menu-icon"><Folder /></el-icon>
               <span>仓库管理</span>
             </template>
             <el-menu-item index="/repos">仓库列表</el-menu-item>
@@ -67,7 +67,7 @@
 
           <el-sub-menu index="branches">
             <template #title>
-              <span class="menu-icon">🌿</span>
+              <el-icon class="menu-icon"><Share /></el-icon>
               <span>分支管理</span>
             </template>
             <el-menu-item index="/branches">分支列表</el-menu-item>
@@ -76,7 +76,7 @@
 
           <el-sub-menu index="versions">
             <template #title>
-              <span class="menu-icon">🏷️</span>
+              <el-icon class="menu-icon"><Collection /></el-icon>
               <span>版本管理</span>
             </template>
             <el-menu-item index="/versions">版本列表</el-menu-item>
@@ -86,7 +86,7 @@
 
           <el-sub-menu index="approval">
             <template #title>
-              <span class="menu-icon">📋</span>
+              <el-icon class="menu-icon"><DocumentChecked /></el-icon>
               <span>审批管理</span>
             </template>
             <el-menu-item index="/approval/pending">待我审批</el-menu-item>
@@ -96,7 +96,7 @@
 
           <el-sub-menu index="audit" v-if="userStore.hasPermission('audit:view')">
             <template #title>
-              <span class="menu-icon">🔍</span>
+              <el-icon class="menu-icon"><Search /></el-icon>
               <span>审计管理</span>
             </template>
             <el-menu-item index="/audit/logs">操作日志</el-menu-item>
@@ -106,7 +106,7 @@
 
           <el-sub-menu index="admin" v-if="userStore.hasPermission('admin:manage')">
             <template #title>
-              <span class="menu-icon">⚙️</span>
+              <el-icon class="menu-icon"><Setting /></el-icon>
               <span>系统管理</span>
             </template>
             <el-menu-item index="/admin/users">用户管理</el-menu-item>
@@ -117,7 +117,7 @@
         </el-menu>
 
         <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
-          {{ sidebarCollapsed ? '▶' : '◀' }}
+          <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
         </div>
       </aside>
 
@@ -157,6 +157,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -206,7 +207,7 @@ function handleUserCommand(command) {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: #f5f5f5;
 }
 
 /* 顶部导航 */
@@ -325,11 +326,12 @@ function handleUserCommand(command) {
 
 /* 侧边栏 */
 .gov-sidebar {
-  background: linear-gradient(180deg, #8b0000 0%, #6b0000 100%);
+  background: #ffffff;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s;
+  transition: width 0.3s ease;
   overflow: hidden;
+  border-right: 1px solid #e4e7ed;
 
   .sidebar-menu {
     flex: 1;
@@ -344,33 +346,50 @@ function handleUserCommand(command) {
     .menu-icon {
       margin-right: 10px;
       font-size: 16px;
+      width: 20px;
+      text-align: center;
     }
 
     :deep(.el-sub-menu__title) {
+      color: #303133;
       &:hover {
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: #ffebee !important;
+        color: #c62828 !important;
       }
     }
 
+    :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+      color: #c62828 !important;
+    }
+
     :deep(.el-menu-item) {
+      color: #303133;
       &:hover {
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: #ffebee !important;
+        color: #c62828 !important;
+      }
+
+      &.is-active {
+        background: #c62828 !important;
+        color: #ffffff !important;
       }
     }
   }
 
   .sidebar-toggle {
-    padding: 15px;
+    padding: 12px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.7);
+    color: #909399;
     cursor: pointer;
-    background: rgba(0, 0, 0, 0.2);
-    transition: all 0.3s;
+    background: #fafafa;
+    transition: all 0.2s ease;
     flex-shrink: 0;
+    border-top: 1px solid #e4e7ed;
+    font-size: 14px;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: #ffebee;
+      color: #c62828;
     }
   }
 }
@@ -380,17 +399,16 @@ function handleUserCommand(command) {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
-  background: #f5f7fa;
+  background: #f5f5f5;
 }
 
 /* 底部版权 */
 .gov-footer {
-  background: #333;
-  color: #fff;
+  background: #303133;
+  color: rgba(255, 255, 255, 0.85);
   padding: 12px 20px;
   text-align: center;
   font-size: 13px;
-  opacity: 0.9;
 }
 
 .notice-badge {
