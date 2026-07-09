@@ -193,8 +193,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getDashboardStats } from '@/api/admin'
+import { getPendingApprovals } from '@/api/approval'
+import { getRiskWarnings, getAuditLogs } from '@/api/bff'
 
 const userStore = useUserStore()
 
@@ -204,39 +208,100 @@ const currentDate = computed(() => {
 })
 
 const stats = reactive({
-  repoCount: 24,
-  versionCount: 156,
-  pendingApprovals: 5,
-  onlineUsers: 12
+  repoCount: 0,
+  versionCount: 0,
+  pendingApprovals: 0,
+  onlineUsers: 0
 })
 
 const pendingApprovals = computed(() => stats.pendingApprovals)
 
-const pendingList = ref([
-  { id: 1, type: 'merge', title: '[feature/xxx] 新增用户管理模块', applicant: '张三', createTime: '2小时前' },
-  { id: 2, type: 'version', title: '政务系统 v2.1.0 版本发布', applicant: '李四', createTime: '5小时前' },
-  { id: 3, type: 'merge', title: '[bugfix/yyy] 修复登录异常问题', applicant: '王五', createTime: '1天前' }
-])
-
-const recentActivities = ref([
-  { id: 1, user: '张三', action: '提交了', target: 'user-service 模块', time: '10分钟前' },
-  { id: 2, user: '李四', action: '创建版本', target: 'v2.0.5', time: '30分钟前' },
-  { id: 3, user: '王五', action: '合并分支', target: 'feature/auth → develop', time: '1小时前' },
-  { id: 4, user: '赵六', action: '提交审批', target: '基线封存申请', time: '2小时前' }
-])
-
-const storageUsed = ref(45)
+const pendingList = ref([])
+const recentActivities = ref([])
+const storageUsed = ref(0)
 const storageColor = computed(() => {
   if (storageUsed.value < 60) return '#67c23a'
   if (storageUsed.value < 80) return '#e6a23c'
   return '#f56c6c'
 })
 
-const riskCount = ref(2)
-const risks = ref([
-  { id: 1, level: 'warning', title: '异常登录：IP 192.168.1.100 多次登录失败', time: '10分钟前' },
-  { id: 2, level: 'info', title: '高频下载：用户test下载次数超过阈值', time: '1小时前' }
-])
+const riskCount = ref(0)
+const risks = ref([])
+
+onMounted(() => {
+  loadDashboardData()
+  loadPendingApprovals()
+  loadRiskWarnings()
+  loadRecentActivities()
+})
+
+async function loadDashboardData() {
+  try {
+    const res = await getDashboardStats()
+    const data = res.data || res
+    if (data) {
+      stats.repoCount = data.repoCount || data.repos || 0
+      stats.versionCount = data.versionCount || data.versions || 0
+      stats.pendingApprovals = data.pendingApprovals || 0
+      stats.onlineUsers = data.onlineUsers || data.users || 0
+      storageUsed.value = data.storageUsed || data.storage || 0
+    }
+  } catch (error) {
+    ElMessage.warning('加载统计数据失败')
+  }
+}
+
+async function loadPendingApprovals() {
+  try {
+    const res = await getPendingApprovals({ page: 1, pageSize: 5 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    pendingList.value = (Array.isArray(list) ? list : []).map(item => ({
+      id: item.id,
+      type: item.operationType || item.type || 'merge',
+      title: item.title || item.description || item.target,
+      applicant: item.applicantName || item.applicant || item.username || '',
+      createTime: item.createdAt || item.createTime || ''
+    }))
+    stats.pendingApprovals = pendingList.value.length
+  } catch (error) {
+    ElMessage.warning('加载待审批列表失败')
+  }
+}
+
+async function loadRiskWarnings() {
+  try {
+    const res = await getRiskWarnings({ page: 1, pageSize: 5 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    risks.value = (Array.isArray(list) ? list : []).map(item => ({
+      id: item.id,
+      level: item.level || 'warning',
+      title: item.title || item.description || '',
+      time: item.createdAt || item.time || ''
+    }))
+    riskCount.value = risks.value.length
+  } catch (error) {
+    ElMessage.warning('加载风险预警失败')
+  }
+}
+
+async function loadRecentActivities() {
+  try {
+    const res = await getAuditLogs({ page: 1, pageSize: 5 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    recentActivities.value = (Array.isArray(list) ? list : []).map(item => ({
+      id: item.id,
+      user: item.username || item.user || '',
+      action: item.actionType || item.action || '',
+      target: item.target || '',
+      time: item.timestamp || item.createdAt || item.time || ''
+    }))
+  } catch (error) {
+    ElMessage.warning('加载最新动态失败')
+  }
+}
 
 function getTypeTagType(type) {
   const map = { merge: 'primary', version: 'success', baseline: 'warning' }

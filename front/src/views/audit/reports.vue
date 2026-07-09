@@ -63,7 +63,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="generateReport">
+          <el-button type="primary" @click="generateReportHandler">
             <el-icon><Download /></el-icon>
             生成报表
           </el-button>
@@ -103,14 +103,16 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAuditReports, generateReport, exportReport } from '@/api/audit'
+import { getAuditStats } from '@/api/bff'
 
 const stats = reactive({
-  totalOperations: 12580,
-  totalUsers: 45,
-  totalRepos: 128,
-  riskCount: 12
+  totalOperations: 0,
+  totalUsers: 0,
+  totalRepos: 0,
+  riskCount: 0
 })
 
 const reportForm = reactive({
@@ -119,27 +121,79 @@ const reportForm = reactive({
   format: 'pdf'
 })
 
-const reportList = ref([
-  { id: 1, name: '2024年1月版本变更统计报表', type: 'version', dateRange: '2024-01-01 至 2024-01-15', creator: '系统', createdAt: '2024-01-15 10:00' },
-  { id: 2, name: '2024年1月操作审计报表', type: 'audit', dateRange: '2024-01-01 至 2024-01-15', creator: '系统', createdAt: '2024-01-15 09:00' }
-])
+const reportList = ref([])
 
-function generateReport() {
-  ElMessage.success('报表生成中，请稍候...')
-  setTimeout(() => {
+onMounted(() => {
+  loadStats()
+  loadReports()
+})
+
+async function loadStats() {
+  try {
+    const res = await getAuditStats()
+    const data = res.data || res
+    if (data) {
+      stats.totalOperations = data.totalOperations || data.total || 0
+      stats.totalUsers = data.totalUsers || data.users || 0
+      stats.totalRepos = data.totalRepos || data.repos || 0
+      stats.riskCount = data.riskCount || data.risks || 0
+    }
+  } catch (error) {
+    ElMessage.warning('加载统计数据失败')
+  }
+}
+
+async function loadReports() {
+  try {
+    const res = await getAuditReports({ page: 1, pageSize: 20 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    reportList.value = Array.isArray(list) ? list : []
+  } catch (error) {
+    ElMessage.warning('加载报表列表失败')
+  }
+}
+
+async function generateReportHandler() {
+  try {
+    const params = {
+      type: reportForm.type,
+      format: reportForm.format
+    }
+    if (reportForm.dateRange && reportForm.dateRange.length === 2) {
+      params.startDate = reportForm.dateRange[0]
+      params.endDate = reportForm.dateRange[1]
+    }
+    ElMessage.info('报表生成中，请稍候...')
+    await generateReport(params)
     ElMessage.success('报表生成成功')
-  }, 2000)
+    loadReports()
+  } catch (error) {
+    ElMessage.warning('报表生成失败')
+  }
 }
 
-function downloadReport(row) {
-  ElMessage.success(`开始下载: ${row.name}`)
+async function downloadReport(row) {
+  try {
+    await exportReport(row.id)
+    ElMessage.success(`开始下载: ${row.name}`)
+  } catch (error) {
+    ElMessage.warning('报表下载失败')
+  }
 }
 
-function deleteReport(row) {
-  ElMessageBox.confirm('确定要删除该报表吗？', '删除确认', { type: 'warning' })
-    .then(() => {
-      ElMessage.success('报表已删除')
-    })
+async function deleteReport(row) {
+  try {
+    await ElMessageBox.confirm('确定要删除该报表吗？', '删除确认', { type: 'warning' })
+    const { deleteReport: delReport } = await import('@/api/bff')
+    await delReport(row.id)
+    ElMessage.success('报表已删除')
+    loadReports()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.warning('删除报表失败')
+    }
+  }
 }
 
 function getTypeName(type) {

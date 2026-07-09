@@ -12,7 +12,7 @@ router.get('/', authenticate, requirePermission('admin:manage'), async (req, res
     
     const total = await db('backups').count('* as count').first();
     const list = await db('backups')
-      .orderBy('created_at', 'desc')
+      .orderBy('start_time', 'desc')
       .limit(parseInt(pageSize))
       .offset(offset);
     

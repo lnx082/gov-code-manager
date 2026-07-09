@@ -113,20 +113,15 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getBaselineList, createBaseline, freezeBaseline } from '@/api/admin'
+import { getVersionList } from '@/api/version'
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 
-const baselineList = ref([
-  { id: 1, name: 'Baseline-2024-Q1', version: 'v1.0.0', repoId: 1, repoName: '政务系统-用户模块', description: '2024年第一季度基线版本，包含用户管理、权限控制等核心功能', status: 'active', creator: '张三', createdAt: '2024-01-10', history: [] },
-  { id: 2, name: 'Baseline-2023-Q4', version: 'v0.9.0', repoId: 1, repoName: '政务系统-用户模块', description: '2023年第四季度基线版本', status: 'active', creator: '李四', createdAt: '2023-10-15', history: [] }
-])
-
-const versionOptions = ref([
-  { id: 1, name: 'v1.0.0', repoName: '政务系统-用户模块' },
-  { id: 2, name: 'v0.9.0', repoName: '政务系统-用户模块' }
-])
+const baselineList = ref([])
+const versionOptions = ref([])
 
 const currentBaseline = ref(null)
 
@@ -145,23 +140,56 @@ const createRules = {
 
 onMounted(() => {
   loadBaselines()
+  loadVersions()
 })
 
-function loadBaselines() {
+async function loadBaselines() {
   loading.value = true
-  setTimeout(() => {
+  try {
+    const res = await getBaselineList()
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    baselineList.value = Array.isArray(list) ? list : []
+  } catch (error) {
+    ElMessage.warning('加载基线列表失败')
+    baselineList.value = []
+  } finally {
     loading.value = false
-  }, 300)
+  }
+}
+
+async function loadVersions() {
+  try {
+    const res = await getVersionList({ page: 1, pageSize: 50 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    versionOptions.value = (Array.isArray(list) ? list : []).map(v => ({
+      id: v.id || v.tagName,
+      name: v.tagName || v.name || v.version,
+      repoName: v.repoName || v.repo || ''
+    }))
+  } catch (error) {
+    ElMessage.warning('加载版本列表失败')
+  }
 }
 
 function showCreateDialog() {
   createDialogVisible.value = true
 }
 
-function handleCreate() {
-  ElMessage.success('基线创建申请已提交，等待审批')
-  createDialogVisible.value = false
-  loadBaselines()
+async function handleCreate() {
+  try {
+    await createBaseline({
+      name: createForm.name,
+      versionId: createForm.versionId,
+      description: createForm.description
+    })
+    ElMessage.success('基线创建申请已提交，等待审批')
+    createDialogVisible.value = false
+    loadBaselines()
+  } catch (error) {
+    ElMessage.warning('创建基线失败')
+  }
 }
 
 function viewDetail(row) {
@@ -173,12 +201,17 @@ function handleChange(row) {
   ElMessage.info('基线变更功能开发中')
 }
 
-function handleFreeze(row) {
-  ElMessageBox.confirm(`确定要冻结基线 "${row.name}" 吗？冻结后该基线将不能再用于上线。`, '冻结基线', { type: 'warning' })
-    .then(() => {
-      ElMessage.success('基线已冻结')
-      loadBaselines()
-    })
+async function handleFreeze(row) {
+  try {
+    await ElMessageBox.confirm(`确定要冻结基线 "${row.name}" 吗？冻结后该基线将不能再用于上线。`, '冻结基线', { type: 'warning' })
+    await freezeBaseline(row.id)
+    ElMessage.success('基线已冻结')
+    loadBaselines()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.warning('冻结基线失败')
+    }
+  }
 }
 
 function formatTime(time) {

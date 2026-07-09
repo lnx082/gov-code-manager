@@ -116,6 +116,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getRiskWarnings, handleRiskWarning } from '@/api/bff'
 
 const loading = ref(false)
 const handleDialogVisible = ref(false)
@@ -132,12 +133,7 @@ const pagination = reactive({
   total: 0
 })
 
-const warningList = ref([
-  { id: 1, level: 'high', type: 'login_abnormal', description: 'IP 192.168.1.100 多次登录失败，疑似暴力破解', username: 'test_user', time: '2024-01-15 10:30', status: 'pending' },
-  { id: 2, level: 'medium', type: 'download_frequent', description: '用户 zhangsan 短时间内下载次数超过阈值(50次)', username: 'zhangsan', time: '2024-01-15 09:45', status: 'pending' },
-  { id: 3, level: 'low', type: 'permission_violation', description: '用户 lisi 尝试访问非授权仓库', username: 'lisi', time: '2024-01-14 16:20', status: 'handled', handler: '系统管理员' }
-])
-
+const warningList = ref([])
 const currentWarning = ref(null)
 
 const handleForm = reactive({
@@ -151,36 +147,69 @@ onMounted(() => {
   loadWarnings()
 })
 
-function loadWarnings() {
+async function loadWarnings() {
   loading.value = true
-  setTimeout(() => {
-    pagination.total = warningList.value.length
+  try {
+    const params = {
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    }
+    if (filterForm.level) params.level = filterForm.level
+    if (filterForm.type) params.type = filterForm.type
+    if (filterForm.status) params.status = filterForm.status
+
+    const res = await getRiskWarnings(params)
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    warningList.value = Array.isArray(list) ? list : []
+    pagination.total = data.total || warningList.value.length
+  } catch (error) {
+    ElMessage.warning('加载风险预警失败')
+    warningList.value = []
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleFilter() {
+  pagination.page = 1
   loadWarnings()
 }
 
 function handleWarning(row) {
   currentWarning.value = row
+  handleForm.action = 'notify'
+  handleForm.comment = ''
   handleDialogVisible.value = true
 }
 
-function submitHandle() {
-  ElMessage.success('预警处理成功')
-  handleDialogVisible.value = false
-  loadWarnings()
+async function submitHandle() {
+  if (!currentWarning.value) return
+  try {
+    await handleRiskWarning(currentWarning.value.id, {
+      action: handleForm.action,
+      comment: handleForm.comment
+    })
+    ElMessage.success('预警处理成功')
+    handleDialogVisible.value = false
+    loadWarnings()
+  } catch (error) {
+    ElMessage.warning('预警处理失败')
+  }
 }
 
 function viewDetail(row) {
   ElMessage.info('查看预警详情')
 }
 
-function ignoreWarning(row) {
-  ElMessage.success('预警已忽略')
-  loadWarnings()
+async function ignoreWarning(row) {
+  try {
+    await handleRiskWarning(row.id, { action: 'ignore' })
+    ElMessage.success('预警已忽略')
+    loadWarnings()
+  } catch (error) {
+    ElMessage.warning('忽略预警失败')
+  }
 }
 
 function getLevelTagType(level) {

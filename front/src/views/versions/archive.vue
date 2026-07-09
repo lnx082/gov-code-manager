@@ -72,6 +72,8 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getArchiveList, restoreArchive } from '@/api/admin'
+import { getMyRepos } from '@/api/gitea'
 
 const loading = ref(false)
 
@@ -86,29 +88,51 @@ const pagination = reactive({
   total: 0
 })
 
-const archiveList = ref([
-  { id: 1, name: 'v0.8.0', repoId: 1, repoName: '政务系统-用户模块', type: 'abandoned', archiveReason: '版本功能已废弃', archiver: '张三', archivedAt: '2024-01-12' },
-  { id: 2, name: 'v0.7.5', repoId: 1, repoName: '政务系统-用户模块', type: 'test', archiveReason: '测试完成，版本归档', archiver: '李四', archivedAt: '2024-01-08' }
-])
-
-const repoList = ref([
-  { id: 1, name: '政务系统-用户模块' },
-  { id: 2, name: '政务系统-审批模块' }
-])
+const archiveList = ref([])
+const repoList = ref([])
 
 onMounted(() => {
   loadArchives()
+  loadRepos()
 })
 
-function loadArchives() {
+async function loadArchives() {
   loading.value = true
-  setTimeout(() => {
-    pagination.total = archiveList.value.length
+  try {
+    const params = {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      type: filterForm.type || undefined,
+      repoId: filterForm.repoId || undefined
+    }
+    const res = await getArchiveList(params)
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    archiveList.value = Array.isArray(list) ? list : []
+    pagination.total = data.total || archiveList.value.length
+  } catch (error) {
+    ElMessage.warning('加载归档列表失败')
+    archiveList.value = []
+  } finally {
     loading.value = false
-  }, 300)
+  }
+}
+
+async function loadRepos() {
+  try {
+    const res = await getMyRepos()
+    const repos = res.data || res
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+      id: r.id,
+      name: r.full_name || r.name
+    }))
+  } catch (error) {
+    ElMessage.warning('加载仓库列表失败')
+  }
 }
 
 function handleFilter() {
+  pagination.page = 1
   loadArchives()
 }
 
@@ -116,12 +140,17 @@ function viewDetail(row) {
   ElMessage.info('查看归档详情功能开发中')
 }
 
-function restore(row) {
-  ElMessageBox.confirm(`确定要恢复版本 "${row.name}" 吗？`, '恢复版本', { type: 'warning' })
-    .then(() => {
-      ElMessage.success('版本已恢复')
-      loadArchives()
-    })
+async function restore(row) {
+  try {
+    await ElMessageBox.confirm(`确定要恢复版本 "${row.name}" 吗？`, '恢复版本', { type: 'warning' })
+    await restoreArchive(row.id)
+    ElMessage.success('版本已恢复')
+    loadArchives()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.warning('恢复版本失败')
+    }
+  }
 }
 
 function getTypeTagType(type) {

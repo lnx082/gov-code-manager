@@ -122,16 +122,12 @@
         </el-form-item>
         <el-form-item label="关联审批流程">
           <el-select v-model="createForm.approvalFlowId" placeholder="选择审批流程" clearable>
-            <el-option label="标准流程" value="1" />
-            <el-option label="涉密版本流程" value="2" />
-            <el-option label="紧急修复流程" value="3" />
+            <el-option v-for="flow in approvalFlows" :key="flow.id" :label="flow.name" :value="flow.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="指派审批人">
           <el-select v-model="createForm.reviewers" multiple placeholder="选择审批人">
-            <el-option label="张三" value="zhangsan" />
-            <el-option label="李四" value="lisi" />
-            <el-option label="王五" value="wangwu" />
+            <el-option v-for="user in reviewerOptions" :key="user.value" :label="user.label" :value="user.value" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -239,6 +235,10 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles } from '@/api/gitea'
+import { createMergeRequest as bffCreateMerge, getMergeRequestList as bffGetMergeList } from '@/api/branches'
+import { getApprovalFlows } from '@/api/bff'
+import { getUserList } from '@/api/user'
 
 const route = useRoute()
 
@@ -258,15 +258,8 @@ const pagination = reactive({
   total: 0
 })
 
-const mergeRequestList = ref([
-  { id: 1, title: '[feature/user-auth] 新增用户认证模块', sourceBranch: 'feature/user-auth', targetBranch: 'develop', repoId: 1, repoName: '政务系统-用户模块', status: 'pending', approvals: 1, requiredApprovals: 2, approvalRate: 50, author: '张三', createdAt: '2024-01-15 10:00', additions: 150, deletions: 20, fileChanges: 8, files: [{ path: 'src/auth/login.js', status: 'modified' }], approvalRecords: [] },
-  { id: 2, title: '[bugfix/login] 修复登录页面样式异常', sourceBranch: 'bugfix/login', targetBranch: 'main', repoId: 1, repoName: '政务系统-用户模块', status: 'approved', approvals: 2, requiredApprovals: 2, approvalRate: 100, author: '李四', createdAt: '2024-01-14 15:00', additions: 5, deletions: 3, fileChanges: 1, files: [], approvalRecords: [] }
-])
-
-const repoList = ref([
-  { id: 1, name: '政务系统-用户模块' },
-  { id: 2, name: '政务系统-审批模块' }
-])
+const mergeRequestList = ref([])
+const repoList = ref([])
 
 const currentMR = ref(null)
 
@@ -289,8 +282,10 @@ const createRules = {
   targetBranch: [{ required: true, message: '请选择目标分支', trigger: 'change' }]
 }
 
-const sourceBranches = ref(['develop', 'feature/user-auth', 'bugfix/login'])
-const targetBranches = ref(['main', 'develop'])
+const sourceBranches = ref([])
+const targetBranches = ref([])
+const approvalFlows = ref([])
+const reviewerOptions = ref([])
 
 const approvalForm = reactive({
   status: 'approved',
@@ -302,15 +297,112 @@ onMounted(() => {
     createForm.sourceBranch = route.query.source
     createDialogVisible.value = true
   }
+  loadRepos()
   loadData()
+  loadApprovalFlows()
+  loadReviewers()
 })
 
-function loadData() {
+async function loadRepos() {
+  try {
+    const res = await getMyRepos()
+    const repos = res.data || res
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+      id: r.id,
+      name: r.full_name || r.name,
+      owner: r.owner?.username || r.owner,
+      repo: r.name
+    }))
+  } catch (error) {
+    ElMessage.warning('加载仓库列表失败')
+  }
+}
+
+async function loadApprovalFlows() {
+  try {
+    const res = await getApprovalFlows()
+    const data = res.data || res
+    approvalFlows.value = (Array.isArray(data) ? data : data.list || data.records || []).map(f => ({
+      id: f.id,
+      name: f.name || f.title
+    }))
+  } catch {
+    // flows are optional
+  }
+}
+
+async function loadReviewers() {
+  try {
+    const res = await getUserList({ page: 1, pageSize: 50 })
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    reviewerOptions.value = (Array.isArray(list) ? list : []).map(u => ({
+      label: u.nickname || u.username || u.name,
+      value: u.username || u.id
+    }))
+  } catch {
+    // reviewers are optional
+  }
+}
+
+async function loadData() {
   loading.value = true
-  setTimeout(() => {
+  try {
+    const params = {
+      page: pagination.page,
+      limit: pagination.pageSize
+    }
+    let list = []
+    // Try BFF merge list first (has approval data)
+    try {
+      const res = await bffGetMergeList({ ...params })
+      const data = res.data || res
+      list = data.list || data.records || data || []
+      if (!Array.isArray(list) && typeof list === 'object') {
+        list = Object.values(list).filter(v => typeof v === 'object')
+      }
+    } catch {
+      // Fall back to trying to load PRs from repos
+      for (const repo of repoList.value.slice(0, 3)) {
+        try {
+          const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 5 })
+          const prs = prRes.data || prRes
+          if (Array.isArray(prs)) {
+            list.push(...prs.map(pr => ({
+              id: pr.id || pr.number,
+              title: pr.title,
+              sourceBranch: pr.head?.label || pr.head?.ref || '',
+              targetBranch: pr.base?.label || pr.base?.ref || '',
+              repoId: repo.id,
+              repoName: repo.name,
+              status: pr.state === 'open' ? 'pending' : pr.merged ? 'merged' : 'closed',
+              approvals: 0,
+              requiredApprovals: 0,
+              approvalRate: 0,
+              author: pr.user?.username || pr.user?.login || '',
+              createdAt: pr.created_at || pr.createdAt,
+              additions: 0,
+              deletions: 0,
+              fileChanges: 0,
+              files: [],
+              approvalRecords: [],
+              owner: repo.owner,
+              repo: repo.repo
+            })))
+          }
+        } catch {
+          // Skip repos that fail
+        }
+      }
+    }
+
+    mergeRequestList.value = Array.isArray(list) ? list : []
     pagination.total = mergeRequestList.value.length
+  } catch (error) {
+    ElMessage.warning('加载合并请求列表失败')
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleFilter() {
@@ -321,23 +413,74 @@ function showCreateDialog() {
   createDialogVisible.value = true
 }
 
-function loadSourceBranches() {
-  sourceBranches.value = ['develop', 'feature/new', 'bugfix/issue']
+async function loadSourceBranches() {
+  const repo = repoList.value.find(r => r.id === createForm.sourceRepoId)
+  if (!repo) return
+  try {
+    const res = await getBranches(repo.owner, repo.repo)
+    const branches = res.data || res
+    sourceBranches.value = (Array.isArray(branches) ? branches : []).map(b => b.name)
+  } catch (error) {
+    ElMessage.warning('加载源分支列表失败')
+  }
 }
 
-function loadTargetBranches() {
-  targetBranches.value = ['main', 'develop', 'test']
+async function loadTargetBranches() {
+  const repo = repoList.value.find(r => r.id === createForm.targetRepoId)
+  if (!repo) return
+  try {
+    const res = await getBranches(repo.owner, repo.repo)
+    const branches = res.data || res
+    targetBranches.value = (Array.isArray(branches) ? branches : []).map(b => b.name)
+  } catch (error) {
+    ElMessage.warning('加载目标分支列表失败')
+  }
 }
 
 async function handleCreate() {
-  ElMessage.success('合并请求创建成功')
-  createDialogVisible.value = false
-  loadData()
+  const sourceRepo = repoList.value.find(r => r.id === createForm.sourceRepoId)
+  const targetRepo = repoList.value.find(r => r.id === createForm.targetRepoId)
+  if (!sourceRepo || !targetRepo) {
+    ElMessage.warning('请选择仓库')
+    return
+  }
+  try {
+    await createPullRequest(sourceRepo.owner, sourceRepo.repo, {
+      title: createForm.title,
+      head: createForm.sourceBranch,
+      base: createForm.targetBranch,
+      body: createForm.description
+    })
+    ElMessage.success('合并请求创建成功')
+    createDialogVisible.value = false
+    loadData()
+  } catch (error) {
+    ElMessage.warning('创建合并请求失败')
+  }
 }
 
-function viewDetail(row) {
-  currentMR.value = row
+async function viewDetail(row) {
+  currentMR.value = { ...row }
   detailDialogVisible.value = true
+  // Try to load PR files
+  const repo = repoList.value.find(r => r.id === row.repoId)
+  if (repo && (row.id || row.number)) {
+    try {
+      const res = await getPullRequestFiles(repo.owner, repo.repo, row.id || row.number)
+      const files = res.data || res
+      if (Array.isArray(files)) {
+        currentMR.value.files = files.map(f => ({
+          path: f.filename || f.path,
+          status: f.status || 'modified'
+        }))
+        currentMR.value.additions = files.reduce((sum, f) => sum + (f.additions || 0), 0)
+        currentMR.value.deletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0)
+        currentMR.value.fileChanges = files.length
+      }
+    } catch {
+      // Fallback to existing data
+    }
+  }
 }
 
 function showApprovalDialog() {
@@ -345,10 +488,20 @@ function showApprovalDialog() {
 }
 
 async function submitApproval() {
-  ElMessage.success('审批提交成功')
-  approvalDialogVisible.value = false
-  detailDialogVisible.value = false
-  loadData()
+  if (!currentMR.value) return
+  try {
+    const { processApproval } = await import('@/api/approval')
+    await processApproval(currentMR.value.id, {
+      action: approvalForm.status === 'approved' ? 'approved' : 'rejected',
+      comment: approvalForm.comment
+    })
+    ElMessage.success('审批提交成功')
+    approvalDialogVisible.value = false
+    detailDialogVisible.value = false
+    loadData()
+  } catch (error) {
+    ElMessage.warning('审批提交失败')
+  }
 }
 
 function handleApprove(row) {
@@ -356,14 +509,32 @@ function handleApprove(row) {
   showApprovalDialog()
 }
 
-function handleClose(row) {
-  ElMessage.warning('关闭合并请求功能开发中')
+async function handleClose(row) {
+  try {
+    const repo = repoList.value.find(r => r.id === row.repoId)
+    if (repo) {
+      await closePullRequest(repo.owner, repo.repo, row.id || row.number)
+    }
+    ElMessage.success('合并请求已关闭')
+    loadData()
+  } catch (error) {
+    ElMessage.warning('关闭合并请求失败')
+  }
 }
 
-function handleMerge() {
-  ElMessage.success('合并成功')
-  detailDialogVisible.value = false
-  loadData()
+async function handleMerge() {
+  if (!currentMR.value) return
+  try {
+    const repo = repoList.value.find(r => r.id === currentMR.value.repoId)
+    if (repo) {
+      await mergePullRequest(repo.owner, repo.repo, currentMR.value.id || currentMR.value.number)
+    }
+    ElMessage.success('合并成功')
+    detailDialogVisible.value = false
+    loadData()
+  } catch (error) {
+    ElMessage.warning('合并失败')
+  }
 }
 
 function getStatusType(status) {

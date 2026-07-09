@@ -11,8 +11,8 @@ router.get('/', authenticate, async (req, res, next) => {
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     
     let query = db('user_profiles')
-      .select('user_profiles.*', 'roles.role_name', 'departments.name as department_name')
-      .leftJoin('roles', 'user_profiles.role_code', 'roles.role_code')
+      .select('user_profiles.*', 'roles.name as role_name', 'departments.name as department_name')
+      .leftJoin('roles', 'user_profiles.role_code', 'roles.code')
       .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id');
     
     if (username) {
@@ -22,8 +22,15 @@ router.get('/', authenticate, async (req, res, next) => {
       query = query.where('role_code', role);
     }
     
-    const totalQuery = query.clone();
-    const total = await totalQuery.count('* as count').first();
+    // 单独统计总数（避免 LEFT JOIN 和 count(*) 的 GROUP BY 冲突）
+    let countQuery = db('user_profiles');
+    if (username) {
+      countQuery = countQuery.where('gitea_username', 'like', `%${username}%`);
+    }
+    if (role) {
+      countQuery = countQuery.where('role_code', role);
+    }
+    const total = await countQuery.count('* as count').first();
     
     const users = await query.orderBy('user_profiles.created_at', 'desc')
       .limit(parseInt(pageSize))
@@ -49,7 +56,7 @@ router.get('/me', authenticate, async (req, res, next) => {
     const profile = await db('user_profiles')
       .select('user_profiles.*', 'departments.name as department_name')
       .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
-      .where('profile_id', req.user.userId)
+      .where('user_id', req.user.userId)
       .first();
     
     if (!profile) {
@@ -69,18 +76,17 @@ router.get('/me', authenticate, async (req, res, next) => {
 router.put('/:id', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { nickname, role_code, department_id, secret_level, is_active } = req.body;
-    
+    const { nickname, role_code, department_id, is_active } = req.body;
+
+    const updateData = { updated_at: new Date() };
+    if (nickname !== undefined) updateData.nickname = nickname;
+    if (role_code !== undefined) updateData.role_code = role_code;
+    if (department_id !== undefined) updateData.department_id = department_id;
+    if (is_active !== undefined) updateData.is_active = is_active;
+
     await db('user_profiles')
-      .where('profile_id', id)
-      .update({
-        nickname,
-        role_code,
-        department_id,
-        secret_level,
-        is_active,
-        updated_at: new Date(),
-      });
+      .where('user_id', id)
+      .update(updateData);
     
     res.json({
       code: 200,
@@ -97,13 +103,15 @@ router.post('/:id/lock', authenticate, async (req, res, next) => {
     const { id } = req.params;
     const { locked } = req.body;
     
+    // locked_until 为时间戳：NULL=未锁定，未来时间=锁定
+    const lockedUntil = locked ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) : null;
     await db('user_profiles')
-      .where('profile_id', id)
+      .where('user_id', id)
       .update({
-        account_locked: locked,
+        locked_until: lockedUntil,
         updated_at: new Date(),
       });
-    
+
     res.json({
       code: 200,
       message: locked ? '用户已锁定' : '用户已解锁',
@@ -117,7 +125,7 @@ router.post('/:id/lock', authenticate, async (req, res, next) => {
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
-    await db('user_profiles').where('profile_id', id).delete();
+    await db('user_profiles').where('user_id', id).delete();
     
     res.json({
       code: 200,
@@ -135,7 +143,7 @@ router.post('/change-password', authenticate, async (req, res, next) => {
     
     // 验证旧密码
     const profile = await db('user_profiles')
-      .where('profile_id', req.user.userId)
+      .where('user_id', req.user.userId)
       .first();
     
     if (profile.password_hash) {
@@ -152,7 +160,7 @@ router.post('/change-password', authenticate, async (req, res, next) => {
     // 更新密码
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await db('user_profiles')
-      .where('profile_id', req.user.userId)
+      .where('user_id', req.user.userId)
       .update({
         password_hash: hashedPassword,
         updated_at: new Date(),

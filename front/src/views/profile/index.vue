@@ -72,7 +72,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { getMySessions, deleteSession } from '@/api/user'
+import { getMySessions, deleteSession, updateUser, changePassword } from '@/api/user'
 
 const userStore = useUserStore()
 
@@ -106,19 +106,39 @@ async function loadSessions() {
   }
 }
 
-function handleSave() {
-  ElMessage.success('保存成功')
+async function handleSave() {
+  try {
+    const userId = userStore.userInfo?.id || userStore.userInfo?.userId
+    if (userId) {
+      await updateUser(userId, { nickname: form.nickname })
+    }
+    ElMessage.success('保存成功')
+  } catch (error) {
+    ElMessage.warning('保存失败')
+  }
 }
 
-function handleChangePassword() {
+async function handleChangePassword() {
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
     ElMessage.error('两次密码输入不一致')
     return
   }
-  ElMessage.success('密码修改成功')
-  passwordForm.oldPassword = ''
-  passwordForm.newPassword = ''
-  passwordForm.confirmPassword = ''
+  if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+    ElMessage.error('请填写完整密码信息')
+    return
+  }
+  try {
+    await changePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword
+    })
+    ElMessage.success('密码修改成功')
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+  } catch (error) {
+    ElMessage.warning('密码修改失败')
+  }
 }
 
 async function handleDeleteSession(row) {

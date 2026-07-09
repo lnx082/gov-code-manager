@@ -127,6 +127,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getAuditLogs } from '@/api/audit'
 
 const loading = ref(false)
 const detailDialogVisible = ref(false)
@@ -144,24 +145,39 @@ const pagination = reactive({
   total: 0
 })
 
-const logList = ref([
-  { id: 'LOG-2024-001', timestamp: '2024-01-15 10:30:25', username: '张三', role: '开发人员', actionType: 'commit', target: 'gov-user-service', description: '提交代码到 feature/auth 分支', ip: '192.168.1.100', success: true, userAgent: 'git/2.39.0', details: { branch: 'feature/auth', files: 3, additions: 150, deletions: 20 } },
-  { id: 'LOG-2024-002', timestamp: '2024-01-15 10:25:00', username: '李四', role: '项目管理员', actionType: 'merge', target: 'gov-user-service', description: '合并 feature/auth 到 develop', ip: '192.168.1.101', success: true, userAgent: 'Mozilla/5.0', details: { source: 'feature/auth', target: 'develop', commits: 5 } },
-  { id: 'LOG-2024-003', timestamp: '2024-01-15 10:20:15', username: '王五', role: '开发人员', actionType: 'download', target: 'gov-system-v1.0.0', description: '下载版本压缩包', ip: '192.168.1.102', success: true, userAgent: 'Mozilla/5.0', details: { version: 'v1.0.0', size: '125MB' } }
-])
-
+const logList = ref([])
 const currentLog = ref(null)
 
 onMounted(() => {
   loadLogs()
 })
 
-function loadLogs() {
+async function loadLogs() {
   loading.value = true
-  setTimeout(() => {
-    pagination.total = 156
+  try {
+    const params = {
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    }
+    if (filterForm.dateRange && filterForm.dateRange.length === 2) {
+      params.startTime = filterForm.dateRange[0]
+      params.endTime = filterForm.dateRange[1]
+    }
+    if (filterForm.username) params.username = filterForm.username
+    if (filterForm.actionType) params.actionType = filterForm.actionType
+    if (filterForm.target) params.target = filterForm.target
+
+    const res = await getAuditLogs(params)
+    const data = res.data || res
+    const list = data.list || data.records || data || []
+    logList.value = Array.isArray(list) ? list : []
+    pagination.total = data.total || logList.value.length
+  } catch (error) {
+    ElMessage.warning('加载审计日志失败')
+    logList.value = []
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleFilter() {
@@ -174,8 +190,18 @@ function resetFilter() {
   loadLogs()
 }
 
-function handleExport() {
-  ElMessage.success('日志导出功能开发中')
+async function handleExport() {
+  try {
+    const params = {}
+    if (filterForm.dateRange && filterForm.dateRange.length === 2) {
+      params.startTime = filterForm.dateRange[0]
+      params.endTime = filterForm.dateRange[1]
+    }
+    // 导出功能将在后续版本实现
+    ElMessage.info('日志导出功能开发中')
+  } catch (error) {
+    ElMessage.warning('日志导出失败')
+  }
 }
 
 function viewDetail(row) {
