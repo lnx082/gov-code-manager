@@ -4,10 +4,11 @@
       <div class="repo-info">
         <div class="repo-title">
           <el-icon class="repo-icon"><FolderOpened /></el-icon>
-          <h1>{{ repoInfo.name }}</h1>
+          <h1>{{ displayName }}</h1>
           <el-tag v-if="repoType" :type="repoTypeTag" size="small">{{ repoTypeLabel }}</el-tag>
         </div>
-        <p class="repo-description">{{ cleanDescription || repoInfo.description || '暂无描述' }}</p>
+        <p class="repo-subname" v-if="displayName !== repoInfo.name">{{ repoInfo.name }}</p>
+        <p class="repo-description">{{ cleanDescription || '暂无描述' }}</p>
         <div class="repo-meta">
           <span><el-icon><User /></el-icon> {{ repoInfo.owner }}</span>
           <span><el-icon><Clock /></el-icon> {{ formatTime(repoInfo.updatedAt) }}</span>
@@ -173,7 +174,16 @@ const settingsForm = reactive({ name: '', description: '', private: true, defaul
 const repoType = computed(() => { const m = (repoInfo.description||'').match(/^\[(source|docs|config)\]/); return m ? m[1] : '' })
 const repoTypeTag = computed(() => repoType.value === 'source' ? '' : repoType.value === 'docs' ? 'success' : 'warning')
 const repoTypeLabel = computed(() => repoType.value === 'source' ? '源码' : repoType.value === 'docs' ? '文档' : repoType.value === 'config' ? '配置' : '')
-const cleanDescription = computed(() => (repoInfo.description||'').replace(/^\[(source|docs|config)\]\s*/, ''))
+const displayName = computed(() => {
+  const m = (repoInfo.description||'').match(/\[显示名=([^\]]+)\]/)
+  return m ? m[1] : repoInfo.name
+})
+const cleanDescription = computed(() => {
+  return (repoInfo.description||'')
+    .replace(/^\[(source|docs|config)\]\s*/, '')
+    .replace(/\[显示名=[^\]]+\]\s*/, '')
+    .replace(/\[(公开|秘密|机密|绝密)\]\s*/, '')
+})
 const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
 const sshCloneUrl = computed(() => `git@123.60.219.19:${repoInfo.owner}/${repoInfo.name}.git`)
 
@@ -294,6 +304,7 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
 .repo-detail-container{background:#fff;border-radius:8px;overflow:hidden}
 .repo-header{display:flex;justify-content:space-between;align-items:flex-start;padding:24px;border-bottom:1px solid #ebeef5;background:#fafafa}
 .repo-title{display:flex;align-items:center;gap:8px;h1{margin:0;font-size:22px}}
+.repo-subname{color:#909399;font-size:13px;margin:0;font-family:monospace}
 .repo-description{color:#909399;margin:8px 0}
 .repo-meta{display:flex;gap:16px;color:#909399;font-size:13px;span{display:flex;align-items:center;gap:4px}}
 .repo-actions{display:flex;gap:8px;flex-shrink:0}
