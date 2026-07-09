@@ -5,8 +5,9 @@
         <div class="repo-title">
           <el-icon class="repo-icon"><FolderOpened /></el-icon>
           <h1>{{ repoInfo.name }}</h1>
+          <el-tag v-if="repoType" :type="repoTypeTag" size="small">{{ repoTypeLabel }}</el-tag>
         </div>
-        <p class="repo-description">{{ repoInfo.description || '暂无描述' }}</p>
+        <p class="repo-description">{{ cleanDescription || repoInfo.description || '暂无描述' }}</p>
         <div class="repo-meta">
           <span><el-icon><User /></el-icon> {{ repoInfo.owner }}</span>
           <span><el-icon><Clock /></el-icon> {{ formatTime(repoInfo.updatedAt) }}</span>
@@ -256,6 +257,19 @@ const settingsForm = reactive({
   description: '',
   private: false,
   defaultBranch: 'main'
+})
+
+// 从描述中解析仓库类型 [source]/[docs]/[config]
+const repoType = computed(() => {
+  const desc = repoInfo.description || ''
+  const match = desc.match(/^\[(source|docs|config)\]/)
+  return match ? match[1] : ''
+})
+const repoTypeTag = computed(() => repoType.value === 'source' ? '' : repoType.value === 'docs' ? 'success' : 'warning')
+const repoTypeLabel = computed(() => repoType.value === 'source' ? '源码' : repoType.value === 'docs' ? '文档' : repoType.value === 'config' ? '配置' : '')
+const cleanDescription = computed(() => {
+  if (!repoType.value) return ''
+  return (repoInfo.description || '').replace(/^\[(source|docs|config)\]\s*/, '').replace(/^# .*\n?/, '').trim()
 })
 
 const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
