@@ -130,8 +130,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBranches as getGiteaBranches } from '@/api/gitea'
-import { getRepoList } from '@/api/repo'
+import { getBranches as getGiteaBranches, getMyRepos } from '@/api/gitea'
 
 const router = useRouter()
 const loading = ref(false)
@@ -158,13 +157,13 @@ onMounted(() => { loadBranches() })
 async function loadBranches() {
   loading.value = true
   try {
-    // Load repo list first
-    const reposRes = await getRepoList({ page: 1, pageSize: 100 })
-    const repos = reposRes.data?.list || reposRes.data || reposRes || []
+    // Load repo list from Gitea
+    const reposRes = await getMyRepos({ page: 1, limit: 100 })
+    const repos = reposRes.data || reposRes
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
       id: r.id,
-      name: r.full_name || r.name || r.path,
-      owner: r.owner || r.owner_name,
+      name: r.full_name || r.name,
+      owner: r.owner?.login || r.owner?.username || r.owner || '',
       repo: r.name
     }))
 

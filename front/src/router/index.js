@@ -32,7 +32,7 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/repos/:id',
+    path: '/repos/:owner/:name',
     name: 'RepoDetail',
     component: () => import('@/views/repos/detail.vue'),
     meta: { requiresAuth: true }

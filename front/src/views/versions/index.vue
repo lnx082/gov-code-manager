@@ -119,7 +119,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getVersionList } from '@/api/version'
+import { getTags, getMyRepos } from '@/api/gitea'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
@@ -148,9 +148,31 @@ onMounted(() => { loadVersions() })
 async function loadVersions() {
   loading.value = true
   try {
-    const res = await getVersionList({ page: pagination.page, pageSize: pagination.pageSize })
-    versionList.value = res.data?.list || res.data || []
-    pagination.total = res.data?.total || versionList.value.length
+    // 按设计文档 3.3：Tag 列表使用 Gitea API
+    const reposRes = await getMyRepos({ page: 1, limit: 100 })
+    const repos = reposRes.data || reposRes
+    const repoArray = Array.isArray(repos) ? repos : []
+    const allTags = []
+    for (const repo of repoArray) {
+      try {
+        const owner = repo.owner?.login || repo.owner?.username || ''
+        const name = repo.name
+        if (!owner || !name) continue
+        const tagRes = await getTags(owner, name)
+        const tags = tagRes.data || tagRes
+        const tagArray = Array.isArray(tags) ? tags : []
+        tagArray.forEach(t => allTags.push({
+          ...t,
+          repoOwner: owner,
+          repoName: name,
+          name: t.name,
+          message: t.message || '',
+          sha: t.commit?.sha || '',
+        }))
+      } catch { /* skip failed repos */ }
+    }
+    versionList.value = allTags
+    pagination.total = allTags.length
   } catch {
     ElMessage.warning('加载版本列表失败')
   } finally {

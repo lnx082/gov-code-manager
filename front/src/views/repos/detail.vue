@@ -297,7 +297,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getRepoDetail } from '@/api/repo'
+import { getRepo, getContents, getBranches, getTags, getCommits } from '@/api/gitea'
 
 const route = useRoute()
 const router = useRouter()
@@ -364,8 +364,22 @@ onMounted(() => {
 async function loadRepoDetail() {
   loading.value = true
   try {
-    const res = await getRepoDetail(route.params.id)
-    Object.assign(repoInfo, res.data)
+    const owner = route.params.owner
+    const name = route.params.name
+    const res = await getRepo(owner, name)
+    const repo = res.data || res
+    Object.assign(repoInfo, {
+      id: repo.id,
+      name: repo.name,
+      full_name: repo.full_name,
+      description: repo.description || '',
+      owner: repo.owner?.login || repo.owner?.username || '',
+      private: repo.private,
+      stars_count: repo.stars_count || 0,
+      forks_count: repo.forks_count || 0,
+      default_branch: repo.default_branch || 'main',
+      updated_at: repo.updated_at
+    })
   } catch (error) {
     ElMessage.error('加载仓库信息失败')
   } finally {

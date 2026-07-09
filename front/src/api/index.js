@@ -88,12 +88,28 @@ const giteaService = axios.create({
   }
 })
 
-// Gitea 请求拦截器
+// Gitea 请求拦截器 — 使用 Basic Auth 凭证（登录时从 JWT 中提取保存）
 giteaService.interceptors.request.use(
   config => {
-    const token = Cookies.get('gitea_token')
-    if (token) {
-      config.headers['Authorization'] = `token ${token}`
+    // 优先使用 Gitea API Basic Auth 凭证
+    const giteaApiToken = Cookies.get('gitea_api_token')
+    if (giteaApiToken) {
+      // gitea_api_token 已是 "Basic <base64>" 或 "token <sha1>" 格式
+      config.headers['Authorization'] = giteaApiToken.startsWith('Basic ') || giteaApiToken.startsWith('token ')
+        ? giteaApiToken
+        : `token ${giteaApiToken}`
+      return config
+    }
+    // 回退：尝试从 JWT 中提取 giteaToken
+    const jwtToken = Cookies.get('gitea_token')
+    if (jwtToken) {
+      try {
+        const payload = JSON.parse(atob(jwtToken.split('.')[1]))
+        if (payload.giteaToken) {
+          config.headers['Authorization'] = payload.giteaToken // 已经是完整格式
+          return config
+        }
+      } catch { /* ignore */ }
     }
     return config
   },

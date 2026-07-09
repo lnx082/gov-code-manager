@@ -142,34 +142,11 @@ async function authenticateWithGitea(username, password) {
   }
 }
 
-// 为用户创建 Gitea API Token（用于 BFF 代理 Gitea 请求）
+// 为用户生成 Gitea Basic Auth 凭证（用于 BFF 代理和前端直连 Gitea API）
 async function createGiteaToken(username, password) {
-  try {
-    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-    const response = await fetch(`${config.gitea.url}/api/v1/users/${username}/tokens`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${credentials}`,
-      },
-      body: JSON.stringify({
-        name: `bff-token-${Date.now()}`,
-      }),
-    });
-
-    if (!response.ok) {
-      // Token 创建失败时回退使用 Basic Auth
-      return `Basic ${credentials}`;
-    }
-
-    const data = await response.json();
-    return data.sha1 || data.token || `Basic ${credentials}`;
-  } catch (error) {
-    console.error('创建 Gitea Token 失败:', error.message);
-    // 回退使用 Basic Auth
-    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-    return `Basic ${credentials}`;
-  }
+  // 直接使用 Basic Auth，无需创建 API Token
+  const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+  return `Basic ${credentials}`;
 }
 
 export default router;

@@ -117,8 +117,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getRepoList } from '@/api/repo'
-import { getMyRepos } from '@/api/gitea'
+import { getMyRepos, searchRepos } from '@/api/gitea'
 
 const router = useRouter()
 const loading = ref(false)
@@ -148,37 +147,29 @@ onMounted(() => {
 async function loadRepos() {
   loading.value = true
   try {
-    // Try BFF repo list first
-    const res = await getRepoList({
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-      search: searchForm.name || undefined
-    })
-    repoList.value = res.data?.list || res.data || []
-    pagination.total = res.data?.total || repoList.value.length
-  } catch {
-    // Fall back to Gitea API directly
-    try {
-      const res = await getMyRepos({ page: pagination.page, limit: pagination.pageSize })
-      const repos = res.data || res
-      repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
-        id: r.id,
-        name: r.full_name || r.name,
-        full_name: r.full_name,
-        description: r.description,
-        private: r.private,
-        owner: r.owner?.username || r.owner,
-        branches_count: 0,
-        stars_count: r.stars_count || 0,
-        updated_at: r.updated_at
-      }))
-      pagination.total = repoList.value.length
-    } catch (giteaError) {
-      console.error('获取仓库列表失败:', giteaError)
-      ElMessage.warning('加载仓库列表失败，请检查网络连接')
-      repoList.value = []
-      pagination.total = 0
-    }
+    // 按设计文档 3.1：仓库列表使用 Gitea API
+    const apiFunc = searchForm.name
+      ? searchRepos(searchForm.name, { page: pagination.page, limit: pagination.pageSize })
+      : getMyRepos({ page: pagination.page, limit: pagination.pageSize })
+    const res = await apiFunc
+    const repos = res.data || res
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+      id: r.id,
+      name: r.full_name || r.name,
+      full_name: r.full_name || r.name,
+      description: r.description || '',
+      private: r.private,
+      owner: r.owner?.username || r.owner?.login || '',
+      branches_count: 0,
+      stars_count: r.stars_count || 0,
+      updated_at: r.updated_at
+    }))
+    pagination.total = repoList.value.length
+  } catch (error) {
+    console.error('获取仓库列表失败:', error)
+    ElMessage.warning('加载仓库列表失败，请重新登录')
+    repoList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -196,7 +187,9 @@ function resetSearch() {
 }
 
 function viewRepo(row) {
-  router.push(`/repos/${row.id}`)
+  const owner = row.owner?.login || row.owner?.username || row.owner || ''
+  const name = row.name || ''
+  router.push(`/repos/${owner}/${name}`)
 }
 
 function cloneRepo(row) {

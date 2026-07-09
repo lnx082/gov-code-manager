@@ -39,6 +39,13 @@ export const useUserStore = defineStore('user', () => {
     const res = await loginApi(loginName, password)
     token.value = res.data.token
     Cookies.set('gitea_token', res.data.token, { expires: 7 })
+    // 从 JWT 中提取 giteaToken 用于前端直接调用 Gitea API
+    try {
+      const payload = JSON.parse(atob(res.data.token.split('.')[1]))
+      if (payload.giteaToken) {
+        Cookies.set('gitea_api_token', payload.giteaToken, { expires: 7 })
+      }
+    } catch { /* ignore decode errors */ }
     userInfo.value = res.data.user
     permissions.value = res.data.user.permissions || []
     return res
