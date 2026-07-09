@@ -240,7 +240,7 @@ onMounted(() => {
 async function loadDashboardData() {
   try {
     // 仓库数量从 Gitea API 获取
-    const reposRes = await getMyRepos({ page: 1, limit: 1 })
+    const reposRes = await getMyRepos({ page: 1, limit: 200 })
     const repos = reposRes.data || reposRes
     stats.repoCount = Array.isArray(repos) ? repos.length : (repos.total_count || 0)
     // 其他统计从 BFF 获取
