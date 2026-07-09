@@ -1,0 +1,16 @@
+{
+  "name": "gov-code-manager",
+  "version": "1.0.0",
+  "description": "党政机关软件版本控制平台",
+  "private": true,
+  "scripts": {
+    "dev": "cd front && npm run dev",
+    "backend": "cd bff && npm start",
+    "dev:all": "concurrently \"npm run backend\" \"npm run dev\"",
+    "build": "cd front && npm run build",
+    "install:all": "cd front && npm install && cd ../bff && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
