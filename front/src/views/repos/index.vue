@@ -118,7 +118,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Folder, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getMyRepos, searchRepos } from '@/api/gitea'
+import { getMyRepos } from '@/api/gitea'
 
 const router = useRouter()
 const loading = ref(false)
@@ -148,13 +148,26 @@ onMounted(() => {
 async function loadRepos() {
   loading.value = true
   try {
-    // 按设计文档 3.1：仓库列表使用 Gitea API
-    const apiFunc = searchForm.name
-      ? searchRepos(searchForm.name, { page: pagination.page, limit: pagination.pageSize })
-      : getMyRepos({ page: pagination.page, limit: pagination.pageSize })
-    const res = await apiFunc
-    const repos = res.data || res
-    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+    // 获取所有仓库，客户端过滤
+    const res = await getMyRepos({ page: 1, limit: 200 })
+    let repos = res.data || res
+    if (res.data?.data) repos = res.data.data // Gitea search 格式兼容
+    if (!Array.isArray(repos)) repos = []
+    // 客户端过滤（名称搜索 + 保密等级）
+    let filtered = repos
+    if (searchForm.name) {
+      const q = searchForm.name.toLowerCase()
+      filtered = filtered.filter(r => (r.full_name || r.name || '').toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q))
+    }
+    if (searchForm.secretLevel) {
+      const level = searchForm.secretLevel
+      filtered = filtered.filter(r => {
+        // Gitea 仓库无保密等级字段，基于 private 推断
+        const inferredLevel = r.private ? 'internal' : 'public'
+        return inferredLevel === level
+      })
+    }
+    repoList.value = filtered.map(r => ({
       id: r.id,
       name: r.name,
       full_name: r.full_name || (r.owner?.login || '') + '/' + r.name,
@@ -162,11 +175,12 @@ async function loadRepos() {
       description: r.description || '',
       private: r.private,
       owner: r.owner?.login || r.owner?.username || '',
+      secretLevel: r.private ? 'internal' : 'public',
       branches_count: 0,
       stars_count: r.stars_count || 0,
       updated_at: r.updated_at
     }))
-    pagination.total = repoList.value.length
+    pagination.total = filtered.length
   } catch (error) {
     console.error('获取仓库列表失败:', error)
     ElMessage.warning('加载仓库列表失败，请重新登录')

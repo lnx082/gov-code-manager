@@ -13,6 +13,7 @@
         </div>
       </div>
       <div class="repo-actions">
+        <el-button @click="downloadZip"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
         <el-button type="primary" @click="showCloneDialog"><el-icon><Download /></el-icon> 克隆</el-button>
       </div>
     </div>
@@ -471,6 +472,11 @@ function getRoleName(role) {
 
 function formatTime(time) { if (!time) return '-'; return new Date(time).toLocaleString('zh-CN') }
 function showCloneDialog() { cloneDialogVisible.value = true }
+function downloadZip() {
+  const { owner, name } = route.params
+  const branch = repoInfo.defaultBranch || 'main'
+  window.open(`http://123.60.219.19:3000/${owner}/${name}/archive/${branch}.zip`, '_blank')
+}
 </script>
 
 <style lang="scss" scoped>
