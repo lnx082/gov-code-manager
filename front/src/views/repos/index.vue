@@ -40,7 +40,7 @@
         <template #default="{ row }">
           <div class="repo-name-cell" @click="viewRepo(row)">
             <span class="repo-icon">📁</span>
-            <span class="repo-name">{{ row.name }}</span>
+            <span class="repo-name">{{ row.displayName || row.full_name || row.name }}</span>
           </div>
         </template>
       </el-table-column>
@@ -155,11 +155,12 @@ async function loadRepos() {
     const repos = res.data || res
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
       id: r.id,
-      name: r.full_name || r.name,
-      full_name: r.full_name || r.name,
+      name: r.name,
+      full_name: r.full_name || (r.owner?.login || '') + '/' + r.name,
+      displayName: r.full_name || r.name,
       description: r.description || '',
       private: r.private,
-      owner: r.owner?.username || r.owner?.login || '',
+      owner: r.owner?.login || r.owner?.username || '',
       branches_count: 0,
       stars_count: r.stars_count || 0,
       updated_at: r.updated_at

@@ -199,6 +199,7 @@ import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getPendingApprovals } from '@/api/approval'
 import { getRiskWarnings, getAuditLogs } from '@/api/bff'
+import { getMyRepos } from '@/api/gitea'
 
 const userStore = useUserStore()
 
@@ -237,10 +238,14 @@ onMounted(() => {
 
 async function loadDashboardData() {
   try {
+    // 仓库数量从 Gitea API 获取
+    const reposRes = await getMyRepos({ page: 1, limit: 1 })
+    const repos = reposRes.data || reposRes
+    stats.repoCount = Array.isArray(repos) ? repos.length : (repos.total_count || 0)
+    // 其他统计从 BFF 获取
     const res = await getDashboardStats()
     const data = res.data || res
     if (data) {
-      stats.repoCount = data.repoCount || data.repos || 0
       stats.versionCount = data.versionCount || data.versions || 0
       stats.pendingApprovals = data.pendingApprovals || 0
       stats.onlineUsers = data.onlineUsers || data.users || 0

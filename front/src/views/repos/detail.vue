@@ -23,7 +23,7 @@
           克隆
         </el-button>
         <el-button @click="showGitCommands">
-          <el-icon><Terminal /></el-icon>
+          <el-icon><Monitor /></el-icon>
           Git命令
         </el-button>
         <el-dropdown @command="handleMoreAction">
@@ -226,7 +226,7 @@
       <!-- 合并请求 -->
       <el-tab-pane label="合并请求" name="merges">
         <template #label>
-          <el-icon><Merge /></el-icon>
+          <el-icon><Connection /></el-icon>
           合并请求
         </template>
         <div class="merge-list">
@@ -292,10 +292,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { FolderOpened, User, OfficeBuilding, Timer, Download, Terminal, Document, Share, Plus, Collection, Lock, Clock, Merge, Setting } from '@element-plus/icons-vue'
+import { FolderOpened, User, OfficeBuilding, Timer, Download, Document, Share, Plus, Collection, Lock, Clock, Setting, Monitor, Connection, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits } from '@/api/gitea'
 
@@ -317,31 +317,16 @@ const repoInfo = reactive({
 })
 
 const breadcrumb = ref([{ name: repoInfo.name || 'root', path: '' }])
-const fileList = ref([
-  { name: 'src', path: 'src', type: 'dir', lastCommitMessage: '添加源码目录', lastCommitTime: '2024-01-15 10:00' },
-  { name: 'README.md', path: 'README.md', type: 'file', lastCommitMessage: 'Initial commit', lastCommitTime: '2024-01-15 09:00' },
-  { name: 'package.json', path: 'package.json', type: 'file', lastCommitMessage: '添加项目配置', lastCommitTime: '2024-01-14 15:30' }
-])
-
-const branchList = ref([
-  { name: 'main', isDefault: true, isProtected: true, commitMessage: 'Merge pull request #1', updatedAt: '2024-01-15 10:00' },
-  { name: 'develop', isDefault: false, isProtected: true, commitMessage: 'Add new feature', updatedAt: '2024-01-14 16:00' },
-  { name: 'feature/user-module', isDefault: false, isProtected: false, commitMessage: 'Update user controller', updatedAt: '2024-01-13 11:00' }
-])
+const fileList = ref([])
+const branchList = ref([])
 const branchSearch = ref('')
 const currentBranch = ref('main')
 
-const tagList = ref([
-  { name: 'v1.0.0', message: '正式版本发布', author: '张三', isBaseline: true, isReleased: true, createdAt: '2024-01-10' },
-  { name: 'v0.9.0', message: '测试版本', author: '李四', isBaseline: false, isReleased: false, createdAt: '2024-01-05' }
-])
+const tagList = ref([])
 
-const commitList = ref([
-  { sha: 'a1b2c3d4e5f6', message: 'Add user authentication module', author: '张三', createdAt: '2024-01-15 10:30' },
-  { sha: 'b2c3d4e5f6a1', message: 'Fix login validation bug', author: '李四', createdAt: '2024-01-14 15:20' }
-])
+const commitList = ref([])
 const commitPage = ref(1)
-const commitTotal = ref(100)
+const commitTotal = ref(0)
 
 const cloneDialogVisible = ref(false)
 
@@ -377,8 +362,8 @@ async function loadRepoDetail() {
       private: repo.private,
       stars_count: repo.stars_count || 0,
       forks_count: repo.forks_count || 0,
-      default_branch: repo.default_branch || 'main',
-      updated_at: repo.updated_at
+      defaultBranch: repo.default_branch || 'main',
+      updatedAt: repo.updated_at
     })
   } catch (error) {
     ElMessage.error('加载仓库信息失败')
@@ -388,8 +373,61 @@ async function loadRepoDetail() {
 }
 
 function loadCommits() {
-  // 加载提交历史
+  loadTabData('commits')
 }
+
+async function loadTabData(tab) {
+  const owner = route.params.owner
+  const name = route.params.name
+  if (!owner || !name) return
+  try {
+    switch (tab) {
+      case 'files':
+        const contents = await getContents(owner, name)
+        fileList.value = (contents.data || contents || []).map(f => ({
+          name: f.name, path: f.path, type: f.type,
+          lastCommitMessage: f.last_commit?.message || '',
+          lastCommitTime: f.last_commit?.timestamp || ''
+        }))
+        breadcrumb.value = [{ name: repoInfo.name || 'root', path: '' }]
+        break
+      case 'branches':
+        const branches = await getBranches(owner, name)
+        branchList.value = (branches.data || branches || []).map(b => ({
+          name: b.name, isDefault: b.name === repoInfo.defaultBranch,
+          isProtected: b.protected, commitMessage: b.commit?.message || '',
+          updatedAt: b.commit?.timestamp || ''
+        }))
+        break
+      case 'tags':
+        const tags = await getTags(owner, name)
+        tagList.value = (tags.data || tags || []).map(t => ({
+          name: t.name, message: t.message || '',
+          sha: t.commit?.sha || '', createdAt: t.commit?.created || ''
+        }))
+        break
+      case 'commits':
+        const commits = await getCommits(owner, name, { page: commitPage.value, limit: 10 })
+        commitList.value = (commits.data || commits || []).map(c => ({
+          sha: c.sha, message: c.commit?.message || c.message || '',
+          author: c.author?.login || c.commit?.author?.name || '',
+          createdAt: c.commit?.author?.date || c.created || ''
+        }))
+        commitTotal.value = commitList.value.length
+        break
+    }
+  } catch (e) {
+    // silently fail for tab data
+  }
+}
+
+// Watch tab changes to load data
+watch(activeTab, (tab) => {
+  if (tab === 'files') loadTabData('files')
+  else if (tab === 'branches') loadTabData('branches')
+  else if (tab === 'tags') loadTabData('tags')
+  else if (tab === 'commits') loadTabData('commits')
+})
 
 function getSecretLevelType(level) {
   const map = { 'public': '', 'internal': 'warning', 'secret': 'danger', 'top-secret': 'danger' }
