@@ -133,22 +133,21 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getBranches as getGiteaBranches } from '@/api/gitea'
+import { getRepoList } from '@/api/repo'
 
 const router = useRouter()
 const loading = ref(false)
 const createDialogVisible = ref(false)
 
-const stats = reactive({ total: 45, protected: 8, active: 23, pending: 5 })
+const stats = reactive({ total: 0, protected: 0, active: 0, pending: 0 })
 
 const filterForm = reactive({ repoId: '', type: '' })
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
-const branchList = ref([
-  { id: 1, name: 'main', repoId: 1, repoName: '政务系统-用户模块', isDefault: true, isProtected: true, sha: 'a1b2c3d4', commitMessage: 'Merge pull request #5', author: '张三', updatedAt: '2024-01-15 10:30' },
-  { id: 2, name: 'develop', repoId: 1, repoName: '政务系统-用户模块', isDefault: false, isProtected: true, sha: 'b2c3d4e5', commitMessage: 'Update user service', author: '李四', updatedAt: '2024-01-15 09:00' },
-  { id: 3, name: 'feature/notification', repoId: 1, repoName: '政务系统-用户模块', isDefault: false, isProtected: false, sha: 'c3d4e5f6', commitMessage: 'Add notification module', author: '王五', updatedAt: '2024-01-14 16:00' }
-])
+const branchList = ref([])
+const repoList = ref([])
 
 const createForm = reactive({ name: '', repoId: '', baseBranch: 'main' })
 const createRules = {
@@ -158,10 +157,28 @@ const createRules = {
 
 onMounted(() => { loadBranches() })
 
-function loadBranches() {
+async function loadBranches() {
   loading.value = true
-  setTimeout(() => {
-    pagination.total = branchList.value.length
+  try {
+    const repos = await getRepoList()
+    const branches = []
+    if (repos.data?.list) {
+      for (const repo of repos.data.list) {
+        try {
+          const res = await getGiteaBranches(repo.owner || repo.owner_name, repo.name)
+          const repoBranches = res.data || []
+          repoBranches.forEach(b => branches.push({ ...b, repoOwner: repo.owner || repo.owner_name, repoName: repo.name }))
+        } catch { /* skip failed repos */ }
+      }
+    }
+    branchList.value = branches
+    pagination.total = branches.length
+    stats.total = branches.length
+    stats.protected = branches.filter(b => b.protected).length
+    stats.active = branches.filter(b => !b.protected).length
+  } catch {
+    ElMessage.warning('加载分支列表失败')
+  } finally {
     loading.value = false
   }, 300)
 }

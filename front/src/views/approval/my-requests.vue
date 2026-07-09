@@ -173,12 +173,9 @@ async function loadMyRequests() {
       applicantUserId: 'me'
     }
     
-    // 实际应调用 API
-    // const res = await getMyApprovals(params)
-    // myRequests.value = res.data.list || []
-    // pagination.total = res.data.total || 0
-    
-    pagination.total = myRequests.value.length
+    const res = await getMyApprovals(params)
+    myRequests.value = res.data.list || []
+    pagination.total = res.data.total || 0
   } catch (error) {
     console.error('加载我的申请失败', error)
   } finally {

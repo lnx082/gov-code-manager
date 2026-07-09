@@ -204,12 +204,9 @@ async function loadHistory() {
       params.endDate = filterForm.dateRange[1]
     }
     
-    // 使用模拟数据，实际应调用 API
-    // const res = await getApprovalList(params)
-    // historyList.value = res.data.list || []
-    // pagination.total = res.data.total || 0
-    
-    pagination.total = historyList.value.length
+    const res = await getApprovalList(params)
+    historyList.value = res.data.list || []
+    pagination.total = res.data.total || 0
   } catch (error) {
     console.error('加载审批历史失败', error)
   } finally {
@@ -231,10 +228,8 @@ function resetFilter() {
 
 async function viewDetail(row) {
   currentApproval.value = row
-  // 实际应调用 API 获取审批记录
-  // const res = await getApprovalDetail(row.approval_id)
-  // approvalRecords.value = res.data.approval_records || []
-  approvalRecords.value = []
+  const res = await getApprovalDetail(row.approval_id)
+  approvalRecords.value = res.data.approval_records || res.data.approvalRecords || []
   detailDialogVisible.value = true
 }
 

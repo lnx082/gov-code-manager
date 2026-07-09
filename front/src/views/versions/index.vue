@@ -119,6 +119,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getVersionList } from '@/api/version'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
@@ -126,10 +127,7 @@ const createTagDialogVisible = ref(false)
 const filterForm = reactive({ repoId: '', type: '', secretLevel: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
-const versionList = ref([
-  { id: 1, name: 'v1.0.0', message: '政务系统正式版本发布，包含用户管理、权限控制等核心功能', repoId: 1, repoName: '政务系统-用户模块', type: 'release', isBaseline: true, sha: 'a1b2c3d4e5f6', author: '张三', createdAt: '2024-01-10' },
-  { id: 2, name: 'v0.9.0', message: '测试版本，新增消息通知功能', repoId: 1, repoName: '政务系统-用户模块', type: 'beta', isBaseline: false, sha: 'b2c3d4e5f6a1', author: '李四', createdAt: '2024-01-05' }
-])
+const versionList = ref([])
 
 const createForm = reactive({
   repoId: '',
@@ -147,12 +145,17 @@ const createRules = {
 
 onMounted(() => { loadVersions() })
 
-function loadVersions() {
+async function loadVersions() {
   loading.value = true
-  setTimeout(() => {
-    pagination.total = versionList.value.length
+  try {
+    const res = await getVersionList({ page: pagination.page, pageSize: pagination.pageSize })
+    versionList.value = res.data?.list || res.data || []
+    pagination.total = res.data?.total || versionList.value.length
+  } catch {
+    ElMessage.warning('加载版本列表失败')
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleFilter() { loadVersions() }
