@@ -164,49 +164,28 @@
         </div>
 
         <el-divider content-position="left">变更内容</el-divider>
-        
-        <div class="diff-stats">
-          <span class="stat added">+ {{ currentMR.additions }} 行</span>
-          <span class="stat removed">- {{ currentMR.deletions }} 行</span>
-          <span class="stat files">{{ currentMR.fileChanges }} 个文件</span>
+        <div style="text-align:center;padding:20px">
+          <p style="color:#909399;margin-bottom:12px">Gitea 1.21 API 不支持返回 PR 差异详情</p>
+          <el-button type="primary" @click="openGiteaPR(currentMR)">
+            <el-icon><Link /></el-icon> 在 Gitea 中查看完整差异
+          </el-button>
         </div>
 
-        <el-tabs>
-          <el-tab-pane label="文件变更">
-            <div class="file-changes">
-              <div v-for="file in currentMR.files" :key="file.path" class="file-item">
-                <span class="file-status" :class="file.status">{{ file.status }}</span>
-                <span class="file-path">{{ file.path }}</span>
-              </div>
-            </div>
-          </el-tab-pane>
-          <el-tab-pane label="评论">
-            <div class="comments">
-              <el-empty description="暂无评论" />
-            </div>
-          </el-tab-pane>
-          <el-tab-pane label="审批记录">
-            <div class="approval-records">
-              <div v-for="record in currentMR.approvalRecords" :key="record.id" class="record-item">
-                <el-avatar :size="32">{{ record.reviewer.charAt(0) }}</el-avatar>
-                <div class="record-content">
-                  <div class="record-header">
-                    <span class="reviewer">{{ record.reviewer }}</span>
-                    <el-tag :type="record.status === 'approved' ? 'success' : 'danger'" size="small">
-                      {{ record.status === 'approved' ? '通过' : '拒绝' }}
-                    </el-tag>
-                  </div>
-                  <div class="record-comment">{{ record.comment || '无评论' }}</div>
-                  <div class="record-time">{{ formatTime(record.time) }}</div>
-                </div>
-              </div>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+        <el-divider content-position="left">审批记录</el-divider>
+        <div class="approval-records">
+          <div v-for="record in currentMR.approvalRecords" :key="record.id" class="record-item">
+            <span>{{ record.user?.login || record.reviewer }}</span>
+            <el-tag :type="record.state==='APPROVED'?'success':record.state==='REJECTED'?'danger':'info'" size="small">
+              {{ record.state==='APPROVED'?'通过':record.state==='REJECTED'?'拒绝':'评审中' }}
+            </el-tag>
+          </div>
+          <el-empty v-if="!currentMR.approvalRecords?.length" description="暂无审批记录" />
+        </div>
+
       </div>
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button @click="showApprovalDialog" type="primary">审批</el-button>
+        <el-button @click="showApprovalDialog" type="primary" v-if="currentMR?.status === 'pending' || currentMR?.status === 'open'">审批</el-button>
         <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved'">合并</el-button>
       </template>
     </el-dialog>
@@ -237,13 +216,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Link } from '@element-plus/icons-vue'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, submitPullRequestReview } from '@/api/gitea'
 import { getApprovalFlows, createApproval, processApproval } from '@/api/bff'
 import { getUserList } from '@/api/user'
-import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
-const authStore = useAuthStore()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const submittingApproval = ref(false)
@@ -360,9 +340,10 @@ async function loadData() {
   try {
     let list = []
     // Iterate repos to load PRs from Gitea API
-    const repos = repoList.value.length ? repoList.value.slice(0, 5) : []
+    const repos = filterForm.repoId
+      ? repoList.value.filter(r => r.id === filterForm.repoId)
+      : repoList.value
     for (const repo of repos) {
-      if (filterForm.repoId && repo.id !== filterForm.repoId) continue
       try {
         const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 10 })
         const prs = prRes.data || prRes
@@ -382,7 +363,7 @@ async function loadData() {
               // 检查当前用户是否已审批
               for (const review of approvals) {
                 if (review.user?.login === userStore.userInfo?.login || review.user?.username === userStore.userInfo?.username) {
-                  if (review.state === 'APPROVED') hasUserApproved = true
+                  if (review.state === 'APPROVED' || review.state === 'PENDING') hasUserApproved = true
                   if (review.state === 'REJECTED') hasUserRejected = true
                 }
               }
@@ -395,9 +376,9 @@ async function loadData() {
             const rejected = approvals.some(r => r.state === 'REJECTED')
             const approvalRate = Math.min(100, Math.round((approvedCount / requiredApprovals) * 100)) || 50
             
-            // 确定显示状态
+            // 确定显示状态（优先使用 Gitea PR 自身状态）
             let displayStatus = 'pending'
-            if (pr.state === 'merged') {
+            if (pr.merged || pr.state === 'merged') {
               displayStatus = 'merged'
             } else if (pr.state === 'closed') {
               displayStatus = 'closed'
@@ -405,14 +386,13 @@ async function loadData() {
               displayStatus = 'rejected'
             } else if (hasUserApproved) {
               displayStatus = 'approved'
+            } else if (pr.state === 'open') {
+              displayStatus = 'open'
             }
             
-            // 根据筛选条件决定是否显示
+            // 状态筛选
             if (filterForm.status && filterForm.status !== displayStatus) {
-              // 如果筛选状态是 pending 但用户已审批，不显示
-              if (filterForm.status === 'pending' && (hasUserApproved || hasUserRejected)) {
-                continue
-              }
+              continue
             }
             
             list.push({
@@ -548,7 +528,7 @@ async function handleCreate() {
         approvals: 0,
         requiredApprovals: 1,
         approvalRate: 0,
-        author: authStore.userInfo?.username || authStore.userInfo?.login || '我',
+        author: userStore.userInfo?.username || userStore.userInfo?.login || '我',
         createdAt: new Date().toISOString(),
         bffApprovalId: bffApprovalId,
         owner: sourceRepo.owner,
@@ -584,6 +564,16 @@ async function viewDetail(row) {
     } catch {
       // Fallback to existing data
     }
+  }
+}
+
+function openGiteaPR(mr) {
+  const repo = repoList.value.find(r => r.id === mr.repoId)
+  const owner = repo?.owner || ''
+  const repoName = repo?.repo || ''
+  const prId = mr.id || mr.number
+  if (owner && repoName && prId) {
+    window.open(`http://123.60.219.19:3000/${owner}/${repoName}/pulls/${prId}`, '_blank')
   }
 }
 
@@ -653,10 +643,16 @@ async function submitApproval() {
     }
     
     ElMessage.success(approvalForm.status === 'approved' ? '审批已通过' : '审批已拒绝')
+    // 立即更新本地状态
+    const newStatus = approvalForm.status === 'approved' ? 'approved' : 'rejected'
+    if (currentMR.value) {
+      currentMR.value.status = newStatus
+      currentMR.value.userApproval = newStatus
+    }
     approvalDialogVisible.value = false
     detailDialogVisible.value = false
-    
-    // 刷新列表，确保状态同步
+
+    // 刷新列表确保同步
     loadData()
   } catch (error) {
     console.error('审批失败:', error)
@@ -707,7 +703,7 @@ function getStatusType(status) {
 }
 
 function getStatusName(status) {
-  const map = { 'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝', 'merged': '已合并', 'closed': '已关闭' }
+  const map = { 'pending': '待审批', 'open': '开放中', 'approved': '已通过', 'rejected': '已拒绝', 'merged': '已合并', 'closed': '已关闭' }
   return map[status] || status
 }
 

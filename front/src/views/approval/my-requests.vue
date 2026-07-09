@@ -152,11 +152,7 @@ const pagination = reactive({
   total: 0
 })
 
-const myRequests = ref([
-  { approval_id: 1, operation_type: 'merge', title: '[feature/auth] 新增用户认证功能', repo_owner: 'root', repo_name: 'gov-user-service', status: 'pending', current_step: 1, urgency: 'normal', created_at: '2024-01-15 10:00:00', steps: ['提交申请', '技术审核', '审批通过'] },
-  { approval_id: 2, operation_type: 'version', title: '政务系统 v1.2.0 正式发布', repo_owner: 'root', repo_name: 'gov-system', status: 'approved', current_step: 3, urgency: 'high', created_at: '2024-01-14 15:00:00', steps: ['提交申请', '安全审核', '领导审批'] },
-  { approval_id: 3, operation_type: 'baseline', title: '申请设置v1.0.0为基线', repo_owner: 'root', repo_name: 'gov-system', status: 'rejected', current_step: 1, urgency: 'normal', created_at: '2024-01-13 09:00:00', description: '该版本已通过全部测试，可以设为基线', steps: ['提交申请', '技术审核'] }
-])
+const myRequests = ref([])
 
 onMounted(() => {
   loadMyRequests()

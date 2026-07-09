@@ -179,11 +179,7 @@ const pagination = reactive({
   total: 0
 })
 
-const historyList = ref([
-  { approval_id: 1, operation_type: 'merge', title: '[feature/auth] 新增用户认证模块', repo_owner: 'root', repo_name: 'gov-user-service', applicant_username: '张三', status: 'approved', current_step: 2, created_at: '2024-01-15 10:00:00', completed_at: '2024-01-15 14:30:00', steps: ['提交申请', '技术审核', '审批通过'] },
-  { approval_id: 2, operation_type: 'version', title: '政务系统 v2.1.0 正式版本发布', repo_owner: 'root', repo_name: 'gov-system', applicant_username: '李四', status: 'approved', current_step: 2, created_at: '2024-01-14 09:00:00', completed_at: '2024-01-14 16:00:00', steps: ['提交申请', '安全审核', '领导审批'] },
-  { approval_id: 3, operation_type: 'baseline', title: '申请设置v2.0.0为基线版本', repo_owner: 'root', repo_name: 'gov-system', applicant_username: '王五', status: 'rejected', current_step: 1, created_at: '2024-01-13 11:00:00', completed_at: '2024-01-13 15:00:00', steps: ['提交申请', '技术审核'] }
-])
+const historyList = ref([])
 
 onMounted(() => {
   loadHistory()
