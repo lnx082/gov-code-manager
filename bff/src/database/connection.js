@@ -105,9 +105,15 @@ export function getDb() {
 
 /**
  * 获取默认数据库实例（向后兼容）
+ * 当作为 knex(tableName) 调用时，返回对应表的 query builder
  */
-export default function getDefaultDb() {
-  return getDb();
+export default function getDefaultDb(tableName) {
+  const instance = getDb();
+  if (!instance) {
+    throw new Error('数据库未初始化，请先调用 initDatabase()');
+  }
+  // 如果传了表名，返回 query builder；否则返回 knex 实例本身
+  return tableName ? instance(tableName) : instance;
 }
 
 /**
