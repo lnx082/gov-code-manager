@@ -247,7 +247,7 @@ async function handleCreateBranch() {
   }
 }
 
-function viewBranch(row) { router.push(`/repos/${row.repoId}?branch=${row.name}`) }
+function viewBranch(row) { router.push(`/repos/${row.repoOwner}/${row.repoName}?branch=${row.name}`) }
 function createMerge(row) { router.push(`/branches/merge?source=${row.name}`) }
 
 function deleteBranch(row) {

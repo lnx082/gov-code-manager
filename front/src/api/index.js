@@ -79,37 +79,22 @@ service.interceptors.response.use(
 export default service
 export { service }
 
-// 创建 Gitea API 实例（直接调用 Gitea REST API）
+// 创建 Gitea API 实例（通过 BFF 代理，避免跨域）
 const giteaService = axios.create({
-  baseURL: import.meta.env.VITE_GITEA_URL || 'http://123.60.219.19:3000/api/v1',
+  baseURL: (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff') + '/gitea',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// Gitea 请求拦截器 — 使用 Basic Auth 凭证（登录时从 JWT 中提取保存）
+// Gitea 请求拦截器 — 通过 BFF 代理访问 Gitea，发送 JWT Token
 giteaService.interceptors.request.use(
   config => {
-    // 优先使用 Gitea API Basic Auth 凭证
-    const giteaApiToken = Cookies.get('gitea_api_token')
-    if (giteaApiToken) {
-      // gitea_api_token 已是 "Basic <base64>" 或 "token <sha1>" 格式
-      config.headers['Authorization'] = giteaApiToken.startsWith('Basic ') || giteaApiToken.startsWith('token ')
-        ? giteaApiToken
-        : `token ${giteaApiToken}`
-      return config
-    }
-    // 回退：尝试从 JWT 中提取 giteaToken
+    // 发送 JWT Token 给 BFF，BFF gitea.js 代理会提取 giteaToken 转发给 Gitea
     const jwtToken = Cookies.get('gitea_token')
     if (jwtToken) {
-      try {
-        const payload = JSON.parse(atob(jwtToken.split('.')[1]))
-        if (payload.giteaToken) {
-          config.headers['Authorization'] = payload.giteaToken // 已经是完整格式
-          return config
-        }
-      } catch { /* ignore */ }
+      config.headers['Authorization'] = `Bearer ${jwtToken}`
     }
     return config
   },
