@@ -21,9 +21,9 @@
         <el-form-item label="保密等级">
           <el-select v-model="searchForm.secretLevel" placeholder="选择等级" clearable style="width: 150px">
             <el-option label="公开" value="public" />
-            <el-option label="内部" value="internal" />
-            <el-option label="涉密" value="secret" />
-            <el-option label="机密" value="top-secret" />
+            <el-option label="秘密" value="secret" />
+            <el-option label="机密" value="confidential" />
+            <el-option label="绝密" value="top-secret" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -44,11 +44,15 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-      <el-table-column label="类型" width="100">
+      <el-table-column label="主管部门" width="120">
         <template #default="{ row }">
-          <el-tag :type="row.private ? 'warning' : 'success'" size="small">
-            {{ row.private ? '私有' : '公开' }}
+          {{ row.department || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="保密等级" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag :type="getSecretLevelTagType(row.secretLevel)" size="small">
+            {{ getSecretLevelName(row.secretLevel) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -67,10 +71,15 @@
           {{ formatTime(row.updated_at || row.updated) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="230" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="viewRepo(row)">查看</el-button>
           <el-button type="primary" link @click="cloneRepo(row)">克隆</el-button>
+          <el-button
+            v-if="userStore.hasPermission('admin:manage')"
+            type="danger" link
+            @click="handleDeleteRepo(row)"
+          >删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -117,10 +126,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Folder, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { getMyRepos } from '@/api/gitea'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '@/stores/user'
+import { getFilteredRepos } from '@/api/bff'
+import { deleteRepo } from '@/api/gitea'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const repoList = ref([])
 const cloneDialogVisible = ref(false)
@@ -148,39 +160,51 @@ onMounted(() => {
 async function loadRepos() {
   loading.value = true
   try {
-    // 获取所有仓库，客户端过滤
-    const res = await getMyRepos({ page: 1, limit: 200 })
-    let repos = res.data || res
-    if (res.data?.data) repos = res.data.data // Gitea search 格式兼容
+    // 从 BFF 获取已过滤的仓库列表（后端处理部门隔离 + 密级管控）
+    const res = await getFilteredRepos({ page: 1, pageSize: 200 })
+    const data = res.data || res
+    let repos = data.list || data || []
     if (!Array.isArray(repos)) repos = []
-    // 客户端过滤（名称搜索 + 保密等级）
-    let filtered = repos
-    if (searchForm.name) {
-      const q = searchForm.name.toLowerCase()
-      filtered = filtered.filter(r => (r.full_name || r.name || '').toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q))
+
+    // 解析显示名和密级
+    function parseDisplayName(desc) {
+      if (!desc) return null
+      const match = desc.match(/\[显示名=([^\]]+)\]/)
+      return match ? match[1] : null
     }
-    if (searchForm.secretLevel) {
-      const level = searchForm.secretLevel
-      filtered = filtered.filter(r => {
-        // Gitea 仓库无保密等级字段，基于 private 推断
-        const inferredLevel = r.private ? 'internal' : 'public'
-        return inferredLevel === level
-      })
-    }
-    repoList.value = filtered.map(r => ({
+
+    // 映射为前端显示格式
+    let mapped = repos.map(r => ({
       id: r.id,
       name: r.name,
-      full_name: r.full_name || (r.owner?.login || '') + '/' + r.name,
-      displayName: r.full_name || r.name,
+      full_name: r.full_name || r.name,
+      displayName: parseDisplayName(r.description) || r.full_name || r.name,
       description: r.description || '',
       private: r.private,
-      owner: r.owner?.login || r.owner?.username || '',
-      secretLevel: r.private ? 'internal' : 'public',
-      branches_count: 0,
+      owner: r.owner || '',
+      department: r._department_name || '-',
+      secretLevel: r._secret_level || 'secret',
+      branches_count: r.branches_count || 0,
       stars_count: r.stars_count || 0,
-      updated_at: r.updated_at
+      updated_at: r.updated_at,
     }))
-    pagination.total = filtered.length
+
+    // 客户端名称搜索
+    if (searchForm.name) {
+      const q = searchForm.name.toLowerCase()
+      mapped = mapped.filter(r =>
+        r.displayName.toLowerCase().includes(q) ||
+        r.name.toLowerCase().includes(q)
+      )
+    }
+
+    // 客户端密级二次筛选
+    if (searchForm.secretLevel) {
+      mapped = mapped.filter(r => r.secretLevel === searchForm.secretLevel)
+    }
+
+    repoList.value = mapped
+    pagination.total = mapped.length
   } catch (error) {
     console.error('获取仓库列表失败:', error)
     ElMessage.warning('加载仓库列表失败，请重新登录')
@@ -203,7 +227,7 @@ function resetSearch() {
 }
 
 function viewRepo(row) {
-  const owner = row.owner?.login || row.owner?.username || row.owner || ''
+  const owner = row.owner || ''
   const name = row.name || ''
   router.push(`/repos/${owner}/${name}`)
 }
@@ -218,6 +242,34 @@ function cloneRepo(row) {
 function copyUrl(url) {
   navigator.clipboard.writeText(url)
   ElMessage.success('已复制到剪贴板')
+}
+
+async function handleDeleteRepo(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除仓库 "${row.displayName}" 吗？\n此操作不可恢复！`,
+      '删除仓库',
+      { type: 'warning', confirmButtonClass: 'el-button--danger' }
+    )
+    const owner = row.owner || 'root'
+    await deleteRepo(owner, row.name)
+    ElMessage.success('仓库已删除')
+    loadRepos()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.response?.data?.message || '删除失败')
+    }
+  }
+}
+
+function getSecretLevelTagType(level) {
+  const map = { public: '', secret: 'warning', confidential: 'danger', 'top-secret': 'danger' }
+  return map[level] || 'info'
+}
+
+function getSecretLevelName(level) {
+  const map = { public: '公开', secret: '秘密', confidential: '机密', 'top-secret': '绝密' }
+  return map[level] || level || '未知'
 }
 
 function formatTime(time) {

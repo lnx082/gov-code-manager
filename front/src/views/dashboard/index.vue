@@ -26,7 +26,7 @@
 
     <!-- 统计卡片 -->
     <div class="stats-grid">
-      <div class="stat-card red">
+      <div class="stat-card red clickable" @click="$router.push('/repos')">
         <div class="stat-icon"><el-icon><Folder /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.repoCount }}</div>
@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <div class="stat-card blue">
+      <div class="stat-card blue clickable" @click="$router.push('/versions')">
         <div class="stat-icon"><el-icon><Collection /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.versionCount }}</div>
@@ -42,7 +42,7 @@
         </div>
       </div>
 
-      <div class="stat-card orange">
+      <div class="stat-card orange clickable" @click="$router.push('/approval/pending')">
         <div class="stat-icon"><el-icon><DocumentChecked /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.pendingApprovals }}</div>
@@ -50,7 +50,7 @@
         </div>
       </div>
 
-      <div class="stat-card green">
+      <div class="stat-card green" :class="{ clickable: isAdmin }" @click="isAdmin && showOnlineUsers()">
         <div class="stat-icon"><el-icon><User /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.onlineUsers }}</div>
@@ -189,6 +189,27 @@
         </el-card>
       </div>
     </div>
+    <!-- 在线用户弹窗 -->
+    <el-dialog v-model="showOnlineDialog" title="在线用户" width="700px" :close-on-click-modal="false">
+      <el-table :data="onlineUserList" v-loading="loadingOnline" stripe border max-height="400">
+        <el-table-column prop="username" label="用户名" width="120" />
+        <el-table-column prop="nickname" label="昵称" width="120" />
+        <el-table-column prop="department_name" label="部门" width="120">
+          <template #default="{ row }">{{ row.department_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="登录时间" width="160">
+          <template #default="{ row }">{{ formatTime(row.login_time) }}</template>
+        </el-table-column>
+        <el-table-column label="最后活跃" width="160">
+          <template #default="{ row }">{{ formatTime(row.last_active) }}</template>
+        </el-table-column>
+        <el-table-column prop="ip_address" label="IP 地址" width="130" />
+      </el-table>
+      <template #footer>
+        <span class="online-footer">当前在线 <strong>{{ onlineUserList.length }}</strong> 人</span>
+        <el-button @click="showOnlineDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -199,15 +220,41 @@ import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getPendingApprovals } from '@/api/approval'
-import { getRiskWarnings, getAuditLogs } from '@/api/bff'
+import { getRiskWarnings, getAuditLogs, getSessions } from '@/api/bff'
 import { getMyRepos } from '@/api/gitea'
 
 const userStore = useUserStore()
+const isAdmin = computed(() => userStore.hasPermission('admin:manage') || userStore.role === 'admin')
 
 const currentDate = computed(() => {
   const now = new Date()
   return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()]}`
 })
+
+// 在线用户弹窗
+const showOnlineDialog = ref(false)
+const onlineUserList = ref([])
+const loadingOnline = ref(false)
+
+async function showOnlineUsers() {
+  showOnlineDialog.value = true
+  loadingOnline.value = true
+  try {
+    const res = await getSessions({ page: 1, pageSize: 200 })
+    const data = res.data || res
+    onlineUserList.value = data.list || data || []
+  } catch (error) {
+    ElMessage.error('获取在线用户列表失败')
+    onlineUserList.value = []
+  } finally {
+    loadingOnline.value = false
+  }
+}
+
+function formatTime(time) {
+  if (!time) return '-'
+  return new Date(time).toLocaleString('zh-CN')
+}
 
 const stats = reactive({
   repoCount: 0,
@@ -418,6 +465,15 @@ function getTypeName(type) {
     }
     &.green {
       background: linear-gradient(135deg, #67c23a 0%, #4a9c2a 100%);
+    }
+
+    &.clickable {
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      &:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
+      }
     }
   }
 }
@@ -653,6 +709,13 @@ function getTypeName(type) {
       }
     }
   }
+}
+
+.online-footer {
+  float: left;
+  font-size: 14px;
+  color: #666;
+  line-height: 32px;
 }
 
 @keyframes pulse {

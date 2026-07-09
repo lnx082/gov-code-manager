@@ -62,7 +62,6 @@
               <span>仓库管理</span>
             </template>
             <el-menu-item index="/repos">仓库列表</el-menu-item>
-            <el-menu-item index="/repos/create">创建仓库</el-menu-item>
           </el-sub-menu>
 
           <el-sub-menu index="branches">

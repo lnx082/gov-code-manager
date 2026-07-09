@@ -55,6 +55,11 @@ async function fixDatabaseSchema(database) {
       { name: 'description', def: 'TEXT' },
       { name: 'is_active', def: 'BOOLEAN DEFAULT TRUE' },
     ],
+    sessions: [
+      { name: 'ip_address', def: 'VARCHAR(50)' },
+      { name: 'user_agent', def: 'VARCHAR(500)' },
+      { name: 'last_active_at', def: 'TIMESTAMP' },
+    ],
   };
 
   for (const [tableName, columns] of Object.entries(tableColumns)) {
@@ -111,6 +116,18 @@ async function fixDatabaseSchema(database) {
     console.warn(`  ⚠️  插入默认部门失败: ${err.message}`);
   }
   
+  // 迁移旧数据：secret_level 从 internal → secret
+  try {
+    const updated = await database('user_profiles')
+      .where('secret_level', 'internal')
+      .update({ secret_level: 'secret', updated_at: new Date() });
+    if (updated > 0) {
+      console.log(`  🔄 已迁移 ${updated} 条用户保密权限：internal → secret`);
+    }
+  } catch (err) {
+    console.warn(`  ⚠️  迁移 secret_level 失败: ${err.message}`);
+  }
+
   console.log('✅ 数据库表结构检查完成');
 }
 

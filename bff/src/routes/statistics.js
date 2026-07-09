@@ -12,7 +12,10 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
     const versionCount = await db('approvals').where('operation_type', 'version').count('* as count').first();
     const baselineCount = await db('baselines').count('* as count').first();
     const userCount = await db('user_profiles').count('* as count').first();
-    
+    const onlineCount = await db('sessions')
+      .where('expires_at', '>', new Date())
+      .count('* as count').first();
+
     res.json({
       code: 200,
       data: {
@@ -21,7 +24,7 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
         versionCount: parseInt(versionCount.count),
         baselineCount: parseInt(baselineCount.count),
         userCount: parseInt(userCount.count),
-        onlineUsers: 12, // 模拟数据
+        onlineUsers: parseInt(onlineCount.count),
       },
     });
   } catch (error) {
