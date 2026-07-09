@@ -39,7 +39,6 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="nickname" label="昵称" width="120" />
       <el-table-column prop="role_name" label="角色" width="120">
         <template #default="{ row }">
           <el-tag type="primary" size="small">{{ row.role_name || '普通用户' }}</el-tag>
@@ -50,7 +49,7 @@
           {{ row.department_name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="保密等级" width="100">
+      <el-table-column label="保密权限" width="100">
         <template #default="{ row }">
           <el-tag :type="getSecretLevelType(row.secret_level)" size="small">
             {{ getSecretLevelName(row.secret_level) }}
@@ -162,12 +161,12 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="保密等级" prop="secretLevel">
-          <el-select v-model="userForm.secretLevel" placeholder="选择保密等级" style="width: 100%">
+        <el-form-item label="保密权限" prop="secretLevel">
+          <el-select v-model="userForm.secretLevel" placeholder="选择保密权限" style="width: 100%">
             <el-option label="公开" value="public" />
-            <el-option label="内部" value="internal" />
-            <el-option label="涉密" value="secret" />
-            <el-option label="机密" value="top-secret" />
+            <el-option label="秘密" value="secret" />
+            <el-option label="机密" value="confidential" />
+            <el-option label="绝密" value="top-secret" />
           </el-select>
         </el-form-item>
 
@@ -252,11 +251,10 @@ const userForm = reactive({
   username: '',
   password: '',
   confirmPassword: '',
-  nickname: '',
   email: '',
   departmentId: null,
   roleCode: 'user',
-  secretLevel: 'internal',
+  secretLevel: 'secret',
   sendNotify: true
 })
 
@@ -390,7 +388,7 @@ function resetUserForm() {
   userForm.confirmPassword = ''
   userForm.departmentId = null
   userForm.roleCode = 'user'
-  userForm.secretLevel = 'internal'
+  userForm.secretLevel = 'secret'
   userForm.sendNotify = true
 }
 
@@ -508,23 +506,27 @@ async function handleDelete(row) {
 }
 
 function getSecretLevelType(level) {
+  // 兼容旧值 internal → secret
   const map = {
-    'public': '',
-    'internal': 'warning',
-    'secret': 'danger',
+    public: '',
+    internal: 'warning',
+    secret: 'warning',
+    confidential: 'danger',
     'top-secret': 'danger'
   }
   return map[level] || ''
 }
 
 function getSecretLevelName(level) {
+  // 兼容旧值 internal → 秘密
   const map = {
-    'public': '公开',
-    'internal': '内部',
-    'secret': '涉密',
-    'top-secret': '机密'
+    public: '公开',
+    internal: '秘密',
+    secret: '秘密',
+    confidential: '机密',
+    'top-secret': '绝密'
   }
-  return map[level] || level || '内部'
+  return map[level] || level || '秘密'
 }
 
 function formatTime(time) {

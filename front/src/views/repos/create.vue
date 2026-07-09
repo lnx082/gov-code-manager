@@ -23,9 +23,13 @@
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="访问控制">
-          <el-switch v-model="form.private" />
-          <span class="switch-label">{{ form.private ? '私有仓库' : '公开仓库' }}</span>
+        <el-form-item label="仓库密级" prop="secretLevel">
+          <el-radio-group v-model="form.secretLevel">
+            <el-radio label="public">公开</el-radio>
+            <el-radio label="secret">秘密</el-radio>
+            <el-radio label="confidential">机密</el-radio>
+            <el-radio label="top-secret">绝密</el-radio>
+          </el-radio-group>
         </el-form-item>
 
         <el-form-item label="初始化仓库">
@@ -50,6 +54,7 @@ import { Plus, Back, Edit, Document, Setting, WarningFilled, CircleCheck } from 
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createRepo } from '@/api/gitea'
+import { pinyin } from 'pinyin-pro'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -59,14 +64,27 @@ const form = reactive({
   name: '',
   description: '',
   type: 'source',
-  private: true,
+  secretLevel: 'secret',
   autoInit: true
 })
+
+// 密级对应的 Gitea 可见性
+const secretLevelMap = {
+  public: { private: false, label: '公开' },
+  secret: { private: true, label: '秘密' },
+  confidential: { private: true, label: '机密' },
+  'top-secret': { private: true, label: '绝密' },
+}
 
 const rules = {
   name: [
     { required: true, message: '请输入仓库名称', trigger: 'blur' },
-    { pattern: /^[a-zA-Z][a-zA-Z0-9_-]*$/, message: '只能包含字母、数字、下划线和连字符，且必须以字母开头', trigger: 'blur' }
+  ],
+  type: [
+    { required: true, message: '请选择仓库类型', trigger: 'change' }
+  ],
+  secretLevel: [
+    { required: true, message: '请选择仓库密级', trigger: 'change' }
   ]
 }
 
@@ -79,31 +97,53 @@ const typeReadmeMap = {
 async function handleSubmit() {
   if (!formRef.value) return
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  try {
+    await formRef.value.validate()
+  } catch {
+    return // 校验不通过
+  }
 
-    submitting.value = true
-    try {
-      // 构建仓库描述（包含类型标识）
-      const desc = form.description
-        ? `[${form.type}] ${form.description}`
-        : `[${form.type}] ${typeReadmeMap[form.type]?.split('\n')[0]?.replace('# ', '') || ''}`
-      await createRepo({
-        name: form.name,
-        description: desc,
-        private: form.private,
-        auto_init: form.autoInit,
-        default_branch: 'main'
-      })
-      ElMessage.success('仓库创建成功')
-      router.push('/repos')
-    } catch (error) {
-      console.error('创建仓库失败:', error)
-      ElMessage.error('创建仓库失败：' + (error?.response?.data?.message || error?.message || '未知错误'))
-    } finally {
-      submitting.value = false
+  submitting.value = true
+  try {
+    // 中文仓库名转拼音作为 Gitea 仓库名，原中文名存入描述
+    const sl = secretLevelMap[form.secretLevel] || secretLevelMap.secret
+    const rawName = form.name.trim()
+    const hasChinese = /[一-龥]/.test(rawName)
+    let repoName, displayTag
+
+    if (hasChinese) {
+      // 转拼音：取每个字首字母 + 全拼，去重
+      const pyArr = pinyin(rawName, { toneType: 'none', type: 'array' })
+      const short = pyArr.map(s => s[0]).join('')
+      const full = pyArr.join('')
+      // 拼音去重 + 短横线连接，确保 Gitea 合法
+      repoName = `${short}_${full}`.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()
+      if (!repoName || repoName.length < 2) repoName = `repo_${Date.now()}`
+      displayTag = `[显示名=${rawName}]`
+    } else {
+      repoName = rawName
+      displayTag = ''
     }
-  })
+
+    const desc = form.description
+      ? `${displayTag}[${sl.label}][${form.type}] ${form.description}`
+      : `${displayTag}[${sl.label}][${form.type}] ${typeReadmeMap[form.type]?.split('\n')[0]?.replace('# ', '') || ''}`
+
+    await createRepo({
+      name: repoName,
+      description: desc,
+      private: sl.private,
+      auto_init: form.autoInit,
+      default_branch: 'main'
+    })
+    ElMessage.success('仓库创建成功')
+    router.push('/repos')
+  } catch (error) {
+    console.error('创建仓库失败:', error)
+    ElMessage.error('创建仓库失败：' + (error?.response?.data?.message || error?.message || '未知错误'))
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 

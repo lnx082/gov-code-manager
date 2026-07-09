@@ -2,13 +2,15 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
+import db from '../database/connection.js';
 
 const router = Router();
 
-// 登录 — 纯 Gitea API 认证
+// 登录 — Gitea API 认证 + 本地用户记录同步
 router.post('/login', authLimiter, async (req, res, next) => {
   try {
     const { username, password } = req.body;
+    const clientIp = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || '';
 
     if (!username || !password) {
       return res.status(400).json({
@@ -33,6 +35,56 @@ router.post('/login', authLimiter, async (req, res, next) => {
     const permissions = isAdmin
       ? ['*']
       : ['repo:view', 'branch:view', 'version:view'];
+
+    // 同步用户信息到本地 user_profiles 表
+    try {
+      const existingUser = await db('user_profiles').where('user_id', giteaUser.id).first();
+      const now = new Date();
+      const profileData = {
+        gitea_username: giteaUser.login || username,
+        nickname: giteaUser.full_name || username,
+        email: giteaUser.email || '',
+        role_code: role,
+        last_login_time: now,
+        last_login_ip: clientIp,
+        updated_at: now,
+      };
+      if (existingUser) {
+        await db('user_profiles').where('user_id', giteaUser.id).update(profileData);
+      } else {
+        await db('user_profiles').insert({
+          user_id: giteaUser.id,
+          ...profileData,
+          department_id: null,
+          secret_level: 'internal',
+          is_active: true,
+          account_locked: false,
+          failed_login_attempts: 0,
+          permissions: JSON.stringify([]),
+          created_at: now,
+        });
+      }
+    } catch (profileError) {
+      // 本地用户同步失败不影响登录
+      console.warn('同步用户信息失败:', profileError.message);
+    }
+
+    // 创建会话记录
+    try {
+      const sessionId = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      await db('sessions').insert({
+        session_id: sessionId,
+        user_id: giteaUser.id,
+        username: giteaUser.login || username,
+        ip_address: clientIp,
+        user_agent: req.headers['user-agent'] || '',
+        created_at: new Date(),
+        last_active_at: new Date(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7天
+      });
+    } catch (sessionError) {
+      console.warn('创建会话记录失败:', sessionError.message);
+    }
 
     // 为 BFF 代理请求创建 Gitea API Token
     const giteaToken = await createGiteaToken(username, password);

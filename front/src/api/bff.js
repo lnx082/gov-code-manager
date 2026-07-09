@@ -392,3 +392,9 @@ export function getTrends(params) {
 export function getDistribution() {
   return bffService.get('/statistics/distribution')
 }
+
+// ============ 仓库列表（带权限过滤） ============
+
+export function getFilteredRepos(params) {
+  return bffService.get('/repos', { params })
+}

@@ -1,8 +1,49 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+
+// 获取所有在线用户（管理员）
+router.get('/', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    // 查询活跃会话，关联用户信息
+    const onlineUsers = await db('sessions')
+      .select(
+        'sessions.*',
+        'user_profiles.nickname',
+        'user_profiles.gitea_username',
+        'user_profiles.role_code',
+        'user_profiles.department_id',
+        'departments.name as department_name'
+      )
+      .leftJoin('user_profiles', 'sessions.user_id', 'user_profiles.user_id')
+      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+      .where('sessions.expires_at', '>', new Date())
+      .orderBy('sessions.last_active_at', 'desc');
+
+    return res.json({
+      code: 200,
+      data: {
+        total: onlineUsers.length,
+        list: onlineUsers.map(s => ({
+          session_id: s.session_id,
+          user_id: s.user_id,
+          username: s.gitea_username || s.username,
+          nickname: s.nickname || '',
+          role_code: s.role_code || '',
+          department_name: s.department_name || '',
+          ip_address: s.ip_address,
+          login_time: s.created_at,
+          last_active: s.last_active_at,
+          user_agent: s.user_agent,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // 获取我的会话列表
 router.get('/my', authenticate, async (req, res, next) => {

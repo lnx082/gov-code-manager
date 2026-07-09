@@ -1,21 +1,61 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
+import db from '../database/connection.js';
 
 const router = Router();
 
-// 获取仓库列表（从 Gitea）
+// 密级权重（值越大权限越高）
+const SECRET_WEIGHT = { public: 0, secret: 1, confidential: 2, 'top-secret': 3 };
+
+/**
+ * 判断用户是否有权限访问该密级的仓库
+ */
+function canAccessByLevel(userLevel, repoLevel) {
+  const uw = SECRET_WEIGHT[userLevel];
+  const rw = SECRET_WEIGHT[repoLevel];
+  if (uw === undefined || rw === undefined) return true; // 未知密级默认放行
+  return uw >= rw;
+}
+
+/**
+ * 从描述中解析密级标签，格式：[显示名=xxx][秘密][source] ...
+ */
+function parseSecretLevel(desc) {
+  if (!desc) return 'secret'; // 无描述默认秘密
+  const clean = desc.replace(/^\[显示名=[^\]]+\]/, '');
+  const match = clean.match(/\[(公开|秘密|机密|绝密)\]/);
+  if (match) {
+    const map = { 公开: 'public', 秘密: 'secret', 机密: 'confidential', 绝密: 'top-secret' };
+    return map[match[1]] || 'secret';
+  }
+  return 'secret';
+}
+
+// 获取仓库列表（带部门 + 密级权限过滤）
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 20, search } = req.query;
-    
-    // 获取 Gitea Token（JWT 中存储）
+
+    // 获取当前用户信息（部门、密级）
+    const profile = await db('user_profiles')
+      .select('user_profiles.department_id', 'user_profiles.secret_level', 'departments.name as department_name')
+      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+      .where('user_id', req.user.userId)
+      .first();
+
+    const isAdmin = req.user.roleCode === 'admin' || req.user.isAdmin === true;
+    const userDeptId = profile?.department_id;
+    const userDeptName = profile?.department_name || '';
+    const userSecretLevel = profile?.secret_level || 'secret';
+
+    // 获取 Gitea Token
     const giteaToken = req.user?.giteaToken || '';
     const authHeader = giteaToken.startsWith('Basic ')
       ? giteaToken
       : `token ${giteaToken}`;
 
-    // 直接从 Gitea 获取仓库列表
+    // 从 Gitea 获取仓库列表
     const response = await fetch(
       `${config.gitea.url}/api/v1/user/repos?page=${page}&limit=${pageSize}${search ? `&q=${search}` : ''}`,
       {
@@ -29,23 +69,65 @@ router.get('/', authenticate, async (req, res, next) => {
     if (!response.ok) {
       throw new Error('获取仓库列表失败');
     }
-    
+
     const repos = await response.json();
-    
-    // 格式化数据
-    const formattedRepos = repos.map(repo => ({
-      id: repo.id,
-      name: repo.name,
-      full_name: repo.full_name,
-      description: repo.description,
-      private: repo.private,
-      owner: repo.owner?.login,
-      branches_count: repo.default_branch ? '1' : '0',
-      stars_count: repo.stars_count,
-      forks_count: repo.forks_count,
-      updated_at: repo.updated_at,
-    }));
-    
+
+    // 获取所有用户部门映射（用于确定仓库主管部门）
+    const allUsers = await db('user_profiles')
+      .select('user_profiles.gitea_username', 'user_profiles.department_id', 'departments.name as department_name')
+      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+      .whereNotNull('user_profiles.department_id');
+
+    const userDeptMap = {};
+    for (const u of allUsers) {
+      userDeptMap[u.gitea_username?.toLowerCase()] = {
+        department_id: u.department_id,
+        department_name: u.department_name || '-',
+      };
+    }
+
+    // 格式化 + 权限过滤
+    const formattedRepos = repos
+      .map(repo => {
+        const ownerName = repo.owner?.login || '';
+        const repoDept = userDeptMap[ownerName.toLowerCase()] || null;
+        const desc = repo.description || '';
+        const repoSecret = parseSecretLevel(desc);
+
+        return {
+          id: repo.id,
+          name: repo.name,
+          full_name: repo.full_name,
+          description: desc,
+          private: repo.private,
+          owner: ownerName,
+          branches_count: repo.default_branch ? '1' : '0',
+          stars_count: repo.stars_count,
+          forks_count: repo.forks_count,
+          updated_at: repo.updated_at,
+          // 扩展字段
+          _department_id: repoDept?.department_id || null,
+          _department_name: repoDept?.department_name || '-',
+          _secret_level: repoSecret,
+        };
+      })
+      .filter(repo => {
+        // 管理员 —— 不过滤
+        if (isAdmin) return true;
+
+        // 部门隔离：仓库必须有主管部门，且与用户同部门
+        if (!repo._department_id || repo._department_id !== userDeptId) {
+          return false;
+        }
+
+        // 密级管控：用户密级 >= 仓库密级
+        if (!canAccessByLevel(userSecretLevel, repo._secret_level)) {
+          return false;
+        }
+
+        return true;
+      });
+
     res.json({
       code: 200,
       data: {
@@ -57,18 +139,10 @@ router.get('/', authenticate, async (req, res, next) => {
     });
   } catch (error) {
     console.error('获取仓库列表失败:', error);
-    // 返回模拟数据
+    // 返回空列表而非模拟数据
     res.json({
       code: 200,
-      data: {
-        list: [
-          { id: 1, name: 'gov-user-service', description: '政务系统用户服务', private: true, owner: 'root', branches_count: 3, stars_count: 5, updated_at: new Date().toISOString() },
-          { id: 2, name: 'gov-auth-module', description: '统一认证模块', private: true, owner: 'root', branches_count: 2, stars_count: 3, updated_at: new Date().toISOString() },
-        ],
-        total: 2,
-        page: 1,
-        pageSize: 20,
-      },
+      data: { list: [], total: 0, page: parseInt(req.query.page || 1), pageSize: parseInt(req.query.pageSize || 20) },
     });
   }
 });
@@ -77,7 +151,7 @@ router.get('/', authenticate, async (req, res, next) => {
 router.get('/:owner/:repo', authenticate, async (req, res, next) => {
   try {
     const { owner, repo } = req.params;
-    
+
     const response = await fetch(
       `${config.gitea.url}/api/v1/repos/${owner}/${repo}`,
       {
@@ -87,13 +161,13 @@ router.get('/:owner/:repo', authenticate, async (req, res, next) => {
         },
       }
     );
-    
+
     if (!response.ok) {
       throw new Error('获取仓库详情失败');
     }
-    
+
     const repoData = await response.json();
-    
+
     res.json({
       code: 200,
       data: repoData,
@@ -108,7 +182,7 @@ router.get('/:owner/:repo/branches', authenticate, async (req, res, next) => {
   try {
     const { owner, repo } = req.params;
     const { page = 1, pageSize = 20 } = req.query;
-    
+
     const response = await fetch(
       `${config.gitea.url}/api/v1/repos/${owner}/${repo}/branches?page=${page}&limit=${pageSize}`,
       {
@@ -118,13 +192,13 @@ router.get('/:owner/:repo/branches', authenticate, async (req, res, next) => {
         },
       }
     );
-    
+
     if (!response.ok) {
       throw new Error('获取分支列表失败');
     }
-    
+
     const branches = await response.json();
-    
+
     res.json({
       code: 200,
       data: {
@@ -142,22 +216,22 @@ router.get('/:owner/:repo/commits', authenticate, async (req, res, next) => {
   try {
     const { owner, repo } = req.params;
     const { page = 1, pageSize = 20, sha } = req.query;
-    
+
     const url = `${config.gitea.url}/api/v1/repos/${owner}/${repo}/commits?page=${page}&limit=${pageSize}${sha ? `&sha=${sha}` : ''}`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Authorization': req.headers.authorization,
         'Content-Type': 'application/json',
       },
     });
-    
+
     if (!response.ok) {
       throw new Error('获取提交历史失败');
     }
-    
+
     const commits = await response.json();
-    
+
     res.json({
       code: 200,
       data: {
