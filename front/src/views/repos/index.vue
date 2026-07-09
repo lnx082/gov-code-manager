@@ -118,6 +118,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getRepoList } from '@/api/repo'
+import { getMyRepos } from '@/api/gitea'
 
 const router = useRouter()
 const loading = ref(false)
@@ -147,6 +148,7 @@ onMounted(() => {
 async function loadRepos() {
   loading.value = true
   try {
+    // Try BFF repo list first
     const res = await getRepoList({
       page: pagination.page,
       pageSize: pagination.pageSize,
@@ -154,15 +156,29 @@ async function loadRepos() {
     })
     repoList.value = res.data?.list || res.data || []
     pagination.total = res.data?.total || repoList.value.length
-  } catch (error) {
-    console.error('获取仓库列表失败:', error)
-    // 使用模拟数据
-    repoList.value = [
-      { id: 1, name: 'gov-user-service', description: '政务系统用户服务模块', private: true, branches_count: 5, stars_count: 12, updated_at: '2024-01-15T10:00:00Z' },
-      { id: 2, name: 'gov-auth-module', description: '统一认证模块', private: true, branches_count: 3, stars_count: 8, updated_at: '2024-01-14T15:30:00Z' },
-      { id: 3, name: 'gov-documentation', description: '项目文档', private: false, branches_count: 2, stars_count: 25, updated_at: '2024-01-13T09:00:00Z' }
-    ]
-    pagination.total = repoList.value.length
+  } catch {
+    // Fall back to Gitea API directly
+    try {
+      const res = await getMyRepos({ page: pagination.page, limit: pagination.pageSize })
+      const repos = res.data || res
+      repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+        id: r.id,
+        name: r.full_name || r.name,
+        full_name: r.full_name,
+        description: r.description,
+        private: r.private,
+        owner: r.owner?.username || r.owner,
+        branches_count: 0,
+        stars_count: r.stars_count || 0,
+        updated_at: r.updated_at
+      }))
+      pagination.total = repoList.value.length
+    } catch (giteaError) {
+      console.error('获取仓库列表失败:', giteaError)
+      ElMessage.warning('加载仓库列表失败，请检查网络连接')
+      repoList.value = []
+      pagination.total = 0
+    }
   } finally {
     loading.value = false
   }

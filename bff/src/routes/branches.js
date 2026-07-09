@@ -4,6 +4,14 @@ import config from '../config/index.js';
 
 const router = Router();
 
+// 从 JWT 中提取 Gitea 认证头
+function giteaAuth(req) {
+  const giteaToken = req.user?.giteaToken || '';
+  return giteaToken.startsWith('Basic ')
+    ? giteaToken
+    : `token ${giteaToken}`;
+}
+
 // 获取分支列表
 router.get('/:owner/:repo/branches', authenticate, async (req, res, next) => {
   try {
@@ -14,7 +22,7 @@ router.get('/:owner/:repo/branches', authenticate, async (req, res, next) => {
       `${config.gitea.url}/api/v1/repos/${owner}/${repo}/branches?page=${page}&limit=${pageSize}`,
       {
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': giteaAuth(req),
           'Content-Type': 'application/json',
         },
       }
@@ -49,7 +57,7 @@ router.post('/:owner/:repo/branches', authenticate, async (req, res, next) => {
       {
         method: 'POST',
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': giteaAuth(req),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -86,7 +94,7 @@ router.delete('/:owner/:repo/branches/:branch', authenticate, async (req, res, n
       {
         method: 'DELETE',
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': giteaAuth(req),
           'Content-Type': 'application/json',
         },
       }
@@ -115,7 +123,7 @@ router.get('/:owner/:repo/pulls', authenticate, async (req, res, next) => {
     
     const response = await fetch(url, {
       headers: {
-        'Authorization': req.headers.authorization,
+        'Authorization': giteaAuth(req),
         'Content-Type': 'application/json',
       },
     });
@@ -149,7 +157,7 @@ router.post('/:owner/:repo/pulls', authenticate, async (req, res, next) => {
       {
         method: 'POST',
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': giteaAuth(req),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -188,7 +196,7 @@ router.post('/:owner/:repo/pulls/:index/merge', authenticate, async (req, res, n
       {
         method: 'POST',
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': giteaAuth(req),
           'Content-Type': 'application/json',
         },
       }

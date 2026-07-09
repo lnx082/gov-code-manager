@@ -9,17 +9,23 @@ router.get('/', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 20, search } = req.query;
     
+    // 获取 Gitea Token（JWT 中存储）
+    const giteaToken = req.user?.giteaToken || '';
+    const authHeader = giteaToken.startsWith('Basic ')
+      ? giteaToken
+      : `token ${giteaToken}`;
+
     // 直接从 Gitea 获取仓库列表
     const response = await fetch(
       `${config.gitea.url}/api/v1/user/repos?page=${page}&limit=${pageSize}${search ? `&q=${search}` : ''}`,
       {
         headers: {
-          'Authorization': req.headers.authorization,
+          'Authorization': authHeader,
           'Content-Type': 'application/json',
         },
       }
     );
-    
+
     if (!response.ok) {
       throw new Error('获取仓库列表失败');
     }

@@ -74,6 +74,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getArchiveList, restoreArchive } from '@/api/admin'
 import { getMyRepos } from '@/api/gitea'
+import { getRepoList } from '@/api/repo'
 
 const loading = ref(false)
 
@@ -120,14 +121,25 @@ async function loadArchives() {
 
 async function loadRepos() {
   try {
+    // Try Gitea API first for richer repo data
     const res = await getMyRepos()
     const repos = res.data || res
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
       id: r.id,
       name: r.full_name || r.name
     }))
-  } catch (error) {
-    ElMessage.warning('加载仓库列表失败')
+  } catch {
+    // Fall back to BFF repo list
+    try {
+      const res = await getRepoList({ page: 1, pageSize: 100 })
+      const repos = res.data?.list || res.data || res || []
+      repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+        id: r.id,
+        name: r.full_name || r.name || r.path
+      }))
+    } catch (fallbackError) {
+      ElMessage.warning('加载仓库列表失败')
+    }
   }
 }
 

@@ -41,7 +41,7 @@
     <!-- 主体区域 -->
     <div class="app-body">
       <!-- 侧边栏 -->
-      <aside class="gov-sidebar">
+      <aside class="gov-sidebar" :style="{ width: sidebarCollapsed ? '64px' : '220px' }">
         <el-menu
           :default-active="$route.path"
           :collapse="sidebarCollapsed"
@@ -325,18 +325,20 @@ function handleUserCommand(command) {
 
 /* 侧边栏 */
 .gov-sidebar {
-  width: 220px;
   background: linear-gradient(180deg, #8b0000 0%, #6b0000 100%);
   display: flex;
   flex-direction: column;
   transition: width 0.3s;
+  overflow: hidden;
 
   .sidebar-menu {
     flex: 1;
     border-right: none;
+    overflow-y: auto;
+    overflow-x: hidden;
 
     &:not(.el-menu--collapse) {
-      width: 220px;
+      width: 100%;
     }
 
     .menu-icon {
@@ -364,6 +366,7 @@ function handleUserCommand(command) {
     cursor: pointer;
     background: rgba(0, 0, 0, 0.2);
     transition: all 0.3s;
+    flex-shrink: 0;
 
     &:hover {
       background: rgba(255, 255, 255, 0.1);

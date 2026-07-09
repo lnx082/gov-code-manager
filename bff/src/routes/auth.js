@@ -34,7 +34,10 @@ router.post('/login', authLimiter, async (req, res, next) => {
       ? ['*']
       : ['repo:view', 'branch:view', 'version:view'];
 
-    // 生成 JWT（包含 Gitea 用户信息）
+    // 为 BFF 代理请求创建 Gitea API Token
+    const giteaToken = await createGiteaToken(username, password);
+
+    // 生成 JWT（包含 Gitea 用户信息和 Gitea Token）
     const token = jwt.sign(
       {
         userId: giteaUser.id,
@@ -45,6 +48,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
         roleCode: role,
         isAdmin: isAdmin,
         permissions: permissions,
+        giteaToken: giteaToken || '',
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn }
@@ -135,6 +139,36 @@ async function authenticateWithGitea(username, password) {
   } catch (error) {
     console.error('Gitea 认证失败:', error.message);
     return null;
+  }
+}
+
+// 为用户创建 Gitea API Token（用于 BFF 代理 Gitea 请求）
+async function createGiteaToken(username, password) {
+  try {
+    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    const response = await fetch(`${config.gitea.url}/api/v1/users/${username}/tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${credentials}`,
+      },
+      body: JSON.stringify({
+        name: `bff-token-${Date.now()}`,
+      }),
+    });
+
+    if (!response.ok) {
+      // Token 创建失败时回退使用 Basic Auth
+      return `Basic ${credentials}`;
+    }
+
+    const data = await response.json();
+    return data.sha1 || data.token || `Basic ${credentials}`;
+  } catch (error) {
+    console.error('创建 Gitea Token 失败:', error.message);
+    // 回退使用 Basic Auth
+    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    return `Basic ${credentials}`;
   }
 }
 

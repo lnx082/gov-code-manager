@@ -10,21 +10,27 @@ router.get('/', authenticate, async (req, res, next) => {
     const { page = 1, pageSize = 20, status, type } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     
-    let query = db('approvals').select('*');
-    
+    let query = db('approvals');
+
     if (status) {
       query = query.where('status', status);
     }
     if (type) {
       query = query.where('operation_type', type);
     }
-    
+
     // 如果是获取我的申请
     if (req.query.applicantUserId === 'me') {
       query = query.where('applicant_user_id', req.user.userId);
     }
-    
-    const total = await query.clone().count('* as count').first();
+
+    // 单独构建 count 查询避免 select * + count(*) 的 GROUP BY 冲突
+    let countQuery = db('approvals');
+    if (status) countQuery = countQuery.where('status', status);
+    if (type) countQuery = countQuery.where('operation_type', type);
+    if (req.query.applicantUserId === 'me') countQuery = countQuery.where('applicant_user_id', req.user.userId);
+    const total = await countQuery.count('* as count').first();
+
     const list = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize))
       .offset(offset);
@@ -51,12 +57,16 @@ router.get('/pending', authenticate, async (req, res, next) => {
     
     let query = db('approvals')
       .where('status', 'pending');
-    
+
     if (type) {
       query = query.where('operation_type', type);
     }
-    
-    const total = await query.clone().count('* as count').first();
+
+    // 单独构建 count 查询避免 GROUP BY 冲突
+    let countQuery = db('approvals').where('status', 'pending');
+    if (type) countQuery = countQuery.where('operation_type', type);
+    const total = await countQuery.count('* as count').first();
+
     const list = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize))
       .offset(offset);

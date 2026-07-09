@@ -40,8 +40,7 @@
       <el-form inline>
         <el-form-item label="仓库">
           <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 200px">
-            <el-option label="政务系统-用户模块" value="1" />
-            <el-option label="政务系统-审批模块" value="2" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="分支类型">
@@ -110,14 +109,12 @@
         </el-form-item>
         <el-form-item label="所属仓库" prop="repoId">
           <el-select v-model="createForm.repoId" placeholder="选择仓库">
-            <el-option label="政务系统-用户模块" value="1" />
-            <el-option label="政务系统-审批模块" value="2" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="基于分支" prop="baseBranch">
           <el-select v-model="createForm.baseBranch" placeholder="选择基础分支">
-            <el-option label="main" value="main" />
-            <el-option label="develop" value="develop" />
+            <el-option v-for="branch in baseBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -130,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBranches as getGiteaBranches } from '@/api/gitea'
@@ -148,6 +145,7 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const branchList = ref([])
 const repoList = ref([])
+const baseBranches = ref(['main', 'develop'])
 
 const createForm = reactive({ name: '', repoId: '', baseBranch: 'main' })
 const createRules = {
@@ -160,22 +158,40 @@ onMounted(() => { loadBranches() })
 async function loadBranches() {
   loading.value = true
   try {
-    const repos = await getRepoList()
+    // Load repo list first
+    const reposRes = await getRepoList({ page: 1, pageSize: 100 })
+    const repos = reposRes.data?.list || reposRes.data || reposRes || []
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
+      id: r.id,
+      name: r.full_name || r.name || r.path,
+      owner: r.owner || r.owner_name,
+      repo: r.name
+    }))
+
+    // Load branches from each repo
     const branches = []
-    if (repos.data?.list) {
-      for (const repo of repos.data.list) {
-        try {
-          const res = await getGiteaBranches(repo.owner || repo.owner_name, repo.name)
-          const repoBranches = res.data || []
-          repoBranches.forEach(b => branches.push({ ...b, repoOwner: repo.owner || repo.owner_name, repoName: repo.name }))
-        } catch { /* skip failed repos */ }
-      }
+    const reposToLoad = filterForm.repoId
+      ? repoList.value.filter(r => r.id === filterForm.repoId)
+      : repoList.value
+    for (const repo of reposToLoad) {
+      try {
+        const res = await getGiteaBranches(repo.owner, repo.repo)
+        const repoBranches = res.data || res
+        const branchArray = Array.isArray(repoBranches) ? repoBranches : []
+        branchArray.forEach(b => branches.push({
+          ...b,
+          repoId: repo.id,
+          repoOwner: repo.owner,
+          repoName: repo.name
+        }))
+      } catch { /* skip failed repos */ }
     }
     branchList.value = branches
     pagination.total = branches.length
     stats.total = branches.length
     stats.protected = branches.filter(b => b.protected).length
     stats.active = branches.filter(b => !b.protected).length
+    stats.pending = 0
   } catch {
     ElMessage.warning('加载分支列表失败')
   } finally {
@@ -185,16 +201,51 @@ async function loadBranches() {
 
 function handleFilter() { loadBranches() }
 function resetFilter() { Object.keys(filterForm).forEach(key => filterForm[key] = ''); loadBranches() }
-function showCreateDialog() { createDialogVisible.value = true }
+function showCreateDialog() {
+  createForm.repoId = ''
+  createForm.baseBranch = 'main'
+  createDialogVisible.value = true
+}
+
+// Watch repoId change in create form to load base branches
+watch(() => createForm.repoId, async (newRepoId) => {
+  if (!newRepoId) {
+    baseBranches.value = ['main', 'develop']
+    return
+  }
+  const repo = repoList.value.find(r => r.id === newRepoId)
+  if (!repo) return
+  try {
+    const res = await getGiteaBranches(repo.owner, repo.repo)
+    const branches = res.data || res
+    baseBranches.value = (Array.isArray(branches) ? branches : []).map(b => b.name)
+  } catch {
+    baseBranches.value = ['main', 'develop']
+  }
+})
 
 async function handleCreateBranch() {
   if (!createForm.name || !createForm.repoId) {
     ElMessage.warning('请填写完整信息')
     return
   }
-  ElMessage.success('分支创建成功')
-  createDialogVisible.value = false
-  loadBranches()
+  const repo = repoList.value.find(r => r.id === createForm.repoId)
+  if (!repo) {
+    ElMessage.warning('请选择有效的仓库')
+    return
+  }
+  try {
+    const { createBranch } = await import('@/api/gitea')
+    await createBranch(repo.owner, repo.repo, {
+      branch_name: createForm.name,
+      old_branch_name: createForm.baseBranch || 'main'
+    })
+    ElMessage.success('分支创建成功')
+    createDialogVisible.value = false
+    loadBranches()
+  } catch {
+    ElMessage.warning('分支创建失败')
+  }
 }
 
 function viewBranch(row) { router.push(`/repos/${row.repoId}?branch=${row.name}`) }

@@ -236,7 +236,6 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles } from '@/api/gitea'
-import { createMergeRequest as bffCreateMerge, getMergeRequestList as bffGetMergeList } from '@/api/branches'
 import { getApprovalFlows } from '@/api/bff'
 import { getUserList } from '@/api/user'
 
@@ -292,12 +291,12 @@ const approvalForm = reactive({
   comment: ''
 })
 
-onMounted(() => {
+onMounted(async () => {
   if (route.query.source) {
     createForm.sourceBranch = route.query.source
     createDialogVisible.value = true
   }
-  loadRepos()
+  await loadRepos()
   loadData()
   loadApprovalFlows()
   loadReviewers()
@@ -348,56 +347,49 @@ async function loadReviewers() {
 async function loadData() {
   loading.value = true
   try {
-    const params = {
-      page: pagination.page,
-      limit: pagination.pageSize
-    }
     let list = []
-    // Try BFF merge list first (has approval data)
-    try {
-      const res = await bffGetMergeList({ ...params })
-      const data = res.data || res
-      list = data.list || data.records || data || []
-      if (!Array.isArray(list) && typeof list === 'object') {
-        list = Object.values(list).filter(v => typeof v === 'object')
-      }
-    } catch {
-      // Fall back to trying to load PRs from repos
-      for (const repo of repoList.value.slice(0, 3)) {
-        try {
-          const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 5 })
-          const prs = prRes.data || prRes
-          if (Array.isArray(prs)) {
-            list.push(...prs.map(pr => ({
-              id: pr.id || pr.number,
-              title: pr.title,
-              sourceBranch: pr.head?.label || pr.head?.ref || '',
-              targetBranch: pr.base?.label || pr.base?.ref || '',
-              repoId: repo.id,
-              repoName: repo.name,
-              status: pr.state === 'open' ? 'pending' : pr.merged ? 'merged' : 'closed',
-              approvals: 0,
-              requiredApprovals: 0,
-              approvalRate: 0,
-              author: pr.user?.username || pr.user?.login || '',
-              createdAt: pr.created_at || pr.createdAt,
-              additions: 0,
-              deletions: 0,
-              fileChanges: 0,
-              files: [],
-              approvalRecords: [],
-              owner: repo.owner,
-              repo: repo.repo
-            })))
-          }
-        } catch {
-          // Skip repos that fail
+    // Iterate repos to load PRs from Gitea API
+    const repos = repoList.value.length ? repoList.value.slice(0, 5) : []
+    for (const repo of repos) {
+      if (filterForm.repoId && repo.id !== filterForm.repoId) continue
+      try {
+        const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 10 })
+        const prs = prRes.data || prRes
+        if (Array.isArray(prs)) {
+          list.push(...prs.map(pr => ({
+            id: pr.id || pr.number,
+            title: pr.title,
+            sourceBranch: pr.head?.label || pr.head?.ref || '',
+            targetBranch: pr.base?.label || pr.base?.ref || '',
+            repoId: repo.id,
+            repoName: repo.name,
+            status: pr.state === 'open' ? 'pending' : pr.merged ? 'merged' : 'closed',
+            approvals: 0,
+            requiredApprovals: 0,
+            approvalRate: 0,
+            author: pr.user?.username || pr.user?.login || '',
+            createdAt: pr.created_at || pr.createdAt,
+            additions: 0,
+            deletions: 0,
+            fileChanges: 0,
+            files: [],
+            approvalRecords: [],
+            owner: repo.owner,
+            repo: repo.repo
+          })))
         }
+      } catch {
+        // Skip repos that fail
       }
     }
 
-    mergeRequestList.value = Array.isArray(list) ? list : []
-    pagination.total = mergeRequestList.value.length
+    // Apply status filter if set
+    if (filterForm.status) {
+      list = list.filter(item => item.status === filterForm.status)
+    }
+
+    mergeRequestList.value = list
+    pagination.total = list.length
   } catch (error) {
     ElMessage.warning('加载合并请求列表失败')
   } finally {
