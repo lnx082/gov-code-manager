@@ -165,7 +165,9 @@ async function loadBranches() {
       id: r.id,
       name: r.full_name || r.name,
       owner: r.owner?.login || r.owner?.username || r.owner || '',
-      repo: r.name
+      repo: r.name,
+      repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
+      repoName: r.name
     }))
 
     // Load branches from each repo
@@ -182,7 +184,7 @@ async function loadBranches() {
           ...b,
           repoId: repo.id,
           repoOwner: repo.owner,
-          repoName: repo.name
+          repoName: repo.repo
         }))
       } catch { /* skip failed repos */ }
     }

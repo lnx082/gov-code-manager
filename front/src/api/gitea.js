@@ -121,8 +121,8 @@ export function getCommitStatus(owner, repo, sha) {
 
 // ============ 差异对比 ============
 
-export function compareRepos(owner, repo, params) {
-  return giteaService.get(`/repos/${owner}/${repo}/compare`, { params })
+export function compareRepos(owner, repo, base, head) {
+  return giteaService.get(`/repos/${owner}/${repo}/compare/${base}...${head}`)
 }
 
 // ============ 文件操作 ============

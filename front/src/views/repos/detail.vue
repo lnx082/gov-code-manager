@@ -363,28 +363,17 @@ async function viewCommitDiff(commit) {
   diffData.value = { sha: commit.sha, message: commit.message, author: commit.author, date: commit.createdAt, files: [] }
   diffDialogVisible.value = true; diffLoading.value = true
   try {
-    const parentSha = commit.parentSha || ''
-    if (parentSha) {
-      const compareRes = await compareRepos(owner, name, { base: parentSha, head: commit.sha })
-      const compareData = compareRes.data || compareRes
-      diffData.value.files = (compareData.files || []).map(f => ({
-        name: f.filename || f.name, status: f.status || 'modified',
-        additions: f.additions || 0, deletions: f.deletions || 0, patch: f.patch || ''
-      }))
-    } else {
-      // 没有父提交（初始提交），尝试获取提交详情
-      try {
-        const commitRes = await getCommit(owner, name, commit.sha)
-        const detail = commitRes.data || commitRes
-        const files = detail.files || detail.stats || []
-        if (files.length > 0) {
-          diffData.value.files = files.map(f => ({
-            name: f.filename || f.name, status: f.status || 'added',
-            additions: f.additions || 0, deletions: f.deletions || 0, patch: f.patch || ''
-          }))
-        }
-      } catch { /* 回退失败 */ }
-    }
+    // 使用 Gitea git/commits API（返回 files + stats）
+    const commitRes = await getCommit(owner, name, commit.sha)
+    const detail = commitRes.data || commitRes
+    const files = detail.files || detail.stats || []
+    diffData.value.files = (Array.isArray(files) ? files : []).map(f => ({
+      name: f.filename || f.name || '',
+      status: f.status || 'modified',
+      additions: f.additions || 0,
+      deletions: f.deletions || 0,
+      patch: f.patch || ''
+    }))
   } catch (e) { console.error('加载差异失败:', e) }
   finally { diffLoading.value = false }
 }
