@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      - gov-network
+    depends_on:
+      - bff
+    restart: unless-stopped
+
+  # BFF 层服务
+  bff:
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - DB_HOST=${DB_HOST:-mariadb}
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-gov_code_manager}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=6379
+      - GITEA_URL=${GITEA_URL:-http://123.60.219.19:3000}
+    networks:
+      - gov-network
+    depends_on:
+      - mariadb
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MariaDB 数据库
+  mariadb:
+    image: mariadb:10.11
+    ports:
+      - "3306:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_PASSWORD:-password}
+      - MARIADB_DATABASE=gov_code_manager
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./bff/src/database/migrate.js:/docker-entrypoint-initdb.d/migrate.js
+    networks:
+      - gov-network
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gov-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+networks:
+  gov-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+  redis_data:
