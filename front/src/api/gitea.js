@@ -130,6 +130,11 @@ export function compareRepos(owner, repo, base, head) {
   return giteaService.get(`/repos/${owner}/${repo}/compare/${base}...${head}`)
 }
 
+// 获取提交差异（服务端计算）
+export function getCommitDiff(owner, repo, sha) {
+  return giteaService.get(`/commit-diff/${owner}/${repo}/${sha}`)
+}
+
 // ============ 文件操作 ============
 
 export function getContents(owner, repo, path = '', ref = '') {
