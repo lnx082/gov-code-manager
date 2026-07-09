@@ -113,6 +113,22 @@
         <el-button type="danger" @click="handleCreateTag">创建版本</el-button>
       </template>
     </el-dialog>
+
+    <!-- 版本详情对话框 -->
+    <el-dialog v-model="versionDialogVisible" :title="'版本 ' + (activeVersion?.name || '')" width="600px">
+      <div v-if="activeVersion" class="version-detail">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="版本号">{{ activeVersion.name }}</el-descriptions-item>
+          <el-descriptions-item label="所属仓库">{{ activeVersion.repoOwner }}/{{ activeVersion.repoName }}</el-descriptions-item>
+          <el-descriptions-item label="提交 SHA">{{ activeVersion.sha?.substring(0, 8) || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="版本说明">{{ activeVersion.message || '无' }}</el-descriptions-item>
+        </el-descriptions>
+        <div style="margin-top:16px;display:flex;gap:8px">
+          <el-button type="primary" @click="downloadVersion(activeVersion)"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
+          <el-button @click="openGiteaRelease(activeVersion)"><el-icon><Link /></el-icon> Gitea 页面</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -120,10 +136,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTags, getMyRepos } from '@/api/gitea'
-import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay } from '@element-plus/icons-vue'
+import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
+const versionDialogVisible = ref(false)
+const activeVersion = ref(null)
 
 const filterForm = reactive({ repoId: '', type: '', secretLevel: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -191,8 +209,31 @@ async function handleCreateTag() {
   loadVersions()
 }
 
-function viewVersionDetail(row) { ElMessage.info(`查看版本: ${row.name}`) }
-function downloadVersion(row) { ElMessage.success(`开始下载版本: ${row.name}`) }
+function viewVersionDetail(row) {
+  if (row.repoOwner && row.repoName) {
+    activeVersion.value = row
+    versionDialogVisible.value = true
+  } else {
+    ElMessage.info(`版本: ${row.name}`)
+  }
+}
+function openGiteaRelease(row) {
+  if (row.repoOwner && row.repoName) {
+    window.open(`http://123.60.219.19:3000/${row.repoOwner}/${row.repoName}/releases/tag/${row.name}`, '_blank')
+  }
+}
+function downloadVersion(row) {
+  if (row.repoOwner && row.repoName) {
+    const a = document.createElement('a')
+    a.href = `http://123.60.219.19:3000/${row.repoOwner}/${row.repoName}/archive/${row.name}.zip`
+    a.download = `${row.repoName}-${row.name}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } else {
+    ElMessage.warning('无法获取仓库信息')
+  }
+}
 
 function formatTime(time) {
   if (!time) return '-'
