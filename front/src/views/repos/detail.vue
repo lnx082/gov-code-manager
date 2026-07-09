@@ -187,16 +187,22 @@
           <div class="diff-header">
             <p><strong>提交：</strong>{{ diffData.message }}</p>
             <p><strong>作者：</strong>{{ diffData.author }} | {{ diffData.date }}</p>
-            <p><strong>变更文件：</strong>{{ diffData.files.length }} 个</p>
+            <p><strong>变更文件：</strong>{{ diffData.files.length }} 个 |
+              <span style="color:#67c23a"><strong>+{{ diffData.stats?.additions || 0 }}</strong></span>
+              <span style="color:#f56c6c;margin-left:8px"><strong>-{{ diffData.stats?.deletions || 0 }}</strong></span>
+            </p>
           </div>
+          <div v-if="diffData.files.length === 0" style="text-align:center;padding:40px;color:#999">无文件变更</div>
           <div v-for="file in diffData.files" :key="file.name" class="diff-file">
             <div class="diff-file-header">
               <span class="diff-file-name">{{ file.name }}</span>
-              <el-tag :type="file.status === 'added' ? 'success' : file.status === 'removed' ? 'danger' : 'warning'" size="small">{{ file.status === 'added' ? '新增' : file.status === 'removed' ? '删除' : '修改' }}</el-tag>
-              <span class="diff-stats"><span style="color:#67c23a">+{{ file.additions }}</span> <span style="color:#f56c6c">-{{ file.deletions }}</span></span>
+              <el-tag :type="file.status === 'added' ? 'success' : file.status === 'removed' ? 'danger' : 'warning'" size="small">
+                {{ file.status === 'added' ? '新增' : file.status === 'removed' ? '删除' : '修改' }}
+              </el-tag>
+              <el-button type="primary" link size="small" @click="openFileDiffUrl(file.name)" style="margin-left:auto">
+                <el-icon><View /></el-icon> 查看差异
+              </el-button>
             </div>
-            <div v-if="file.patch" class="diff-patch"><pre><code v-html="renderDiffLines(file.patch)"></code></pre></div>
-            <div v-else class="diff-no-patch">无差异详情</div>
           </div>
         </div>
       </div>
@@ -210,7 +216,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Setting, Connection, Link, Avatar, Right, Switch } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, compareRepos, getPullRequests, getRepoMembers, updateRepo } from '@/api/gitea'
+import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommit, getPullRequests, getRepoMembers, updateRepo } from '@/api/gitea'
 
 const route = useRoute()
 const router = useRouter()
@@ -360,22 +366,25 @@ async function viewFileContent(file) {
 
 async function viewCommitDiff(commit) {
   const { owner, name } = route.params
-  diffData.value = { sha: commit.sha, message: commit.message, author: commit.author, date: commit.createdAt, files: [] }
+  diffData.value = { sha: commit.sha, message: commit.message, author: commit.author, date: commit.createdAt, files: [], stats: {} }
   diffDialogVisible.value = true; diffLoading.value = true
   try {
-    // 使用 Gitea git/commits API（返回 files + stats）
+    // Gitea git/commits API 返回 files 数组 + stats 统计
     const commitRes = await getCommit(owner, name, commit.sha)
     const detail = commitRes.data || commitRes
-    const files = detail.files || detail.stats || []
+    const files = detail.files || []
     diffData.value.files = (Array.isArray(files) ? files : []).map(f => ({
       name: f.filename || f.name || '',
-      status: f.status || 'modified',
-      additions: f.additions || 0,
-      deletions: f.deletions || 0,
-      patch: f.patch || ''
+      status: f.status || 'modified'
     }))
+    diffData.value.stats = detail.stats || {}
   } catch (e) { console.error('加载差异失败:', e) }
   finally { diffLoading.value = false }
+}
+
+function openFileDiffUrl(filename) {
+  const { owner, name } = route.params
+  window.open(`http://123.60.219.19:3000/${owner}/${name}/commit/${diffData.value.sha}`, '_blank')
 }
 
 function viewCommitDetail(commit) {
