@@ -4,7 +4,7 @@
     <div class="gov-banner">
       <div class="banner-content">
         <div class="banner-left">
-          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c41230'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(45 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(90 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(135 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(180 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(225 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(270 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(315 50 50)'/%3E%3Ccircle cx='50' cy='50' r='20' fill='%23c41230'/%3E%3Ctext x='50' y='55' text-anchor='middle' font-size='18' fill='%23ffd700' font-weight='bold'%3E%E5%85%9A%3C/text%3E%3C/svg%3E" alt="党徽" class="party-emblem" />
+          <el-icon :size="36" class="party-emblem"><Platform /></el-icon>
           <span class="banner-title">党政软件版本管控平台</span>
         </div>
         <div class="banner-right">
@@ -58,7 +58,7 @@
         <div class="login-box">
           <div class="login-header">
             <div class="emblem-wrapper">
-              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c41230'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(45 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(90 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(135 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(180 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(225 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(270 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(315 50 50)'/%3E%3Ccircle cx='50' cy='50' r='20' fill='%23c41230'/%3E%3Ctext x='50' y='55' text-anchor='middle' font-size='18' fill='%23ffd700' font-weight='bold'%3E%E5%85%9A%3C/text%3E%3C/svg%3E" alt="党徽" class="login-emblem" />
+              <el-icon :size="48" class="login-emblem"><Platform /></el-icon>
             </div>
             <h1>用户登录</h1>
             <p class="login-subtitle">请使用您的账号登录系统</p>
@@ -139,7 +139,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { Lock, DocumentChecked, Checked, DataAnalysis, User, WarningFilled } from '@element-plus/icons-vue'
+import { Lock, DocumentChecked, Checked, DataAnalysis, User, WarningFilled, Platform } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()

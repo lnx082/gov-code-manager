@@ -164,49 +164,28 @@
         </div>
 
         <el-divider content-position="left">变更内容</el-divider>
-        
-        <div class="diff-stats">
-          <span class="stat added">+ {{ currentMR.additions }} 行</span>
-          <span class="stat removed">- {{ currentMR.deletions }} 行</span>
-          <span class="stat files">{{ currentMR.fileChanges }} 个文件</span>
+        <div style="text-align:center;padding:20px">
+          <p style="color:#909399;margin-bottom:12px">Gitea 1.21 API 不支持返回 PR 差异详情</p>
+          <el-button type="primary" @click="openGiteaPR(currentMR)">
+            <el-icon><Link /></el-icon> 在 Gitea 中查看完整差异
+          </el-button>
         </div>
 
-        <el-tabs>
-          <el-tab-pane label="文件变更">
-            <div class="file-changes">
-              <div v-for="file in currentMR.files" :key="file.path" class="file-item">
-                <span class="file-status" :class="file.status">{{ file.status }}</span>
-                <span class="file-path">{{ file.path }}</span>
-              </div>
-            </div>
-          </el-tab-pane>
-          <el-tab-pane label="评论">
-            <div class="comments">
-              <el-empty description="暂无评论" />
-            </div>
-          </el-tab-pane>
-          <el-tab-pane label="审批记录">
-            <div class="approval-records">
-              <div v-for="record in currentMR.approvalRecords" :key="record.id" class="record-item">
-                <el-avatar :size="32">{{ record.reviewer.charAt(0) }}</el-avatar>
-                <div class="record-content">
-                  <div class="record-header">
-                    <span class="reviewer">{{ record.reviewer }}</span>
-                    <el-tag :type="record.status === 'approved' ? 'success' : 'danger'" size="small">
-                      {{ record.status === 'approved' ? '通过' : '拒绝' }}
-                    </el-tag>
-                  </div>
-                  <div class="record-comment">{{ record.comment || '无评论' }}</div>
-                  <div class="record-time">{{ formatTime(record.time) }}</div>
-                </div>
-              </div>
-            </div>
-          </el-tab-pane>
-        </el-tabs>
+        <el-divider content-position="left">审批记录</el-divider>
+        <div class="approval-records">
+          <div v-for="record in currentMR.approvalRecords" :key="record.id" class="record-item">
+            <span>{{ record.user?.login || record.reviewer }}</span>
+            <el-tag :type="record.state==='APPROVED'?'success':record.state==='REJECTED'?'danger':'info'" size="small">
+              {{ record.state==='APPROVED'?'通过':record.state==='REJECTED'?'拒绝':'评审中' }}
+            </el-tag>
+          </div>
+          <el-empty v-if="!currentMR.approvalRecords?.length" description="暂无审批记录" />
+        </div>
+
       </div>
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button @click="showApprovalDialog" type="primary">审批</el-button>
+        <el-button @click="showApprovalDialog" type="primary" v-if="currentMR?.status === 'pending' || currentMR?.status === 'open'">审批</el-button>
         <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved'">合并</el-button>
       </template>
     </el-dialog>
@@ -237,13 +216,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Link } from '@element-plus/icons-vue'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, submitPullRequestReview } from '@/api/gitea'
 import { getApprovalFlows, createApproval, processApproval } from '@/api/bff'
 import { getUserList } from '@/api/user'
-import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
-const authStore = useAuthStore()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const submittingApproval = ref(false)
@@ -360,29 +340,34 @@ async function loadData() {
   try {
     let list = []
     // Iterate repos to load PRs from Gitea API
-    const repos = repoList.value.length ? repoList.value.slice(0, 5) : []
+    const repos = filterForm.repoId
+      ? repoList.value.filter(r => r.id === filterForm.repoId)
+      : repoList.value
     for (const repo of repos) {
-      if (filterForm.repoId && repo.id !== filterForm.repoId) continue
       try {
         const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 10 })
         const prs = prRes.data || prRes
         if (Array.isArray(prs)) {
           // 获取每个 PR 的审批状态
           for (const pr of prs) {
+            // 从 PR 自身提取仓库信息（比迭代 repo 更可靠）
+            const prOwner = pr.base?.repo?.owner?.login || pr.head?.repo?.owner?.login || repo.owner
+            const prRepo = pr.base?.repo?.name || pr.head?.repo?.name || repo.repo
+
             let approvals = []
             let hasUserApproved = false
             let hasUserRejected = false
-            let requiredApprovals = 1 // 默认需要1人审批
-            
+            let requiredApprovals = 1
+
             // 尝试获取审批记录
             try {
-              const reviewRes = await getPullRequestReviews(repo.owner, repo.repo, pr.id || pr.number)
+              const reviewRes = await getPullRequestReviews(prOwner, prRepo, pr.number || pr.id)
               const reviews = reviewRes.data || reviewRes || []
               approvals = Array.isArray(reviews) ? reviews : []
               // 检查当前用户是否已审批
               for (const review of approvals) {
                 if (review.user?.login === userStore.userInfo?.login || review.user?.username === userStore.userInfo?.username) {
-                  if (review.state === 'APPROVED') hasUserApproved = true
+                  if (review.state === 'APPROVED' || review.state === 'PENDING') hasUserApproved = true
                   if (review.state === 'REJECTED') hasUserRejected = true
                 }
               }
@@ -395,9 +380,9 @@ async function loadData() {
             const rejected = approvals.some(r => r.state === 'REJECTED')
             const approvalRate = Math.min(100, Math.round((approvedCount / requiredApprovals) * 100)) || 50
             
-            // 确定显示状态
+            // 确定显示状态：优先审批状态，其次 Gitea PR 状态
             let displayStatus = 'pending'
-            if (pr.state === 'merged') {
+            if (pr.merged || pr.state === 'merged') {
               displayStatus = 'merged'
             } else if (pr.state === 'closed') {
               displayStatus = 'closed'
@@ -406,41 +391,33 @@ async function loadData() {
             } else if (hasUserApproved) {
               displayStatus = 'approved'
             }
-            
-            // 根据筛选条件决定是否显示
+
+            // 状态筛选
             if (filterForm.status && filterForm.status !== displayStatus) {
-              // 如果筛选状态是 pending 但用户已审批，不显示
-              if (filterForm.status === 'pending' && (hasUserApproved || hasUserRejected)) {
-                continue
-              }
+              continue
             }
             
             list.push({
-              id: pr.id || pr.number,
+              id: pr.number || pr.id,
+              number: pr.number || pr.id,
               title: pr.title,
               sourceBranch: pr.head?.label || pr.head?.ref || '',
               targetBranch: pr.base?.label || pr.base?.ref || '',
               repoId: repo.id,
               repoName: repo.name,
-              // Gitea API 状态
               state: pr.state,
               merged: pr.merged,
-              // 显示状态（考虑用户审批情况）
               status: displayStatus,
-              // 用户审批状态
               userApproval: hasUserApproved ? 'approved' : hasUserRejected ? 'rejected' : null,
               approvals: approvedCount,
               requiredApprovals,
               approvalRate,
               author: pr.user?.username || pr.user?.login || '',
               createdAt: pr.created_at || pr.createdAt,
-              additions: 0,
-              deletions: 0,
-              fileChanges: 0,
-              files: [],
+              additions: 0, deletions: 0, fileChanges: 0, files: [],
               approvalRecords: approvals,
-              owner: repo.owner,
-              repo: repo.repo
+              owner: prOwner,
+              repo: prRepo
             })
           }
         }
@@ -494,10 +471,9 @@ async function loadTargetBranches() {
 async function handleCreate() {
   const sourceRepo = repoList.value.find(r => r.id === createForm.sourceRepoId)
   const targetRepo = repoList.value.find(r => r.id === createForm.targetRepoId)
-  if (!sourceRepo || !targetRepo) {
-    ElMessage.warning('请选择仓库')
-    return
-  }
+  if (!sourceRepo || !targetRepo) { ElMessage.warning('请选择仓库'); return }
+  if (!createForm.sourceBranch || !createForm.targetBranch) { ElMessage.warning('请选择分支'); return }
+  if (createForm.sourceBranch === createForm.targetBranch) { ElMessage.warning('源分支和目标分支不能相同'); return }
   try {
     // 1. 先在 Gitea 创建 PR
     const prRes = await createPullRequest(sourceRepo.owner, sourceRepo.repo, {
@@ -536,8 +512,8 @@ async function handleCreate() {
     // 添加到列表中（确保新创建的 PR 立即可见）
     if (prNumber) {
       mergeRequestList.value.unshift({
-        id: prNumber,
-        number: prNumber,
+        id: prRes.data?.number || prNumber,
+        number: prRes.data?.number || prNumber,
         title: createForm.title,
         sourceBranch: createForm.sourceBranch,
         targetBranch: createForm.targetBranch,
@@ -548,7 +524,7 @@ async function handleCreate() {
         approvals: 0,
         requiredApprovals: 1,
         approvalRate: 0,
-        author: authStore.userInfo?.username || authStore.userInfo?.login || '我',
+        author: userStore.userInfo?.username || userStore.userInfo?.login || '我',
         createdAt: new Date().toISOString(),
         bffApprovalId: bffApprovalId,
         owner: sourceRepo.owner,
@@ -559,18 +535,23 @@ async function handleCreate() {
     loadData()
   } catch (error) {
     console.error('创建合并请求失败:', error)
-    ElMessage.warning('创建合并请求失败: ' + (error?.message || '未知错误'))
+    const giteaMsg = error?.response?.data?.message || error?.response?.data?.error || ''
+    const msg = error?.response?.status === 422 ? `请求无效: ${giteaMsg || '请检查分支是否存在且有差异'}`
+              : error?.response?.status === 409 ? '该分支对已存在合并请求'
+              : (error?.message || '未知错误')
+    ElMessage.warning('创建合并请求失败: ' + msg)
   }
 }
 
 async function viewDetail(row) {
   currentMR.value = { ...row }
   detailDialogVisible.value = true
-  // Try to load PR files
-  const repo = repoList.value.find(r => r.id === row.repoId)
-  if (repo && (row.id || row.number)) {
+  // 使用 MR 自身的 owner/repo，不依赖 repoId 查找
+  const owner = row.owner
+  const repo = row.repo
+  if (owner && repo && (row.id || row.number)) {
     try {
-      const res = await getPullRequestFiles(repo.owner, repo.repo, row.id || row.number)
+      const res = await getPullRequestFiles(owner, repo, row.id || row.number)
       const files = res.data || res
       if (Array.isArray(files)) {
         currentMR.value.files = files.map(f => ({
@@ -587,6 +568,15 @@ async function viewDetail(row) {
   }
 }
 
+function openGiteaPR(mr) {
+  const owner = mr.owner || ''
+  const repoName = mr.repo || ''
+  const prId = mr.id || mr.number
+  if (owner && repoName && prId) {
+    window.open(`http://123.60.219.19:3000/${owner}/${repoName}/pulls/${prId}`, '_blank')
+  }
+}
+
 function showApprovalDialog() {
   // 重置审批表单
   approvalForm.status = 'approved'
@@ -600,69 +590,58 @@ async function submitApproval() {
     return
   }
   
-  // 检查必要的仓库信息
-  const repo = repoList.value.find(r => r.id === currentMR.value.repoId)
-  if (!repo) {
-    ElMessage.warning('无法确定仓库信息')
-    return
-  }
-  
   const prId = currentMR.value.id || currentMR.value.number
-  if (!prId) {
-    ElMessage.warning('无法确定合并请求编号')
-    return
-  }
-  
-  // 审批意见不能为空
-  if (!approvalForm.comment || approvalForm.comment.trim() === '') {
-    ElMessage.warning('请填写审批意见')
-    return
-  }
-  
+  if (!prId) { ElMessage.warning('无法确定合并请求编号'); return }
+
+  // 使用 MR 自身存储的 owner/repo，更可靠
+  const owner = currentMR.value.owner
+  const repo = currentMR.value.repo
+  if (!owner || !repo) { ElMessage.error('仓库信息不完整，请刷新页面后重试'); return }
+
+  if (!approvalForm.comment || approvalForm.comment.trim() === '') { ElMessage.warning('请填写审批意见'); return }
+
   submittingApproval.value = true
   try {
-    // 调用 Gitea API 提交 PR 审批
-    // event: APPROVE (通过), REJECT (拒绝), COMMENT (仅评论)
     const event = approvalForm.status === 'approved' ? 'APPROVE' : 'REJECT'
-    
-    console.log('提交审批:', {
-      owner: repo.owner,
-      repo: repo.repo,
-      prId,
+
+    await submitPullRequestReview(owner, repo, prId, {
       event,
       body: approvalForm.comment.trim()
     })
     
-    await submitPullRequestReview(repo.owner, repo.repo, prId, {
-      event,
-      body: approvalForm.comment.trim()
-    })
-    
-    // 审批成功后，同步更新 BFF 数据库中的审批记录
-    // 查找对应的 BFF 审批记录
-    try {
-      // 尝试通过标题匹配找到对应的审批记录
-      const bffAction = approvalForm.status === 'approved' ? 'approved' : 'rejected'
-      await processApproval(currentMR.value.bffApprovalId || prId, {
-        action: bffAction,
-        body: approvalForm.comment.trim()
-      })
-    } catch (bffError) {
-      console.warn('同步更新 BFF 审批状态失败:', bffError)
-      // 即使 BFF 更新失败，也不影响 Gitea 审批结果
+    // 审批成功后，同步更新 BFF 数据库中的审批记录（如果有关联）
+    if (currentMR.value.bffApprovalId) {
+      try {
+        const bffAction = approvalForm.status === 'approved' ? 'approved' : 'rejected'
+        await processApproval(currentMR.value.bffApprovalId, {
+          action: bffAction,
+          body: approvalForm.comment.trim()
+        })
+      } catch (bffError) {
+        console.warn('同步更新 BFF 审批状态失败:', bffError)
+      }
     }
     
     ElMessage.success(approvalForm.status === 'approved' ? '审批已通过' : '审批已拒绝')
+    // 更新本地状态（当前详情和列表项）
+    const newStatus = approvalForm.status === 'approved' ? 'approved' : 'rejected'
+    if (currentMR.value) {
+      currentMR.value.status = newStatus
+      currentMR.value.userApproval = newStatus
+    }
+    // 同步更新 mergeRequestList 中的对应项
+    const idx = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
+    if (idx !== -1) {
+      mergeRequestList.value[idx].status = newStatus
+      mergeRequestList.value[idx].userApproval = newStatus
+    }
     approvalDialogVisible.value = false
     detailDialogVisible.value = false
-    
-    // 刷新列表，确保状态同步
-    loadData()
   } catch (error) {
     console.error('审批失败:', error)
-    // 显示具体的错误信息
-    const errorMsg = error?.response?.data?.message || error?.message || '审批提交失败'
-    ElMessage.error(`审批失败: ${errorMsg}`)
+    const detail = error?.response?.data
+    const msg = typeof detail === 'string' ? detail : (detail?.message || detail?.error || '')
+    ElMessage.error(msg ? `审批失败: ${msg}` : '审批提交失败，请检查网络连接')
   } finally {
     submittingApproval.value = false
   }

@@ -116,7 +116,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
 router.post('/', authenticate, async (req, res, next) => {
   try {
     const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel } = req.body;
-    
+
     await db('approvals').insert({
       operation_type: operationType,
       title,
@@ -186,12 +186,11 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
         completed_at: new Date(),
       });
     
-    // 记录审批操作
+    // 记录审批操作（approval_records 表没有 reviewer_username 列）
     await db('approval_records').insert({
       approval_id: id,
       step: approval.current_step,
       reviewer_user_id: req.user.userId,
-      reviewer_username: req.user.username,
       action: normalizedAction,
       comment: body.trim(),
       action_time: new Date(),

@@ -3,7 +3,7 @@
     <!-- 顶部导航栏 - 政务风格 -->
     <header class="gov-header">
       <div class="header-left">
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c41230'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(0 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(45 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(90 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(135 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(180 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(225 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(270 50 50)'/%3E%3Cpath d='M50 10 L53 40 L50 45 L47 40 Z' fill='%23ffd700' transform='rotate(315 50 50)'/%3E%3Ccircle cx='50' cy='50' r='20' fill='%23c41230'/%3E%3Ctext x='50' y='55' text-anchor='middle' font-size='18' fill='%23ffd700' font-weight='bold'%3E%E5%85%9A%3C/text%3E%3C/svg%3E" alt="党徽" class="header-emblem" />
+        <el-icon :size="28" class="header-emblem"><Platform /></el-icon>
         <div class="header-title">
           <h1>党政软件版本管控平台</h1>
           <span class="header-subtitle">GovCode Version Control Platform</span>
@@ -157,7 +157,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown } from '@element-plus/icons-vue'
+import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()

@@ -170,13 +170,9 @@ async function loadPending() {
     pagination.total = res.data?.total || 0
   } catch (error) {
     console.error('加载待审批列表失败:', error)
-    // 使用模拟数据
-    pendingList.value = [
-      { approval_id: 1, operation_type: 'merge', title: '[feature/auth] 新增用户认证功能', applicant_username: '张三', createTime: '2024-01-15 10:00', urgency: 'normal', status: 'pending' },
-      { approval_id: 2, operation_type: 'version', title: '政务系统 v2.1.0 正式版本发布', applicant_username: '李四', createTime: '2024-01-15 09:00', urgency: 'high', status: 'pending' },
-      { approval_id: 3, operation_type: 'baseline', title: '申请设置v2.0.0为基线', applicant_username: '王五', createTime: '2024-01-14 16:00', urgency: 'normal', status: 'pending' }
-    ]
-    pagination.total = pendingList.value.length
+    ElMessage.error('加载待审批列表失败，请重新登录')
+    pendingList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -239,8 +235,7 @@ async function submitApproval() {
     // 审批成功后，从列表中移除该记录（因为已经处理过了）
     const index = pendingList.value.findIndex(p => p.approval_id === currentApproval.value.approval_id)
     if (index !== -1) {
-      pendingList.value.splice(index, 1)
-      pagination.total = pendingList.value.length
+      loadPending()
     }
   } catch (error) {
     console.error('审批提交失败:', error)
