@@ -85,40 +85,9 @@ router.get('/commit-diff/:owner/:repo/:sha', authenticate, async (req, res, next
   }
 });
 
-// 代理到 Gitea API（通配符路由，必须放在最后）
-router.all('/*', authenticate, async (req, res, next) => {
-  try {
-    const giteaPath = req.path;
-    let giteaUrl = `${config.gitea.url}/api/v1${giteaPath}`;
-    const queryString = new URLSearchParams(req.query).toString();
-    if (queryString) giteaUrl += '?' + queryString;
-
-    const giteaToken = req.user?.giteaToken || '';
-    const authHeader = giteaToken || req.headers.authorization || '';
-
-    const fetchOptions = {
-      method: req.method,
-      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-    };
-
-    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
-      fetchOptions.body = JSON.stringify(req.body);
-    }
-
-    const response = await fetch(giteaUrl, fetchOptions);
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      res.status(response.status).json(data);
-    } else {
-      const text = await response.text();
-      res.set('Content-Type', contentType);
-      res.status(response.status).send(text);
-    }
-  } catch (error) {
-    next(error);
-  }
-});
+// ============================================================
+// 专用路由：必须定义在通配符 /* 之前，否则会被通配符拦截
+// ============================================================
 
 // 特殊处理：PR 审批需要返回统一的响应格式
 router.post('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req, res, next) => {
@@ -175,7 +144,7 @@ router.post('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req
   }
 });
 
-// 获取 PR 审批记录
+// 获取 PR 审批记录（专用路由，返回统一 code/data 格式）
 router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req, res, next) => {
   try {
     const { owner, repo, index } = req.params;
@@ -192,7 +161,11 @@ router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req,
     });
 
     if (!response.ok) {
-      throw new Error('获取审批记录失败');
+      const errorData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({
+        code: response.status,
+        message: errorData.message || '获取审批记录失败',
+      });
     }
 
     const reviews = await response.json();
@@ -201,6 +174,43 @@ router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req,
       code: 200,
       data: reviews,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// 通配符代理：必须放在所有专用路由之后（最后一条路由）
+// ============================================================
+router.all('/*', authenticate, async (req, res, next) => {
+  try {
+    const giteaPath = req.path;
+    let giteaUrl = `${config.gitea.url}/api/v1${giteaPath}`;
+    const queryString = new URLSearchParams(req.query).toString();
+    if (queryString) giteaUrl += '?' + queryString;
+
+    const giteaToken = req.user?.giteaToken || '';
+    const authHeader = giteaToken || req.headers.authorization || '';
+
+    const fetchOptions = {
+      method: req.method,
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+    };
+
+    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetch(giteaUrl, fetchOptions);
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } else {
+      const text = await response.text();
+      res.set('Content-Type', contentType);
+      res.status(response.status).send(text);
+    }
   } catch (error) {
     next(error);
   }

@@ -20,6 +20,11 @@ export function getApprovalDetail(id) {
   return request.get(`/approvals/${id}`)
 }
 
+// 按 Gitea PR 编号查询审批状态（BFF 回退查询）
+export function getApprovalByPrNumber(prNumber) {
+  return request.get(`/approvals/by-pr/${prNumber}`)
+}
+
 // 创建审批申请
 export function createApproval(data) {
   return request.post('/approvals', data)
@@ -128,4 +133,9 @@ export function getRiskWarnings(params) {
 // 处理风险预警
 export function handleRiskWarning(id, data) {
   return request.post(`/risk-warnings/${id}/handle`, data)
+}
+
+// 获取合并请求列表（BFF 主数据源，不依赖 Gitea）
+export function getMergeApprovals(params) {
+  return request.get('/approvals/merge-requests', { params })
 }

@@ -85,7 +85,119 @@ router.get('/pending', authenticate, async (req, res, next) => {
   }
 });
 
-// 获取审批详情
+// 按 Gitea PR 编号查询审批状态
+router.get('/by-pr/:prNumber', authenticate, async (req, res, next) => {
+  try {
+    const { prNumber } = req.params;
+    const approval = await db('approvals')
+      .where('gitea_pr_number', parseInt(prNumber))
+      .orderBy('created_at', 'desc')
+      .first();
+
+    if (!approval) {
+      return res.json({ code: 200, data: null });
+    }
+
+    res.json({
+      code: 200,
+      data: {
+        approvalId: approval.approval_id,
+        status: approval.status,
+        title: approval.title,
+        createdAt: approval.created_at,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 获取合并请求列表（merge.vue 的主数据源，不依赖 Gitea API）
+router.get('/merge-requests', authenticate, async (req, res, next) => {
+  try {
+    const { page = 1, pageSize = 50, status } = req.query;
+
+    let query = db('approvals')
+      .where('operation_type', 'merge');
+
+    if (status) {
+      query = query.where('status', status);
+    }
+
+    const countQuery = db('approvals')
+      .where('operation_type', 'merge');
+    if (status) countQuery.where('status', status);
+    const total = await countQuery.count('* as count').first();
+
+    const list = await query
+      .orderBy('created_at', 'desc')
+      .limit(parseInt(pageSize))
+      .offset((parseInt(page) - 1) * parseInt(pageSize));
+
+    const formatted = list.map(item => ({
+      id: item.gitea_pr_number || item.approval_id,
+      number: item.gitea_pr_number || item.approval_id,
+      title: item.title,
+      description: item.description,
+      sourceBranch: item.source_branch,
+      targetBranch: item.target_branch,
+      repoName: item.repo_owner ? `${item.repo_owner}/${item.repo_name}` : (item.repo_name || ''),
+      owner: item.repo_owner,
+      repo: item.repo_name,
+      status: item.status,
+      state: item.status === 'approved' || item.status === 'rejected' ? 'open' : 'open',
+      merged: item.status === 'merged',
+      approvals: item.status === 'approved' ? 1 : 0,
+      requiredApprovals: 1,
+      approvalRate: item.status === 'approved' ? 100 : (item.status === 'rejected' ? 0 : 0),
+      author: item.applicant_username,
+      createdAt: item.created_at,
+      bffApprovalId: item.approval_id,
+      approvalRecords: [],
+      additions: 0,
+      deletions: 0,
+      fileChanges: 0,
+      files: [],
+    }));
+
+    res.json({
+      code: 200,
+      data: {
+        list: formatted,
+        total: parseInt(total.count),
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 获取审批统计
+router.get('/stats/summary', authenticate, async (req, res, next) => {
+  try {
+    const pending = await db('approvals').where('status', 'pending').count('* as count').first();
+    const approved = await db('approvals').where('status', 'approved').count('* as count').first();
+    const rejected = await db('approvals').where('status', 'rejected').count('* as count').first();
+
+    res.json({
+      code: 200,
+      data: {
+        pending: parseInt(pending.count),
+        approved: parseInt(approved.count),
+        rejected: parseInt(rejected.count),
+        total: parseInt(pending.count) + parseInt(approved.count) + parseInt(rejected.count),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ 动态参数路由：必须放在所有具体路径之后（:id 会匹配任何路径片段）============
+
+// 获取审批详情（按ID）
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -115,9 +227,9 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // 创建审批申请
 router.post('/', authenticate, async (req, res, next) => {
   try {
-    const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel } = req.body;
+    const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel, giteaPrNumber } = req.body;
 
-    await db('approvals').insert({
+    const [insertId] = await db('approvals').insert({
       operation_type: operationType,
       title,
       description,
@@ -127,17 +239,21 @@ router.post('/', authenticate, async (req, res, next) => {
       target_branch: targetBranch,
       urgency: urgency || 'normal',
       secret_level: secretLevel || 'internal',
+      gitea_pr_number: giteaPrNumber || null,
       status: 'pending',
       current_step: 1,
       applicant_user_id: req.user.userId,
       applicant_username: req.user.username,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    }).returning('approval_id');
 
     res.json({
       code: 200,
       message: '审批申请已提交',
+      data: {
+        approvalId: insertId,
+      },
     });
   } catch (error) {
     next(error);
@@ -199,27 +315,6 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
     res.json({
       code: 200,
       message: normalizedAction === 'approved' ? '审批已通过' : '审批已拒绝',
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// 获取审批统计
-router.get('/stats/summary', authenticate, async (req, res, next) => {
-  try {
-    const pending = await db('approvals').where('status', 'pending').count('* as count').first();
-    const approved = await db('approvals').where('status', 'approved').count('* as count').first();
-    const rejected = await db('approvals').where('status', 'rejected').count('* as count').first();
-    
-    res.json({
-      code: 200,
-      data: {
-        pending: parseInt(pending.count),
-        approved: parseInt(approved.count),
-        rejected: parseInt(rejected.count),
-        total: parseInt(pending.count) + parseInt(approved.count) + parseInt(rejected.count),
-      },
     });
   } catch (error) {
     next(error);

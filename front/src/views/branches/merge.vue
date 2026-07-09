@@ -217,8 +217,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
-import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, submitPullRequestReview } from '@/api/gitea'
+import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, getPullRequestReviews, submitPullRequestReview } from '@/api/gitea'
 import { getApprovalFlows, createApproval, processApproval } from '@/api/bff'
+import { getMergeApprovals } from '@/api/approval'
 import { getUserList } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 
@@ -232,7 +233,7 @@ const detailDialogVisible = ref(false)
 const approvalDialogVisible = ref(false)
 
 const filterForm = reactive({
-  status: 'pending',
+  status: '',
   repoId: ''
 })
 
@@ -281,8 +282,10 @@ onMounted(async () => {
     createForm.sourceBranch = route.query.source
     createDialogVisible.value = true
   }
-  await loadRepos()
+  // 主数据加载（BFF，不依赖 Gitea）
   loadData()
+  // 仓库列表等辅助数据并行加载（失败不影响主列表）
+  loadRepos()
   loadApprovalFlows()
   loadReviewers()
 })
@@ -338,91 +341,45 @@ async function loadReviewers() {
 async function loadData() {
   loading.value = true
   try {
-    let list = []
-    // Iterate repos to load PRs from Gitea API
-    const repos = filterForm.repoId
-      ? repoList.value.filter(r => r.id === filterForm.repoId)
-      : repoList.value
-    for (const repo of repos) {
+    // ===== 主数据源：从 BFF approvals 表加载合并请求列表 =====
+    const params = { page: 1, pageSize: 50 }
+    if (filterForm.status) params.status = filterForm.status
+
+    const res = await getMergeApprovals(params)
+    const bffList = res.data?.list || res.data || []
+    const list = Array.isArray(bffList) ? bffList.map(item => ({
+      ...item,
+      userApproval: null,
+      approvalRecords: item.approvalRecords || [],
+      files: item.files || [],
+      additions: item.additions || 0,
+      deletions: item.deletions || 0,
+      fileChanges: item.fileChanges || 0,
+    })) : []
+
+    // ===== 辅助：异步从 Gitea 补充 PR 详情（不影响主数据显示） =====
+    for (const item of list) {
+      if (!item.owner || !item.repo || !item.number) continue
       try {
-        const prRes = await getPullRequests(repo.owner, repo.repo, { state: 'all', page: 1, limit: 10 })
+        // 补充 Gitea Reviews 审批记录
+        const reviewRes = await getPullRequestReviews(item.owner, item.repo, item.number)
+        const reviews = reviewRes.data || reviewRes || []
+        const approvals = Array.isArray(reviews) ? reviews : []
+        item.approvalRecords = approvals
+        item.approvals = approvals.filter(r => r.state === 'APPROVED').length
+
+        // 补充 PR 元数据
+        const prRes = await getPullRequests(item.owner, item.repo, { state: 'all', page: 1, limit: 1 })
         const prs = prRes.data || prRes
-        if (Array.isArray(prs)) {
-          // 获取每个 PR 的审批状态
-          for (const pr of prs) {
-            // 从 PR 自身提取仓库信息（比迭代 repo 更可靠）
-            const prOwner = pr.base?.repo?.owner?.login || pr.head?.repo?.owner?.login || repo.owner
-            const prRepo = pr.base?.repo?.name || pr.head?.repo?.name || repo.repo
-
-            let approvals = []
-            let hasUserApproved = false
-            let hasUserRejected = false
-            let requiredApprovals = 1
-
-            // 尝试获取审批记录
-            try {
-              const reviewRes = await getPullRequestReviews(prOwner, prRepo, pr.number || pr.id)
-              const reviews = reviewRes.data || reviewRes || []
-              approvals = Array.isArray(reviews) ? reviews : []
-              // 检查当前用户是否已审批
-              for (const review of approvals) {
-                if (review.user?.login === userStore.userInfo?.login || review.user?.username === userStore.userInfo?.username) {
-                  if (review.state === 'APPROVED' || review.state === 'PENDING') hasUserApproved = true
-                  if (review.state === 'REJECTED') hasUserRejected = true
-                }
-              }
-            } catch {
-              // 获取审批记录失败，使用默认值
-            }
-            
-            // 计算审批进度
-            const approvedCount = approvals.filter(r => r.state === 'APPROVED').length
-            const rejected = approvals.some(r => r.state === 'REJECTED')
-            const approvalRate = Math.min(100, Math.round((approvedCount / requiredApprovals) * 100)) || 50
-            
-            // 确定显示状态：优先审批状态，其次 Gitea PR 状态
-            let displayStatus = 'pending'
-            if (pr.merged || pr.state === 'merged') {
-              displayStatus = 'merged'
-            } else if (pr.state === 'closed') {
-              displayStatus = 'closed'
-            } else if (rejected || hasUserRejected) {
-              displayStatus = 'rejected'
-            } else if (hasUserApproved) {
-              displayStatus = 'approved'
-            }
-
-            // 状态筛选
-            if (filterForm.status && filterForm.status !== displayStatus) {
-              continue
-            }
-            
-            list.push({
-              id: pr.number || pr.id,
-              number: pr.number || pr.id,
-              title: pr.title,
-              sourceBranch: pr.head?.label || pr.head?.ref || '',
-              targetBranch: pr.base?.label || pr.base?.ref || '',
-              repoId: repo.id,
-              repoName: repo.name,
-              state: pr.state,
-              merged: pr.merged,
-              status: displayStatus,
-              userApproval: hasUserApproved ? 'approved' : hasUserRejected ? 'rejected' : null,
-              approvals: approvedCount,
-              requiredApprovals,
-              approvalRate,
-              author: pr.user?.username || pr.user?.login || '',
-              createdAt: pr.created_at || pr.createdAt,
-              additions: 0, deletions: 0, fileChanges: 0, files: [],
-              approvalRecords: approvals,
-              owner: prOwner,
-              repo: prRepo
-            })
-          }
+        const pr = Array.isArray(prs) ? prs.find(p => (p.number || p.id) === item.number) : null
+        if (pr) {
+          item.sourceBranch = pr.head?.label || pr.head?.ref || item.sourceBranch
+          item.targetBranch = pr.base?.label || pr.base?.ref || item.targetBranch
+          item.state = pr.state || item.state
+          item.merged = pr.merged || item.merged
         }
-      } catch {
-        // Skip repos that fail
+      } catch (e) {
+        // Gitea 补充失败不影响主数据（BFF 已有完整状态）
       }
     }
 
@@ -430,7 +387,7 @@ async function loadData() {
     pagination.total = list.length
   } catch (error) {
     console.error('加载合并请求列表失败:', error)
-    ElMessage.warning('加载合并请求列表失败')
+    ElMessage.warning('加载合并请求列表失败：' + (error.message || '网络错误'))
   } finally {
     loading.value = false
   }
