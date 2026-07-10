@@ -38,6 +38,36 @@ export function auditMiddleware(req, res, next) {
 }
 
 /**
+ * 根据请求方法和路径推断业务操作类型
+ */
+function determineActionType(method, path) {
+  const p = path.toLowerCase();
+  // 认证相关
+  if (p.includes('/auth/login')) return 'login';
+  if (p.includes('/auth/logout')) return 'logout';
+  // 仓库相关
+  if (p.includes('/repos') && method === 'DELETE') return 'delete';
+  if (p.includes('/repos') && method === 'POST') return 'create';
+  if (p.includes('/repos') && method === 'PUT') return 'update';
+  // 审批相关
+  if (p.includes('/approvals') && method === 'POST') return 'approval';
+  // 版本相关
+  if (p.includes('/versions')) return 'version';
+  // 下载
+  if (p.includes('/archive') || p.includes('/download') || p.includes('/raw')) return 'download';
+  // 合并
+  if (p.includes('/merge') || p.includes('/pulls')) return 'merge';
+  // 提交
+  if (p.includes('/commits')) return 'commit';
+  // 方法映射
+  if (method === 'POST') return 'create';
+  if (method === 'PUT' || method === 'PATCH') return 'update';
+  if (method === 'DELETE') return 'delete';
+  if (method === 'GET') return 'view';
+  return method.toLowerCase();
+}
+
+/**
  * 记录审计日志
  */
 async function recordAuditLog(req, res, body, responseTime) {
@@ -79,12 +109,13 @@ async function recordAuditLog(req, res, body, responseTime) {
       log_id: logId,
       timestamp: new Date(),
       user_id: req.user?.userId || null,
-      username: req.user?.username || null,
+      // 登录请求时 req.user 不存在，从请求体中提取用户名
+      username: req.user?.username || req.body?.username || null,
       nickname: req.user?.nickname || null,
       department_id: req.user?.departmentId || null,
       department_name: req.user?.departmentName || null,
       role_code: req.user?.roleCode || null,
-      action_type: req.method,
+      action_type: determineActionType(req.method, req.originalUrl || req.path),
       action_name: `${req.method} ${req.path}`,
       target_type: req.body?.targetType || null,
       target_id: req.body?.targetId || null,

@@ -57,3 +57,8 @@ export function exportReport(id) {
 export function complianceCheck(data) {
   return request.post('/compliance/check', data)
 }
+
+// 导出审计日志（CSV下载）
+export function exportAuditLogs(params) {
+  return request.get('/audit/export', { params, responseType: 'blob' })
+}
