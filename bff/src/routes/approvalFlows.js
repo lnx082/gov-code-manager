@@ -19,7 +19,12 @@ router.get('/', async (req, res, next) => {
       query = query.where('is_active', isActive === 'true' ? 1 : 0);
     }
 
-    const total = await query.clone().count('* as count').first();
+    // 单独构建 count 查询避免 GROUP BY 冲突
+    let countQuery = db('approval_flows');
+    if (isActive !== undefined) {
+      countQuery = countQuery.where('is_active', isActive === 'true' ? 1 : 0);
+    }
+    const total = await countQuery.count('* as count').first();
     const list = await query
       .orderBy('is_default', 'desc')
       .orderBy('created_at', 'desc')

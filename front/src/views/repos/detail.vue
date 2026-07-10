@@ -208,7 +208,24 @@ async function loadFiles() {
     const ref = currentBranch.value || repoInfo.defaultBranch || 'main'
     const contents = await getContents(owner, name, currentPath.value || '', ref)
     const data = contents.data || contents
-    fileList.value = (Array.isArray(data) ? data : [data]).map(f => ({ name: f.name, path: f.path||f.name, type: f.type, lastCommitMessage: f.last_commit?.message||'', lastCommitTime: f.last_commit?.timestamp||'' }))
+    const items = Array.isArray(data) ? data : [data]
+
+    // 并行查询每个文件的最新提交
+    const withCommits = await Promise.all(items.map(async f => {
+      try {
+        const path = f.path || f.name
+        const commitsRes = await getCommits(owner, name, { sha: ref, limit: 1, path })
+        const lastCommit = (commitsRes.data || commitsRes)?.[0]
+        return {
+          name: f.name, path, type: f.type,
+          lastCommitMessage: lastCommit?.commit?.message || lastCommit?.message || '',
+          lastCommitTime: lastCommit?.commit?.committer?.date || lastCommit?.commit?.author?.date || lastCommit?.created_at || ''
+        }
+      } catch {
+        return { name: f.name, path: f.path || f.name, type: f.type, lastCommitMessage: '', lastCommitTime: '' }
+      }
+    }))
+    fileList.value = withCommits
   } catch { fileList.value = [] }
 }
 
@@ -236,7 +253,11 @@ async function loadMembers() {
     const m = await getRepoMembers(route.params.owner, route.params.name)
     const data = m.data || m; const arr = (Array.isArray(data) ? data : []).map(x => ({ username: x.username||x.login||'', role: x.permissions?.admin?'admin':x.permissions?.push?'write':'read' }))
     const cur = userStore.userInfo?.username || userStore.username || ''
-    if (cur && !arr.some(x => x.username===cur)) arr.unshift({ username: cur, role: 'owner' })
+    const repoOwner = route.params.owner || repoInfo.owner || ''
+    // 当前用户不在列表中则添加为 owner
+    if (cur && !arr.some(x => x.username===cur)) arr.unshift({ username: cur, role: cur === repoOwner ? 'owner' : (arr.length > 0 ? 'write' : 'owner') })
+    // 仓库拥有者不在列表中则添加
+    if (repoOwner && !arr.some(x => x.username===repoOwner)) arr.unshift({ username: repoOwner, role: 'owner' })
     memberList.value = arr
   } catch { memberList.value = [] }
   finally { memberLoading.value = false }

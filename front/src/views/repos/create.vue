@@ -32,6 +32,12 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item label="所属部门" v-if="isAdmin">
+          <el-select v-model="form.department" placeholder="选择部门（默认创建者部门）" clearable style="width: 360px">
+            <el-option v-for="d in departments" :key="d.dept_id" :label="d.name" :value="d.name" />
+          </el-select>
+        </el-form-item>
+
         <el-form-item label="初始化仓库">
           <el-switch v-model="form.autoInit" />
           <span class="switch-label">{{ form.autoInit ? '添加README.md文件' : '空仓库' }}</span>
@@ -49,23 +55,36 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { Plus, Back, Edit, Document, Setting, WarningFilled, CircleCheck } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createRepo } from '@/api/gitea'
+import { getDepartments } from '@/api/bff'
+import { useUserStore } from '@/stores/user'
 import { pinyin } from 'pinyin-pro'
 
 const router = useRouter()
+const userStore = useUserStore()
 const formRef = ref(null)
 const submitting = ref(false)
+const departments = ref([])
+const isAdmin = computed(() => userStore.role === 'admin')
 
 const form = reactive({
   name: '',
   description: '',
   type: 'source',
   secretLevel: 'secret',
-  autoInit: true
+  autoInit: true,
+  department: ''
+})
+
+onMounted(async () => {
+  try {
+    const res = await getDepartments()
+    departments.value = res.data?.list || res.data || []
+  } catch { /* keep empty */ }
 })
 
 // 密级对应的 Gitea 可见性
@@ -112,11 +131,9 @@ async function handleSubmit() {
     let repoName, displayTag
 
     if (hasChinese) {
-      // 转拼音：取每个字首字母 + 全拼，去重
       const pyArr = pinyin(rawName, { toneType: 'none', type: 'array' })
       const short = pyArr.map(s => s[0]).join('')
       const full = pyArr.join('')
-      // 拼音去重 + 短横线连接，确保 Gitea 合法
       repoName = `${short}_${full}`.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase()
       if (!repoName || repoName.length < 2) repoName = `repo_${Date.now()}`
       displayTag = `[显示名=${rawName}]`
@@ -125,9 +142,12 @@ async function handleSubmit() {
       displayTag = ''
     }
 
+    // 部门标签（管理员可选指定部门）
+    const deptTag = form.department ? `[部门=${form.department}]` : ''
+
     const desc = form.description
-      ? `${displayTag}[${sl.label}][${form.type}] ${form.description}`
-      : `${displayTag}[${sl.label}][${form.type}] ${typeReadmeMap[form.type]?.split('\n')[0]?.replace('# ', '') || ''}`
+      ? `${displayTag}${deptTag}[${sl.label}][${form.type}] ${form.description}`
+      : `${displayTag}${deptTag}[${sl.label}][${form.type}] ${typeReadmeMap[form.type]?.split('\n')[0]?.replace('# ', '') || ''}`
 
     await createRepo({
       name: repoName,

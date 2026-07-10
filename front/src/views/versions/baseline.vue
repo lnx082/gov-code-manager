@@ -26,7 +26,11 @@
         </template>
       </el-table-column>
       <el-table-column prop="version" label="对应版本" width="120" />
-      <el-table-column prop="repoName" label="所属仓库" width="180" />
+      <el-table-column label="所属仓库" width="180">
+        <template #default="{ row }">
+          {{ row.displayName || row.repoName }}
+        </template>
+      </el-table-column>
       <el-table-column prop="description" label="基线说明" min-width="200" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
@@ -50,28 +54,33 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="createDialogVisible" title="创建基线" width="600px">
+    <el-dialog v-model="createDialogVisible" title="创建基线" width="700px">
       <el-form :model="createForm" :rules="createRules" label-width="120px">
         <el-form-item label="基线名称" prop="name" class="form-required">
           <el-input v-model="createForm.name" placeholder="请输入基线名称" />
         </el-form-item>
-        <el-form-item label="选择版本" prop="versionId" class="form-required">
-          <el-select v-model="createForm.versionId" placeholder="选择版本" style="width: 100%">
-            <el-option v-for="v in versionOptions" :key="v.id" :label="v.name" :value="v.id">
+        <el-form-item label="筛选仓库">
+          <el-select v-model="filterRepoId" placeholder="按仓库筛选版本" clearable style="width: 100%" @change="onFilterRepoChange">
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="搜索版本">
+          <el-input v-model="versionSearch" placeholder="输入版本号搜索" clearable />
+        </el-form-item>
+        <el-form-item label="选择版本" prop="versionKey" class="form-required">
+          <el-select v-model="createForm.versionKey" placeholder="选择版本" style="width: 100%" filterable>
+            <el-option v-for="v in filteredVersionOptions" :key="v.key" :label="v.label" :value="v.key">
               <span>{{ v.name }}</span>
-              <span style="float: right; color: #8492a6; font-size: 12px">{{ v.repoName }}</span>
+              <span style="float: right; color: #909399; font-size: 12px; margin-left: 8px">{{ v.displayName }}</span>
             </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="基线说明" prop="description" class="form-required">
           <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="说明基线的用途和适用范围" />
         </el-form-item>
-        <el-form-item label="审批流程">
-          <el-select v-model="createForm.approvalFlowId" style="width: 100%">
-            <el-option label="标准审批流程" value="1" />
-            <el-option label="涉密版本审批" value="2" />
-          </el-select>
-        </el-form-item>
+        <div class="form-tip" style="margin-left:120px;margin-bottom:12px;color:#909399;font-size:12px">
+          提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
@@ -111,10 +120,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBaselineList, createBaseline, freezeBaseline } from '@/api/admin'
-import { getVersionList } from '@/api/version'
+import { getTags, getMyRepos } from '@/api/gitea'
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
@@ -122,21 +131,43 @@ const detailDialogVisible = ref(false)
 
 const baselineList = ref([])
 const versionOptions = ref([])
+const repoList = ref([])
+const filterRepoId = ref('')
+const versionSearch = ref('')
 
 const currentBaseline = ref(null)
 
+// 解析中文显示名
+function parseDisplayName(desc, fallback) {
+  if (!desc) return fallback || ''
+  const m = desc.match(/\[显示名=([^\]]+)\]/)
+  return m ? m[1] : (fallback || '')
+}
+
 const createForm = reactive({
   name: '',
-  versionId: '',
-  description: '',
-  approvalFlowId: '1'
+  versionKey: '',
+  description: ''
 })
 
 const createRules = {
   name: [{ required: true, message: '请输入基线名称', trigger: 'blur' }],
-  versionId: [{ required: true, message: '请选择版本', trigger: 'change' }],
+  versionKey: [{ required: true, message: '请选择版本', trigger: 'change' }],
   description: [{ required: true, message: '请输入基线说明', trigger: 'blur' }]
 }
+
+// 根据仓库筛选和搜索过滤版本
+const filteredVersionOptions = computed(() => {
+  let list = versionOptions.value
+  if (filterRepoId.value) {
+    list = list.filter(v => v.repoId === filterRepoId.value)
+  }
+  if (versionSearch.value) {
+    const q = versionSearch.value.toLowerCase()
+    list = list.filter(v => v.name.toLowerCase().includes(q) || v.label.toLowerCase().includes(q))
+  }
+  return list
+})
 
 onMounted(() => {
   loadBaselines()
@@ -149,7 +180,10 @@ async function loadBaselines() {
     const res = await getBaselineList()
     const data = res.data || res
     const list = data.list || data.records || data || []
-    baselineList.value = Array.isArray(list) ? list : []
+    baselineList.value = (Array.isArray(list) ? list : []).map(b => ({
+      ...b,
+      displayName: b.displayName || b.repoName || parseDisplayName(b.description, b.repoName)
+    }))
   } catch (error) {
     ElMessage.warning('加载基线列表失败')
     baselineList.value = []
@@ -160,35 +194,88 @@ async function loadBaselines() {
 
 async function loadVersions() {
   try {
-    const res = await getVersionList({ page: 1, pageSize: 50 })
-    const data = res.data || res
-    const list = data.list || data.records || data || []
-    versionOptions.value = (Array.isArray(list) ? list : []).map(v => ({
-      id: v.id || v.tagName,
-      name: v.tagName || v.name || v.version,
-      repoName: v.repoName || v.repo || ''
-    }))
+    // 从 Gitea 加载真实 tags，而非假数据
+    const reposRes = await getMyRepos({ page: 1, limit: 100 })
+    const repos = reposRes.data || reposRes
+    const repoArray = Array.isArray(repos) ? repos : []
+
+    repoList.value = repoArray.map(r => {
+      const owner = r.owner?.login || r.owner?.username || ''
+      const name = r.name
+      return {
+        id: r.id,
+        name: r.full_name || r.name,
+        displayName: parseDisplayName(r.description, r.full_name || r.name),
+        owner,
+        repo: name
+      }
+    })
+
+    const allVersions = []
+    for (const repo of repoList.value) {
+      try {
+        if (!repo.owner || !repo.repo) continue
+        const tagRes = await getTags(repo.owner, repo.repo)
+        const tags = tagRes.data || tagRes
+        const tagArray = Array.isArray(tags) ? tags : []
+        tagArray.forEach(t => allVersions.push({
+          key: `${repo.owner}/${repo.repo}@${t.name}`,
+          name: t.name,
+          label: `${t.name} — ${repo.displayName}`,
+          displayName: repo.displayName,
+          repoId: repo.id,
+          repoOwner: repo.owner,
+          repoName: repo.repo,
+          sha: t.commit?.sha || ''
+        }))
+      } catch { /* skip failed repos */ }
+    }
+    versionOptions.value = allVersions
   } catch (error) {
     ElMessage.warning('加载版本列表失败')
   }
 }
 
+// 切换筛选仓库时重置搜索
+function onFilterRepoChange() {
+  // 筛选变化会自动触发 computed 重新计算
+}
+
 function showCreateDialog() {
+  createForm.name = ''
+  createForm.versionKey = ''
+  createForm.description = ''
+  filterRepoId.value = ''
+  versionSearch.value = ''
   createDialogVisible.value = true
 }
 
 async function handleCreate() {
+  if (!createForm.name || !createForm.versionKey || !createForm.description) {
+    ElMessage.warning('请填写必填项')
+    return
+  }
+  const version = versionOptions.value.find(v => v.key === createForm.versionKey)
+  if (!version) {
+    ElMessage.warning('请选择有效的版本')
+    return
+  }
   try {
     await createBaseline({
       name: createForm.name,
-      versionId: createForm.versionId,
+      versionKey: createForm.versionKey,
+      versionName: version.name,
+      repoOwner: version.repoOwner,
+      repoName: version.repoName,
+      sha: version.sha,
       description: createForm.description
     })
     ElMessage.success('基线创建申请已提交，等待审批')
     createDialogVisible.value = false
     loadBaselines()
   } catch (error) {
-    ElMessage.warning('创建基线失败')
+    const msg = error?.response?.data?.message || error?.message || '创建基线失败'
+    ElMessage.warning(msg)
   }
 }
 

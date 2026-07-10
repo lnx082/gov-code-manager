@@ -16,8 +16,8 @@
           <el-select v-model="filterForm.type" clearable style="width: 150px">
             <el-option label="全部" value="" />
             <el-option label="合并请求" value="merge" />
-            <el-option label="版本发布" value="version" />
-            <el-option label="基线申请" value="baseline" />
+            <el-option label="版本发布" value="version_release" />
+            <el-option label="基线申请" value="baseline_create" />
             <el-option label="分支创建" value="branch" />
           </el-select>
         </el-form-item>
@@ -143,11 +143,9 @@
           :type="record.action === 'approved' ? 'success' : 'danger'"
           :timestamp="formatTime(record.action_time)"
         >
-          <h4>{{ record.step_name || `步骤 ${record.step}` }}</h4>
+          <h4>{{ record.reviewer_name ? `第${record.step}步 - ${record.reviewer_name}` : `步骤 ${record.step}` }}</h4>
           <p>
-            审批人: {{ record.reviewer_user_id }}
-            <br/>
-            操作: {{ record.action === 'approved' ? '通过' : '拒绝' }}
+            操作: {{ record.action === 'approved' ? '✅ 通过' : '❌ 拒绝' }}
           </p>
           <p v-if="record.comment">意见: {{ record.comment }}</p>
         </el-timeline-item>
@@ -234,12 +232,12 @@ function handleExport() {
 }
 
 function getTypeTagType(type) {
-  const map = { 'merge': 'primary', 'version': 'success', 'baseline': 'warning', 'branch': 'info' }
+  const map = { 'merge': 'primary', 'version_release': 'success', 'baseline_create': 'warning', 'branch': 'info' }
   return map[type] || 'info'
 }
 
 function getTypeName(type) {
-  const map = { 'merge': '合并请求', 'version': '版本发布', 'baseline': '基线申请', 'branch': '分支创建' }
+  const map = { 'merge': '合并请求', 'version_release': '版本发布', 'baseline_create': '基线申请', 'branch': '分支创建' }
   return map[type] || type
 }
 

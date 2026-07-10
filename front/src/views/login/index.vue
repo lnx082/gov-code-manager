@@ -19,7 +19,6 @@
       <div class="login-left">
         <div class="gov-info">
           <h2>党政软件版本管控平台</h2>
-          <p class="subtitle">GovCode Version Control Platform</p>
           <div class="feature-list">
             <div class="feature-item">
               <el-icon class="feature-icon"><Lock /></el-icon>
@@ -127,8 +126,8 @@
     <!-- 底部版权信息 -->
     <div class="gov-footer">
       <div class="footer-content">
-        <p>党政软件版本管控平台 © 2024 版权所有</p>
-        <p>技术支持：信息化建设办公室 | 服务热线：400-XXX-XXXX</p>
+        <p>党政软件版本管控平台 © 2026 版权所有</p>
+        <p>技术支持：电科院52组</p>
       </div>
     </div>
   </div>
@@ -412,21 +411,16 @@ async function handleLogin() {
 
 /* 底部版权 */
 .gov-footer {
-  background: #333;
-  color: #fff;
+  background: #fff;
+  color: #666;
   padding: 20px 0;
   text-align: center;
+  border-top: 1px solid #e4e7ed;
 
   .footer-content {
     p {
       margin: 5px 0;
       font-size: 13px;
-      opacity: 0.8;
-
-      &:first-child {
-        font-size: 14px;
-        opacity: 1;
-      }
     }
   }
 }

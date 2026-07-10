@@ -10,9 +10,8 @@
     <el-card class="filter-card">
       <el-form inline>
         <el-form-item label="仓库">
-          <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 200px">
-            <el-option label="政务系统-用户模块" value="1" />
-            <el-option label="政务系统-审批模块" value="2" />
+          <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 240px">
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="版本类型">
@@ -45,7 +44,11 @@
         </template>
       </el-table-column>
       <el-table-column prop="message" label="版本说明" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="repoName" label="所属仓库" width="180" />
+      <el-table-column label="所属仓库" width="180">
+        <template #default="{ row }">
+          {{ row.displayName || row.repoName }}
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
           <el-tag :type="row.type === 'release' ? 'success' : 'warning'" size="small">
@@ -85,10 +88,17 @@
     <el-dialog v-model="createTagDialogVisible" title="创建版本" width="600px">
       <el-form :model="createForm" :rules="createRules" label-width="100px">
         <el-form-item label="所属仓库" prop="repoId" class="form-required">
-          <el-select v-model="createForm.repoId" placeholder="选择仓库" style="width: 100%">
-            <el-option label="政务系统-用户模块" value="1" />
-            <el-option label="政务系统-审批模块" value="2" />
+          <el-select v-model="createForm.repoId" placeholder="选择仓库" style="width: 100%" @change="onCreateRepoChange">
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="基于分支" prop="targetBranch" class="form-required">
+          <el-select v-model="createForm.targetBranch" placeholder="选择分支" style="width: 100%" :disabled="!createForm.repoId">
+            <el-option v-for="b in createBranchList" :key="b" :label="b" :value="b" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="发布标题" prop="title">
+          <el-input v-model="createForm.title" placeholder="如：用户模块 v1.0.0 正式发布" />
         </el-form-item>
         <el-form-item label="版本号" prop="name" class="form-required">
           <el-input v-model="createForm.name" placeholder="v1.0.0" />
@@ -105,12 +115,12 @@
         </el-form-item>
         <el-form-item label="关联审批">
           <el-switch v-model="createForm.requireApproval" />
-          <span class="switch-tip">正式版本需要完成审批流程后才能创建</span>
+          <span class="switch-tip">提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）</span>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createTagDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="handleCreateTag">创建版本</el-button>
+        <el-button type="danger" @click="handleCreateTag" :loading="createSubmitting">创建版本</el-button>
       </template>
     </el-dialog>
 
@@ -135,11 +145,14 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getTags, getMyRepos } from '@/api/gitea'
+import { getTags, getMyRepos, getBranches, getReleases } from '@/api/gitea'
+import { createApproval } from '@/api/bff'
+import request from '@/api'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
+const createSubmitting = ref(false)
 const versionDialogVisible = ref(false)
 const activeVersion = ref(null)
 
@@ -147,9 +160,20 @@ const filterForm = reactive({ repoId: '', type: '', secretLevel: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 
 const versionList = ref([])
+const repoList = ref([])
+const createBranchList = ref([])
+
+// 解析中文显示名
+function parseDisplayName(desc, fallback) {
+  if (!desc) return fallback || ''
+  const m = desc.match(/\[显示名=([^\]]+)\]/)
+  return m ? m[1] : (fallback || '')
+}
 
 const createForm = reactive({
   repoId: '',
+  targetBranch: '',
+  title: '',
   name: '',
   message: '',
   type: 'release',
@@ -158,40 +182,103 @@ const createForm = reactive({
 
 const createRules = {
   repoId: [{ required: true, message: '请选择仓库', trigger: 'change' }],
+  targetBranch: [{ required: true, message: '请选择基于分支', trigger: 'change' }],
   name: [{ required: true, message: '请输入版本号', trigger: 'blur' }],
   message: [{ required: true, message: '请输入版本说明', trigger: 'blur' }]
 }
 
 onMounted(() => { loadVersions() })
 
+// 创建表单仓库变化时，加载该仓库的分支列表
+async function onCreateRepoChange(repoId) {
+  createForm.targetBranch = ''
+  createBranchList.value = []
+  if (!repoId) return
+  const repo = repoList.value.find(r => r.id === repoId)
+  if (!repo) return
+  try {
+    const res = await getBranches(repo.owner, repo.repo)
+    const branches = res.data || res
+    createBranchList.value = (Array.isArray(branches) ? branches : []).map(b => b.name)
+    // 默认选中默认分支
+    const defaultBranch = createBranchList.value.find(b => b === 'main' || b === 'master')
+    if (defaultBranch) createForm.targetBranch = defaultBranch
+  } catch {
+    createBranchList.value = ['main']
+    createForm.targetBranch = 'main'
+  }
+}
+
 async function loadVersions() {
   loading.value = true
   try {
-    // 按设计文档 3.3：Tag 列表使用 Gitea API
     const reposRes = await getMyRepos({ page: 1, limit: 100 })
     const repos = reposRes.data || reposRes
     const repoArray = Array.isArray(repos) ? repos : []
+
+    // 构建 repoList，含中文显示名
+    repoList.value = repoArray.map(r => {
+      const owner = r.owner?.login || r.owner?.username || ''
+      const name = r.name
+      return {
+        id: r.id,
+        name: r.full_name || r.name,
+        displayName: parseDisplayName(r.description, r.full_name || r.name),
+        owner,
+        repo: name,
+        repoOwner: owner,
+        repoName: name
+      }
+    })
+
+    // 如果筛选了仓库，只加载该仓库的 tags
+    const reposToLoad = filterForm.repoId
+      ? repoList.value.filter(r => r.id === filterForm.repoId)
+      : repoList.value
+
     const allTags = []
-    for (const repo of repoArray) {
+    for (const repo of reposToLoad) {
       try {
-        const owner = repo.owner?.login || repo.owner?.username || ''
-        const name = repo.name
-        if (!owner || !name) continue
-        const tagRes = await getTags(owner, name)
+        if (!repo.owner || !repo.repo) continue
+        const [tagRes, releaseRes] = await Promise.all([
+          getTags(repo.owner, repo.repo),
+          getReleases(repo.owner, repo.repo, { limit: 100 }).catch(() => ({ data: [] }))
+        ])
         const tags = tagRes.data || tagRes
         const tagArray = Array.isArray(tags) ? tags : []
+        // 用 Release 数据确定 tag 类型
+        const releases = (releaseRes.data || releaseRes || [])
+        const releaseMap = {}
+        ;(Array.isArray(releases) ? releases : []).forEach(r => {
+          releaseMap[r.tag_name] = r.prerelease ? 'beta' : 'release'
+        })
         tagArray.forEach(t => allTags.push({
           ...t,
-          repoOwner: owner,
-          repoName: name,
+          repoOwner: repo.owner,
+          repoName: repo.repo,
+          displayName: repo.displayName,
           name: t.name,
           message: t.message || '',
           sha: t.commit?.sha || '',
+          type: releaseMap[t.name] || (t.name?.includes('beta') || t.name?.includes('rc') ? 'beta' : 'release'),
         }))
       } catch { /* skip failed repos */ }
     }
-    versionList.value = allTags
+    // 批量查询基线状态
+    if (allTags.length > 0) {
+      try {
+        const tagKeys = allTags.map(t => `${t.repoOwner}/${t.repoName}@${t.name}`).join(',')
+        const baselineRes = await request.get('/baselines/check', { params: { tags: tagKeys } })
+        const baselineMap = baselineRes.data || baselineRes || {}
+        allTags.forEach(t => {
+          const key = `${t.repoOwner}/${t.repoName}@${t.name}`
+          t.isBaseline = baselineMap[key] || false
+        })
+      } catch { /* skip baseline check */ }
+    }
     pagination.total = allTags.length
+    const start = (pagination.page - 1) * pagination.pageSize
+    versionList.value = allTags.slice(start, start + pagination.pageSize)
   } catch {
     ElMessage.warning('加载版本列表失败')
   } finally {
@@ -200,13 +287,64 @@ async function loadVersions() {
 }
 
 function handleFilter() { loadVersions() }
-function resetFilter() { Object.keys(filterForm).forEach(key => filterForm[key] = ''); loadVersions() }
-function showCreateTag() { createTagDialogVisible.value = true }
+function resetFilter() {
+  filterForm.repoId = ''
+  filterForm.type = ''
+  filterForm.secretLevel = ''
+  loadVersions()
+}
+
+async function showCreateTag() {
+  createForm.repoId = ''
+  createForm.targetBranch = ''
+  createForm.title = ''
+  createForm.name = ''
+  createForm.message = ''
+  createForm.type = 'release'
+  createForm.requireApproval = true
+  createBranchList.value = []
+  createTagDialogVisible.value = true
+}
 
 async function handleCreateTag() {
-  ElMessage.success('版本创建成功')
-  createTagDialogVisible.value = false
-  loadVersions()
+  if (!createForm.repoId || !createForm.name || !createForm.message || !createForm.targetBranch) {
+    ElMessage.warning('请填写必填项')
+    return
+  }
+  const repo = repoList.value.find(r => r.id === createForm.repoId)
+  if (!repo) {
+    ElMessage.warning('请选择有效的仓库')
+    return
+  }
+  createSubmitting.value = true
+  try {
+    // 提交审批申请（自动使用默认审批流程），审批通过后由 BFF 执行 tag/release
+    await createApproval({
+      operationType: 'version_release',
+      title: createForm.title || `${repo.displayName} ${createForm.name}`,
+      description: createForm.message,
+      repoOwner: repo.owner,
+      repoName: repo.repo,
+      targetBranch: createForm.targetBranch,
+      body: JSON.stringify({
+        repoOwner: repo.owner,
+        repoName: repo.repo,
+        tagName: createForm.name.trim(),
+        releaseTitle: createForm.title || createForm.name.trim(),
+        releaseBody: createForm.message.trim(),
+        targetBranch: createForm.targetBranch,
+        prerelease: createForm.type !== 'release'
+      })
+    })
+    ElMessage.success('版本发布申请已提交，等待审批通过后将自动发布')
+    createTagDialogVisible.value = false
+    loadVersions()
+  } catch (error) {
+    const msg = error?.response?.data?.message || error?.message || '未知错误'
+    ElMessage.error('提交审批失败：' + msg)
+  } finally {
+    createSubmitting.value = false
+  }
 }
 
 function viewVersionDetail(row) {

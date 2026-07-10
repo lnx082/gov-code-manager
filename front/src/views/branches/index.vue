@@ -40,7 +40,7 @@
       <el-form inline>
         <el-form-item label="仓库">
           <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 200px">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="分支类型">
@@ -69,7 +69,11 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="repoName" label="所属仓库" width="180" />
+      <el-table-column label="所属仓库" width="180">
+        <template #default="{ row }">
+          {{ row.displayName || row.repoName }}
+        </template>
+      </el-table-column>
       <el-table-column label="最新提交" min-width="200">
         <template #default="{ row }">
           <div class="commit-cell">
@@ -84,11 +88,13 @@
           {{ formatTime(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
-          <el-button type="primary" link @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
-          <el-button type="danger" link @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
+          <div class="action-buttons">
+            <el-button size="small" @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
+            <el-button size="small" type="success" plain @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
+            <el-button size="small" type="danger" plain @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -109,7 +115,7 @@
         </el-form-item>
         <el-form-item label="所属仓库" prop="repoId">
           <el-select v-model="createForm.repoId" placeholder="选择仓库">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="基于分支" prop="baseBranch">
@@ -161,14 +167,22 @@ async function loadBranches() {
     // Load repo list from Gitea
     const reposRes = await getMyRepos({ page: 1, limit: 100 })
     const repos = reposRes.data || reposRes
-    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
-      id: r.id,
-      name: r.full_name || r.name,
-      owner: r.owner?.login || r.owner?.username || r.owner || '',
-      repo: r.name,
-      repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
-      repoName: r.name
-    }))
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => {
+      // 解析中文显示名
+      const desc = r.description || ''
+      const dm = desc.match(/\[显示名=([^\]]+)\]/)
+      const displayName = dm ? dm[1] : (r.full_name || r.name)
+      return {
+        id: r.id,
+        name: r.full_name || r.name,
+        displayName,
+        owner: r.owner?.login || r.owner?.username || r.owner || '',
+        repo: r.name,
+        repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
+        repoName: r.name,
+        defaultBranch: r.default_branch || 'main'
+      }
+    })
 
     // Load branches from each repo
     const branches = []
@@ -184,16 +198,25 @@ async function loadBranches() {
           ...b,
           repoId: repo.id,
           repoOwner: repo.owner,
-          repoName: repo.repo
+          repoName: repo.repo,
+          displayName: repo.displayName,
+          sha: b.commit?.sha || b.sha || '',
+          commitMessage: b.commit?.message || b.commitMessage || '',
+          author: b.commit?.author?.name || b.commit?.committer?.name || b.author || '',
+          updatedAt: b.commit?.author?.date || b.commit?.committer?.date || b.updatedAt || '',
+          isDefault: b.name === repo.defaultBranch,
+          isProtected: b.protected || false
         }))
       } catch { /* skip failed repos */ }
     }
-    branchList.value = branches
     pagination.total = branches.length
     stats.total = branches.length
     stats.protected = branches.filter(b => b.protected).length
     stats.active = branches.filter(b => !b.protected).length
     stats.pending = 0
+    // 客户端分页
+    const start = (pagination.page - 1) * pagination.pageSize
+    branchList.value = branches.slice(start, start + pagination.pageSize)
   } catch {
     ElMessage.warning('加载分支列表失败')
   } finally {
@@ -310,6 +333,13 @@ function formatTime(time) {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .pagination-wrapper {

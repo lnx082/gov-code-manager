@@ -4,25 +4,26 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, getUserInfo as getUserInfoApi, logout as logoutApi } from '@/api/user'
-import Cookies from 'js-cookie'
+import { getToken, setToken, removeToken, getApiToken, setApiToken, removeApiToken } from '@/api'
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref(Cookies.get('gitea_token') || '')
+  // 使用 sessionStorage 存储 token，实现标签页独立登录
+  const token = ref(getToken())
   const userInfo = ref(null)
   const permissions = ref([])
 
   const isAuthenticated = computed(() => !!token.value)
-  
+
   const username = computed(() => userInfo.value?.username || userInfo.value?.nickname || '未登录')
+  const role = computed(() => userInfo.value?.role || '')
   const roleName = computed(() => {
     const roleMap = {
       'admin': '系统管理员',
       'project_manager': '项目管理员',
       'developer': '开发人员',
-      'auditor': '审计人员',
-      'user': '普通用户'
+      'auditor': '审计人员'
     }
-    return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '普通用户'
+    return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '开发人员'
   })
 
   async function initUser() {
@@ -41,12 +42,12 @@ export const useUserStore = defineStore('user', () => {
   async function loginAction(loginName, password) {
     const res = await loginApi(loginName, password)
     token.value = res.data.token
-    Cookies.set('gitea_token', res.data.token, { expires: 7 })
+    setToken(res.data.token)
     // 从 JWT 中提取 giteaToken 用于前端直接调用 Gitea API
     try {
       const payload = JSON.parse(atob(res.data.token.split('.')[1]))
       if (payload.giteaToken) {
-        Cookies.set('gitea_api_token', payload.giteaToken, { expires: 7 })
+        setApiToken(payload.giteaToken)
       }
     } catch { /* ignore decode errors */ }
     userInfo.value = res.data.user
@@ -54,16 +55,17 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  function logout() {
+  async function logout() {
     try {
-      logoutApi()
+      await logoutApi()
     } catch (e) {
       // 忽略错误
     }
     token.value = ''
     userInfo.value = null
     permissions.value = []
-    Cookies.remove('gitea_token')
+    removeToken()
+    removeApiToken()
   }
 
   function hasPermission(permission) {
@@ -78,6 +80,7 @@ export const useUserStore = defineStore('user', () => {
     permissions,
     isAuthenticated,
     username,
+    role,
     roleName,
     initUser,
     loginAction,

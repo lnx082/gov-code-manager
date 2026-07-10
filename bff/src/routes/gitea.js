@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
+import db from '../database/connection.js';
 
 const router = Router();
 
@@ -183,6 +184,81 @@ router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req,
 });
 
 // ============================================================
+// 仓库创建专用路由：创建后自动添加同部门成员为协作者
+// ============================================================
+router.post('/repos', authenticate, async (req, res, next) => {
+  try {
+    const giteaUrl = `${config.gitea.url}/api/v1/repos`;
+    const giteaToken = req.user?.giteaToken || '';
+    const authHeader = giteaToken || req.headers.authorization || '';
+
+    // 1. 调用 Gitea API 创建仓库
+    const response = await fetch(giteaUrl, {
+      method: 'POST',
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json(result);
+    }
+
+    // 2. 解析部门：优先从 description 中取 [部门=xxx]，否则用创建者自己的部门
+    const desc = req.body.description || '';
+    const deptMatch = desc.match(/\[部门=([^\]]+)\]/);
+    let targetDeptName = deptMatch ? deptMatch[1] : null;
+    let targetDeptId = null;
+
+    if (targetDeptName) {
+      const dept = await db('departments').where('name', targetDeptName).first();
+      targetDeptId = dept?.dept_id;
+    } else {
+      // 用创建者部门
+      const profile = await db('user_profiles')
+        .select('department_id', 'departments.name as department_name')
+        .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+        .where('user_id', req.user.userId).first();
+      targetDeptId = profile?.department_id;
+      targetDeptName = profile?.department_name;
+    }
+
+    // 3. 查找同部门所有用户
+    if (targetDeptId) {
+      const deptUsers = await db('user_profiles')
+        .select('gitea_username')
+        .where('department_id', targetDeptId)
+        .whereNot('gitea_username', req.user.username); // 排除创建者自己
+
+      const owner = result.owner?.login || req.user.username;
+      const repoName = result.name || req.body.name;
+
+      // 4. 逐个添加为仓库协作者（read 权限）
+      let added = 0;
+      for (const u of deptUsers) {
+        try {
+          const addRes = await fetch(
+            `${config.gitea.url}/api/v1/repos/${owner}/${repoName}/collaborators/${u.gitea_username}`,
+            {
+              method: 'PUT',
+              headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ permission: 'read' }),
+            }
+          );
+          if (addRes.ok) added++;
+        } catch { /* skip */ }
+      }
+      if (added > 0) {
+        console.log(`[RepoCreate] 已为仓库 ${repoName} 添加 ${added} 名 ${targetDeptName || '同部门'} 协作者`);
+      }
+    }
+
+    res.status(response.status).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
 // 通配符代理：必须放在所有专用路由之后（最后一条路由）
 // ============================================================
 router.all('/*', authenticate, async (req, res, next) => {
@@ -192,12 +268,18 @@ router.all('/*', authenticate, async (req, res, next) => {
     const queryString = new URLSearchParams(req.query).toString();
     if (queryString) giteaUrl += '?' + queryString;
 
+    // 使用用户自己的 Gitea token（同部门仓库已自动添加协作者）
     const giteaToken = req.user?.giteaToken || '';
     const authHeader = giteaToken || req.headers.authorization || '';
 
+    // 清除条件请求头，防止 Gitea 返回 304 空响应
+    const forwardHeaders = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+    if (req.headers['if-none-match']) delete req.headers['if-none-match'];
+    if (req.headers['if-modified-since']) delete req.headers['if-modified-since'];
+
     const fetchOptions = {
       method: req.method,
-      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      headers: forwardHeaders,
     };
 
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
@@ -205,6 +287,10 @@ router.all('/*', authenticate, async (req, res, next) => {
     }
 
     const response = await fetch(giteaUrl, fetchOptions);
+    // 禁止缓存，防止浏览器返回 304 空数据
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = await response.json();

@@ -14,7 +14,7 @@
           <el-button type="primary" size="large" @click="$router.push('/repos/create')">
             <el-icon><Plus /></el-icon> 创建仓库
           </el-button>
-          <el-button size="large" @click="$router.push('/approval/pending')">
+          <el-button size="large" @click="$router.push('/approval/pending')" v-if="isAdmin || userStore.role === 'project_manager'">
             <el-icon><DocumentChecked /></el-icon> 待我审批
             <el-badge :value="pendingApprovals" :hidden="pendingApprovals === 0" />
           </el-button>
@@ -40,7 +40,7 @@
         </div>
       </div>
 
-      <div class="stat-card orange clickable" @click="$router.push('/approval/pending')">
+      <div class="stat-card orange clickable" @click="$router.push('/approval/pending')" v-if="isAdmin || userStore.role === 'project_manager'">
         <div class="stat-icon"><el-icon><DocumentChecked /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.pendingApprovals }}</div>
@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <div class="stat-card green" :class="{ clickable: isAdmin }" @click="isAdmin && showOnlineUsers()">
+      <div class="stat-card green" :class="{ clickable: isAdmin }" @click="isAdmin && showOnlineUsers()" v-if="isAdmin">
         <div class="stat-icon"><el-icon><User /></el-icon></div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.onlineUsers }}</div>
@@ -61,8 +61,8 @@
     <div class="main-content">
       <!-- 左侧 -->
       <div class="content-left">
-        <!-- 待处理事项 -->
-        <el-card class="panel-card" shadow="hover">
+        <!-- 待处理事项（仅管理员/项目管理员可见） -->
+        <el-card class="panel-card" shadow="hover" v-if="isAdmin || userStore.role === 'project_manager'">
           <template #header>
             <div class="card-header">
               <span><el-icon><DocumentChecked /></el-icon> 待处理审批</span>
@@ -130,7 +130,7 @@
               <div class="link-icon orange"><el-icon><Collection /></el-icon></div>
               <span>版本管理</span>
             </div>
-            <div class="quick-link-item" @click="$router.push('/audit/logs')">
+            <div class="quick-link-item" @click="$router.push('/audit/logs')" v-if="isAdmin || userStore.role === 'auditor'">
               <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>审计日志</span>
             </div>
@@ -142,48 +142,38 @@
           <template #header>
             <span><el-icon><Monitor /></el-icon> 系统状态</span>
           </template>
-          <div class="system-status">
+          <div class="system-status" v-if="sysInfo">
             <div class="status-item">
-              <span class="status-label">系统版本</span>
-              <span class="status-value">v1.0.0</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Gitea服务</span>
-              <span class="status-indicator online">
-                <span class="dot"></span> 正常
+              <span class="status-label">Gitea 服务</span>
+              <span class="status-indicator" :class="sysInfo.services?.gitea?.online ? 'online' : 'offline'">
+                <span class="dot"></span> {{ sysInfo.services?.gitea?.online ? '正常' : '离线' }}
               </span>
             </div>
             <div class="status-item">
               <span class="status-label">数据库</span>
-              <span class="status-indicator online">
-                <span class="dot"></span> 正常
+              <span class="status-indicator" :class="sysInfo.services?.database?.online ? 'online' : 'offline'">
+                <span class="dot"></span> {{ sysInfo.services?.database?.online ? '正常' : '离线' }}
               </span>
             </div>
+            <el-divider />
+            <div class="status-item"><span class="status-label">BFF 主机</span><span class="status-value">{{ sysInfo.hostname }}</span></div>
+            <div class="status-item"><span class="status-label">系统</span><span class="status-value">{{ sysInfo.platform }} {{ sysInfo.arch }}</span></div>
+            <div class="status-item"><span class="status-label">CPU</span><span class="status-value">{{ sysInfo.cpu?.model?.substring(0, 30) }} ({{ sysInfo.cpu?.cores }}核)</span></div>
             <div class="status-item">
-              <span class="status-label">存储空间</span>
-              <el-progress :percentage="storageUsed" :color="storageColor" :stroke-width="10" />
+              <span class="status-label">CPU</span>
+              <el-progress :percentage="sysInfo.cpu?.usage||0" :stroke-width="8" :color="sysInfo.cpu?.usage > 80 ? '#f56c6c' : '#67c23a'" />
             </div>
+            <div class="status-item">
+              <span class="status-label">内存</span>
+              <el-progress :percentage="sysInfo.memory?.usagePct||0" :stroke-width="8" :color="sysInfo.memory?.usagePct > 80 ? '#f56c6c' : '#67c23a'" :format="() => formatBytes(sysInfo.memory?.used) + ' / ' + formatBytes(sysInfo.memory?.total)" />
+            </div>
+            <div class="status-item" v-if="sysInfo.disk?.total > 0">
+              <span class="status-label">磁盘</span>
+              <el-progress :percentage="sysInfo.disk?.usagePct||0" :stroke-width="8" :color="sysInfo.disk?.usagePct > 80 ? '#f56c6c' : '#67c23a'" :format="() => formatBytes(sysInfo.disk?.total - sysInfo.disk?.free) + ' / ' + formatBytes(sysInfo.disk?.total)" />
+            </div>
+            <div class="status-item"><span class="status-label">运行时间</span><span class="status-value">{{ formatUptime(sysInfo.uptime) }}</span></div>
           </div>
-        </el-card>
-
-        <!-- 风险预警 -->
-        <el-card class="panel-card" shadow="hover" v-if="userStore.hasPermission('audit:view')">
-          <template #header>
-            <div class="card-header">
-              <span><el-icon><WarningFilled /></el-icon> 风险预警</span>
-              <el-badge :value="riskCount" :hidden="riskCount === 0" />
-            </div>
-          </template>
-          <div class="risk-list" v-if="risks.length > 0">
-            <div v-for="risk in risks" :key="risk.id" class="risk-item">
-              <el-icon class="risk-icon"><WarningFilled /></el-icon>
-              <div class="risk-content">
-                <div class="risk-title">{{ risk.title }}</div>
-                <div class="risk-time"><el-icon><Clock /></el-icon> {{ risk.time }}</div>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无风险预警" />
+          <el-empty v-else description="无法获取系统信息" />
         </el-card>
       </div>
     </div>
@@ -214,12 +204,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, WarningFilled, Search } from '@element-plus/icons-vue'
+import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
-import { getPendingApprovals } from '@/api/approval'
-import { getRiskWarnings, getAuditLogs, getSessions } from '@/api/bff'
-import { getMyRepos } from '@/api/gitea'
+import { getPendingApprovals, getApprovalList } from '@/api/approval'
+import { getSessions } from '@/api/bff'
+import request from '@/api'
 import { Solar } from 'lunar-javascript'
 
 const userStore = useUserStore()
@@ -272,44 +262,34 @@ const stats = reactive({
   repoCount: 0,
   versionCount: 0,
   pendingApprovals: 0,
-  onlineUsers: 0
+  onlineUsers: 0,
+  userCount: 0
 })
 
 const pendingApprovals = computed(() => stats.pendingApprovals)
 
 const pendingList = ref([])
 const recentActivities = ref([])
-const storageUsed = ref(0)
-const storageColor = computed(() => {
-  if (storageUsed.value < 60) return '#67c23a'
-  if (storageUsed.value < 80) return '#e6a23c'
-  return '#f56c6c'
-})
-
-const riskCount = ref(0)
-const risks = ref([])
+const sysInfo = ref(null)
 
 onMounted(() => {
   loadDashboardData()
   loadPendingApprovals()
-  loadRiskWarnings()
   loadRecentActivities()
+  loadSystemInfo()
 })
 
 async function loadDashboardData() {
   try {
-    // 仓库数量从 Gitea API 获取
-    const reposRes = await getMyRepos({ page: 1, limit: 200 })
-    const repos = reposRes.data || reposRes
-    stats.repoCount = Array.isArray(repos) ? repos.length : (repos.total_count || 0)
-    // 其他统计从 BFF 获取
+    // 所有统计从 BFF 获取（含真实仓库 + 版本数）
     const res = await getDashboardStats()
     const data = res.data || res
     if (data) {
-      stats.versionCount = data.versionCount || data.versions || 0
+      stats.repoCount = data.repoCount || 0
+      stats.versionCount = data.versionCount || 0
       stats.pendingApprovals = data.pendingApprovals || 0
-      stats.onlineUsers = data.onlineUsers || data.users || 0
-      storageUsed.value = data.storageUsed || data.storage || 0
+      stats.onlineUsers = data.onlineUsers || 0
+      stats.userCount = data.userCount || 0
     }
   } catch (error) {
     ElMessage.warning('加载统计数据失败')
@@ -334,37 +314,25 @@ async function loadPendingApprovals() {
   }
 }
 
-async function loadRiskWarnings() {
-  try {
-    const res = await getRiskWarnings({ page: 1, pageSize: 5 })
-    const data = res.data || res
-    const list = data.list || data.records || data || []
-    risks.value = (Array.isArray(list) ? list : []).map(item => ({
-      id: item.id,
-      level: item.level || 'warning',
-      title: item.title || item.description || '',
-      time: item.createdAt || item.time || ''
-    }))
-    riskCount.value = risks.value.length
-  } catch (error) {
-    ElMessage.warning('加载风险预警失败')
-  }
-}
-
 async function loadRecentActivities() {
   try {
-    const res = await getAuditLogs({ page: 1, pageSize: 5 })
+    // 从审批记录获取真实最新动态
+    const res = await getApprovalList({ page: 1, pageSize: 5 })
     const data = res.data || res
     const list = data.list || data.records || data || []
-    recentActivities.value = (Array.isArray(list) ? list : []).map(item => ({
-      id: item.id,
-      user: item.username || item.user || '',
-      action: item.actionType || item.action || '',
-      target: item.target || '',
-      time: item.timestamp || item.createdAt || item.time || ''
-    }))
+    recentActivities.value = (Array.isArray(list) ? list : []).map(item => {
+      const statusText = item.status === 'approved' ? '审批通过' : item.status === 'rejected' ? '审批拒绝' : '提交了审批'
+      const typeText = item.operation_type === 'version_release' ? '版本发布' : item.operation_type === 'baseline_create' ? '基线申请' : '合并请求'
+      return {
+        id: item.approval_id,
+        user: item.applicant_username || '未知',
+        action: `${statusText} ${typeText}`,
+        target: item.title || '',
+        time: item.created_at || item.updated_at || ''
+      }
+    })
   } catch (error) {
-    ElMessage.warning('加载最新动态失败')
+    recentActivities.value = []
   }
 }
 
@@ -376,6 +344,29 @@ function getTypeTagType(type) {
 function getTypeName(type) {
   const map = { merge: '合并请求', version: '版本发布', baseline: '基线申请' }
   return map[type] || '其他'
+}
+
+async function loadSystemInfo() {
+  try {
+    const res = await request.get('/statistics/system')
+    sysInfo.value = (res.data || res)?.data || (res.data || res)
+  } catch { sysInfo.value = null }
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function formatUptime(seconds) {
+  if (!seconds) return '-'
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return (d > 0 ? d + '天 ' : '') + h + '小时 ' + m + '分钟'
 }
 </script>
 
@@ -409,7 +400,7 @@ function getTypeName(type) {
         h2 {
           font-size: 52px;
           margin-bottom: 20px;
-          font-family: 'Ma Shan Zheng', 'STLiti', 'FZXiaoZhuanTi', cursive;
+          font-family: 'MaoTi', 'STLiti', 'FZXiaoZhuanTi', cursive;
           font-weight: normal;
           background: linear-gradient(180deg, #ffd700 0%, #ff8c00 50%, #ffd700 100%);
           -webkit-background-clip: text;
@@ -689,14 +680,14 @@ function getTypeName(type) {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #67c23a;
+
+      &.online { color: #67c23a; .dot { background: #67c23a; animation: pulse 2s infinite; } }
+      &.offline { color: #f56c6c; .dot { background: #f56c6c; animation: none; } }
 
       .dot {
         width: 8px;
         height: 8px;
-        background: #67c23a;
         border-radius: 50%;
-        animation: pulse 2s infinite;
       }
     }
   }

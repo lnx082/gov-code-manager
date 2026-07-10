@@ -22,17 +22,26 @@ function canAccessByLevel(userLevel, repoLevel) {
 }
 
 /**
- * 从描述中解析密级标签，格式：[显示名=xxx][秘密][source] ...
+ * 从描述中解析密级标签
  */
 function parseSecretLevel(desc) {
-  if (!desc) return 'secret'; // 无描述默认秘密
-  const clean = desc.replace(/^\[显示名=[^\]]+\]/, '');
+  if (!desc) return 'secret';
+  const clean = desc.replace(/^\[显示名=[^\]]+\]/, '').replace(/\[部门=[^\]]+\]/, '');
   const match = clean.match(/\[(公开|秘密|机密|绝密)\]/);
   if (match) {
     const map = { 公开: 'public', 秘密: 'secret', 机密: 'confidential', 绝密: 'top-secret' };
     return map[match[1]] || 'secret';
   }
   return 'secret';
+}
+
+/**
+ * 从描述中解析部门标签：格式 [部门=网信办]
+ */
+function parseDepartment(desc) {
+  if (!desc) return null;
+  const m = desc.match(/\[部门=([^\]]+)\]/);
+  return m ? m[1] : null;
 }
 
 // 获取仓库列表（带部门 + 密级权限过滤）
@@ -52,11 +61,9 @@ router.get('/', authenticate, async (req, res, next) => {
     const userDeptName = profile?.department_name || '';
     const userSecretLevel = profile?.secret_level || 'secret';
 
-    // 获取 Gitea Token
+    // 使用用户自己的 Gitea token（同部门成员已加为协作者，自然能看到对应仓库）
     const giteaToken = req.user?.giteaToken || '';
-    const authHeader = giteaToken.startsWith('Basic ')
-      ? giteaToken
-      : `token ${giteaToken}`;
+    const authHeader = giteaToken.startsWith('Basic ') ? giteaToken : `token ${giteaToken}`;
 
     // 从 Gitea 获取仓库列表
     const response = await fetch(
@@ -93,9 +100,14 @@ router.get('/', authenticate, async (req, res, next) => {
     const formattedRepos = repos
       .map(repo => {
         const ownerName = repo.owner?.login || '';
-        const repoDept = userDeptMap[ownerName.toLowerCase()] || null;
+        const repoDeptFromOwner = userDeptMap[ownerName.toLowerCase()] || null;
         const desc = repo.description || '';
         const repoSecret = parseSecretLevel(desc);
+        // 优先使用描述中的 [部门=xxx] 标签，否则使用创建者的部门
+        const storedDeptName = parseDepartment(desc);
+        const repoDept = storedDeptName
+          ? { department_id: repoDeptFromOwner?.department_id || null, department_name: storedDeptName }
+          : repoDeptFromOwner;
 
         return {
           id: repo.id,
@@ -118,8 +130,8 @@ router.get('/', authenticate, async (req, res, next) => {
         // 管理员 —— 不过滤
         if (isAdmin) return true;
 
-        // 部门隔离：仓库必须有主管部门，且与用户同部门
-        if (!repo._department_id || repo._department_id !== userDeptId) {
+        // 部门隔离：仓库无部门信息时放行（owner 不在 user_profiles 中），有部门则必须匹配
+        if (repo._department_id && repo._department_id !== userDeptId) {
           return false;
         }
 
