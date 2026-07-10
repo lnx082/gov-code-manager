@@ -51,33 +51,77 @@ router.get('/', authenticate, async (req, res, next) => {
   }
 });
 
+// 步骤名 → 角色码映射
+function getRoleForStep(stepName) {
+  if (!stepName) return null;
+  const s = stepName.trim();
+  if (s.includes('系统管理员')) return 'admin';
+  if (s.includes('项目管理员')) return 'project_manager';
+  if (s.includes('开发人员')) return 'developer';
+  if (s.includes('审计')) return 'auditor';
+  return null;
+}
+
 // 获取待我审批列表
 router.get('/pending', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 10, type } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(pageSize);
-    
-    let query = db('approvals')
-      .where('status', 'pending');
+    const userRole = req.user.roleCode || 'user';
+    const isAdmin = userRole === 'admin';
+    const isManager = userRole === 'project_manager';
+
+    // 只查询 pending 状态
+    let query = db('approvals').where('status', 'pending');
 
     if (type) {
       query = query.where('operation_type', type);
     }
 
-    // 单独构建 count 查询避免 GROUP BY 冲突
-    let countQuery = db('approvals').where('status', 'pending');
-    if (type) countQuery = countQuery.where('operation_type', type);
-    const total = await countQuery.count('* as count').first();
+    const allPending = await query.orderBy('created_at', 'desc');
 
-    const list = await query.orderBy('created_at', 'desc')
-      .limit(parseInt(pageSize))
-      .offset(offset);
-    
+    // 按用户角色过滤：只展示当前步骤需要当前用户审批的申请
+    const filtered = [];
+    for (const approval of allPending) {
+      // 加载审批流程步骤
+      let steps = [];
+      if (approval.approval_flow_id) {
+        const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
+        if (flow) {
+          try {
+            steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []);
+          } catch { steps = []; }
+        }
+      }
+
+      const currentStepIdx = (approval.current_step || 1) - 1;
+      const currentStepName = steps[currentStepIdx] || '';
+      const requiredRole = getRoleForStep(currentStepName);
+
+      // 管理员能看到所有待审批
+      // 项目管理员看到自己角色的步骤
+      // 其他角色同理
+      if (isAdmin) {
+        filtered.push(approval);
+      } else if (requiredRole && requiredRole === userRole) {
+        filtered.push(approval);
+      }
+      // 如果没有审批流程，所有人都能看到（兼容旧数据）
+      else if (!approval.approval_flow_id) {
+        filtered.push(approval);
+      }
+    }
+
+    const total = filtered.length;
+    const paged = filtered.slice(
+      (parseInt(page) - 1) * parseInt(pageSize),
+      parseInt(page) * parseInt(pageSize)
+    );
+
     res.json({
       code: 200,
       data: {
-        list,
-        total: parseInt(total.count),
+        list: paged,
+        total,
         page: parseInt(page),
         pageSize: parseInt(pageSize),
       },
@@ -241,10 +285,15 @@ router.post('/', authenticate, async (req, res, next) => {
       if (defaultFlow) flowId = defaultFlow.flow_id;
     }
 
+    // 将操作参数 JSON 附在 description 末尾，供审批通过后使用
+    const fullDescription = body
+      ? (description ? description + '\n<!--BODY ' + body + ' BODY-->' : '<!--BODY ' + body + ' BODY-->')
+      : description;
+
     const [insertId] = await db('approvals').insert({
       operation_type: operationType,
       title,
-      description,
+      description: fullDescription,
       repo_owner: repoOwner,
       repo_name: repoName,
       source_branch: sourceBranch,
@@ -253,7 +302,6 @@ router.post('/', authenticate, async (req, res, next) => {
       secret_level: secretLevel || 'internal',
       gitea_pr_number: giteaPrNumber || null,
       approval_flow_id: flowId,
-      body: body || null,
       status: 'pending',
       current_step: 1,
       applicant_user_id: req.user.userId,
@@ -380,10 +428,12 @@ async function executePostApprovalAction(approval) {
   const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
   const adminToken = getCachedAdminToken() || '';
 
-  // 从 body 中解析操作参数
+  // 从 description 中解析操作参数（格式：<!--BODY {json} BODY-->）
   let bodyData = {};
   try {
-    bodyData = approval.body ? JSON.parse(approval.body) : {};
+    const desc = approval.description || '';
+    const m = desc.match(/<!--BODY (.+?) BODY-->/);
+    if (m) bodyData = JSON.parse(m[1]);
   } catch { bodyData = {}; }
 
   if (approval.operation_type === 'version_release') {

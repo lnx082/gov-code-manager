@@ -12,8 +12,8 @@
         <el-form-item label="审批类型">
           <el-select v-model="filterForm.type" placeholder="选择类型" clearable style="width: 150px">
             <el-option label="合并请求" value="merge" />
-            <el-option label="版本发布" value="version" />
-            <el-option label="基线申请" value="baseline" />
+            <el-option label="版本发布" value="version_release" />
+            <el-option label="基线申请" value="baseline_create" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -245,12 +245,12 @@ async function submitApproval() {
 }
 
 function getTypeTagType(type) {
-  const map = { 'merge': 'primary', 'version': 'success', 'baseline': 'warning', 'branch': 'info' }
+  const map = { 'merge': 'primary', 'version_release': 'success', 'baseline_create': 'warning', 'branch': 'info' }
   return map[type] || 'info'
 }
 
 function getTypeName(type) {
-  const map = { 'merge': '合并请求', 'version': '版本发布', 'baseline': '基线申请', 'branch': '分支创建' }
+  const map = { 'merge': '合并请求', 'version_release': '版本发布', 'baseline_create': '基线申请', 'branch': '分支创建' }
   return map[type] || type
 }
 
