@@ -1,3 +1,6 @@
+/**
+ * Gitea API 透传代理（提交差异/PR审批）
+ */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';

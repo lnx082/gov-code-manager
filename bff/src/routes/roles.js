@@ -1,3 +1,6 @@
+/**
+ * 角色管理 CRUD + 权限定义列表
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission, requireAdmin } from '../middleware/auth.js';

@@ -1,3 +1,6 @@
+/**
+ * 基线管理 CRUD（锁定/解锁/冻结）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

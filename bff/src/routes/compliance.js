@@ -1,3 +1,6 @@
+/**
+ * 合规检查
+ */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 

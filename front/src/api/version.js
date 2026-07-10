@@ -1,3 +1,6 @@
+/**
+ * 版本 API 封装（Tag 中心）
+ */
 import request from './index'
 
 // 获取版本列表

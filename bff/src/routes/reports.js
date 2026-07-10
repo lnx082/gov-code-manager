@@ -1,3 +1,6 @@
+/**
+ * 审计报表管理（生成/下载/删除）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';

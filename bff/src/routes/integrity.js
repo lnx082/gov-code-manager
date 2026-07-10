@@ -1,3 +1,6 @@
+/**
+ * 完整性校验
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

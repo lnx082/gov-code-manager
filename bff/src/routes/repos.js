@@ -1,3 +1,6 @@
+/**
+ * 仓库列表查询（Gitea 代理 + 部门隔离 + 密级权限过滤）
+ */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';

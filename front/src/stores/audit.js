@@ -1,3 +1,6 @@
+/**
+ * 审计状态管理（日志/预警）
+ */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getAuditLogs, getAuditLogDetail, getAuditStats, exportAuditLogs } from '@/api/bff'

@@ -1,3 +1,6 @@
+/**
+ * JWT 认证中间件 + 权限检查（authenticate/requirePermission/requireAdmin）
+ */
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 

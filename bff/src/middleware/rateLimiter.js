@@ -1,3 +1,6 @@
+/**
+ * 速率限制中间件（登录限流/API 限流）
+ */
 import rateLimit from 'express-rate-limit';
 
 // 登录限流：每分钟5次

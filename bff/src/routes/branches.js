@@ -1,3 +1,6 @@
+/**
+ * 分支管理（Gitea 代理：分支/PR CRUD）
+ */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';

@@ -1,3 +1,6 @@
+/**
+ * 用户管理 CRUD（锁定/重置密码/修改密码）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';

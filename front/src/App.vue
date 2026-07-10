@@ -1,3 +1,6 @@
+/**
+ * 根组件（布局框架/侧边栏/顶部导航/路由视图）
+ */
 <template>
   <div class="app-container" v-if="userStore.isAuthenticated">
     <!-- 顶部导航栏 - 政务风格 -->

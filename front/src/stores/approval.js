@@ -1,3 +1,6 @@
+/**
+ * 审批状态管理
+ */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getPendingApprovals, getMyApprovalRequests, getApprovalDetail, createApproval, processApproval, withdrawApproval } from '@/api/bff'

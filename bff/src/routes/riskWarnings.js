@@ -1,3 +1,6 @@
+/**
+ * 风险预警管理（列表/处理/统计）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';

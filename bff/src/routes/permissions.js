@@ -1,3 +1,6 @@
+/**
+ * 权限定义列表
+ */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 

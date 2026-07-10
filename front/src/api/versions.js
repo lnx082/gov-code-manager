@@ -1,3 +1,6 @@
+/**
+ * 版本 API 封装（通用）
+ */
 import request from './index'
 
 // 获取版本列表

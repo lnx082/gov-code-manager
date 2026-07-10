@@ -1,3 +1,6 @@
+/**
+ * 版本管理 CRUD（版本创建/基线/审批联动）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

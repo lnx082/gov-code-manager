@@ -1,3 +1,6 @@
+/**
+ * 数据库备份管理（创建/恢复/删除）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';

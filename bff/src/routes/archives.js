@@ -1,3 +1,6 @@
+/**
+ * 归档管理 CRUD（归档/恢复）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

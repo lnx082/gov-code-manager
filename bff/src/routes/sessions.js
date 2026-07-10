@@ -1,3 +1,6 @@
+/**
+ * 在线会话管理（管理员查看全部会话）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';

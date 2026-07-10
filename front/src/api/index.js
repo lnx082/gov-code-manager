@@ -1,3 +1,6 @@
+/**
+ * Axios 实例创建 + 请求/响应拦截器（BFF + Gitea 双通道）
+ */
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import router from '@/router'

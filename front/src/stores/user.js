@@ -1,3 +1,6 @@
+/**
+ * 用户状态管理（认证/权限/登录/登出）
+ */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, getUserInfo as getUserInfoApi, logout as logoutApi } from '@/api/user'

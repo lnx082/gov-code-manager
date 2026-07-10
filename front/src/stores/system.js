@@ -1,3 +1,6 @@
+/**
+ * 系统状态管理（仪表盘统计/系统状态）
+ */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getDashboardStats, getTrends, getDistribution } from '@/api/bff'

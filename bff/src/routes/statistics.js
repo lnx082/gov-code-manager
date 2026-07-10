@@ -1,3 +1,6 @@
+/**
+ * 仪表盘统计数据 + 趋势数据
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

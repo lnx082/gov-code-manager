@@ -1,3 +1,6 @@
+/**
+ * Vue Router 路由配置（22 条路由 + 导航守卫）
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'

@@ -1,3 +1,6 @@
+/**
+ * 仓库状态管理
+ */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getRepoList, getRepoDetail } from '@/api/repo'

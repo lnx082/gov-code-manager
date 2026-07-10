@@ -1,3 +1,6 @@
+/**
+ * 部门管理 CRUD（树形结构）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';

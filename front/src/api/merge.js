@@ -1,3 +1,6 @@
+/**
+ * 合并请求 API 封装
+ */
 import request from './index'
 
 // 获取分支列表

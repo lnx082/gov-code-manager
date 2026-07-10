@@ -1,3 +1,6 @@
+/**
+ * 版本废弃管理
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

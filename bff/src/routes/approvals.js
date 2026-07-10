@@ -1,3 +1,6 @@
+/**
+ * 审批流程 CRUD + 处理（创建/审批/统计/合并请求）
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';

@@ -1,3 +1,6 @@
+/**
+ * 审计日志查询 + 完整性验证
+ */
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';

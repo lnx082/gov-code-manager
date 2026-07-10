@@ -1,3 +1,6 @@
+/**
+ * 用户认证 API 封装（登录/登出/用户信息）
+ */
 import request from './index'
 
 // 用户登录

@@ -1,3 +1,6 @@
+/**
+ * 用户登录/登出认证（Gitea 认证 + JWT 签发 + 本地用户同步）
+ */
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';

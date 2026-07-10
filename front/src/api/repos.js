@@ -1,3 +1,6 @@
+/**
+ * 仓库 API 封装（通用版）
+ */
 import request from './index'
 
 // 获取仓库列表
