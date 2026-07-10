@@ -14,7 +14,7 @@
     <el-table :data="archiveList" v-loading="loading" stripe border>
       <el-table-column prop="tag_name" label="版本号" width="120" />
       <el-table-column label="所属仓库" width="200">
-        <template #default="{ row }">{{ row.repo_owner }}/{{ row.repo_name }}</template>
+        <template #default="{ row }">{{ getRepoDisplay(row.repo_owner, row.repo_name) }}</template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
@@ -26,7 +26,7 @@
       </el-table-column>
       <el-table-column label="操作" width="100">
         <template #default="{ row }">
-          <el-button type="primary" link @click="restore(row)" v-if="row.status === 'active'">恢复</el-button>
+          <el-button type="primary" link @click="restore(row)" v-if="row.status === 'active' && isAdmin">恢复</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -70,6 +70,7 @@ import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const isPM = computed(() => userStore.role === 'project_manager')
+const isAdmin = computed(() => userStore.role === 'admin')
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -158,6 +159,11 @@ async function restore(row) {
     await restoreArchive(row.archive_id)
     ElMessage.success('已恢复'); loadArchives()
   } catch (e) { if (e !== 'cancel') ElMessage.warning('恢复失败') }
+}
+
+function getRepoDisplay(owner, name) {
+  const repo = repoList.value.find(r => r.owner === owner && r.repo === name)
+  return repo?.displayName || `${owner}/${name}`
 }
 
 function formatTime(time) {
