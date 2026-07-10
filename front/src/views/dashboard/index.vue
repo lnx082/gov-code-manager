@@ -409,7 +409,7 @@ function getTypeName(type) {
         h2 {
           font-size: 52px;
           margin-bottom: 20px;
-          font-family: 'Ma Shan Zheng', 'STLiti', 'FZXiaoZhuanTi', cursive;
+          font-family: 'MaoTi', 'STLiti', 'FZXiaoZhuanTi', cursive;
           font-weight: normal;
           background: linear-gradient(180deg, #ffd700 0%, #ff8c00 50%, #ffd700 100%);
           -webkit-background-clip: text;
