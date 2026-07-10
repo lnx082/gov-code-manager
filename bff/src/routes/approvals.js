@@ -439,12 +439,13 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
   }
 });
 
-// 审批通过后的后置操作：创建 Gitea tag / release
+// 审批通过后的后置操作
 async function executePostApprovalAction(approval) {
   const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
   const adminToken = config.gitea?.token || '';
+  const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
 
-  // 从 description 中解析操作参数（格式：<!--BODY {json} BODY-->）
+  // 从 description 中解析操作参数
   let bodyData = {};
   try {
     const desc = approval.description || '';
@@ -458,7 +459,6 @@ async function executePostApprovalAction(approval) {
       console.error('[PostApproval] 缺少版本发布参数:', bodyData);
       return;
     }
-    const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
 
     // 1. 创建 tag
     const tagRes = await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}/tags`, {
@@ -489,7 +489,59 @@ async function executePostApprovalAction(approval) {
     }
   } else if (approval.operation_type === 'baseline_create') {
     await executeBaselineCreate(approval);
+  } else if (approval.operation_type === 'baseline_archive') {
+    // 基线归档：插入 archives 表 + 归档 Gitea 仓库
+    const { baselineId, repoOwner, repoName, tagName } = bodyData;
+    if (baselineId) {
+      await db('baselines').where('baseline_id', baselineId).update({ status: 'archived' });
+    }
+    await db('archives').insert({
+      repo_owner: repoOwner, repo_name: repoName, tag_name: tagName,
+      status: 'active', archived_by: approval.applicant_user_id, created_at: new Date()
+    });
+    // 归档 Gitea 仓库（设为只读）
+    if (repoOwner && repoName) {
+      try {
+        await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+          body: JSON.stringify({ archived: true }),
+        });
+        console.log(`[PostApproval] 仓库 ${repoOwner}/${repoName} 已归档`);
+      } catch (e) { console.warn('[PostApproval] Gitea 归档失败:', e.message); }
+    }
+  } else if (approval.operation_type === 'baseline_change') {
+    // 基线变更：修改基线对应的版本
+    const { baselineId, newTagName, newSha } = bodyData;
+    console.log(`[PostApproval] 基线变更: baselineId=${baselineId}, newTag=${newTagName}`);
+    if (baselineId) {
+      const result = await db('baselines').where('baseline_id', baselineId).update({
+        tag_name: newTagName, tag_sha: newSha || null
+      });
+      console.log(`[PostApproval] 基线更新结果: ${result}`);
+    }
+  } else if (approval.operation_type === 'baseline_freeze') {
+    // 基线冻结：锁定基线 + 归档仓库
+    const { baselineId, repoOwner, repoName } = bodyData;
+    if (baselineId) {
+      await db('baselines').where('baseline_id', baselineId).update({
+        is_locked: true, status: 'frozen', locked_at: new Date(), locked_by: approval.applicant_user_id
+      });
+    }
+    if (repoOwner && repoName) {
+      try {
+        await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+          body: JSON.stringify({ archived: true }),
+        });
+        console.log(`[PostApproval] 仓库 ${repoOwner}/${repoName} 已冻结归档`);
+      } catch (e) { console.warn('[PostApproval] Gitea 冻结失败:', e.message); }
+    }
   }
 }
+
+// 导出给审批路由使用
+export { executePostApprovalAction };
 
 export default router;

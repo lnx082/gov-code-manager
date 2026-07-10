@@ -116,6 +116,22 @@
         </el-timeline>
       </div>
     </el-dialog>
+
+    <!-- 基线变更对话框 -->
+    <el-dialog v-model="changeDialogVisible" title="基线变更" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="当前版本"><el-tag>{{ changeCurrentTag }}</el-tag></el-form-item>
+        <el-form-item label="新版本">
+          <el-select v-model="changeForm.newTagName" placeholder="选择新版本" style="width:100%" filterable>
+            <el-option v-for="t in changeTagOptions" :key="t" :label="t" :value="t" :disabled="t === changeCurrentTag" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="changeDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitChange">提交审批</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -124,6 +140,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBaselineList, createBaseline, freezeBaseline } from '@/api/admin'
 import { getTags, getMyRepos } from '@/api/gitea'
+import { createApproval } from '@/api/bff'
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
@@ -284,20 +301,65 @@ function viewDetail(row) {
   detailDialogVisible.value = true
 }
 
+const changeDialogVisible = ref(false)
+const changeForm = reactive({ baselineId: '', newTagName: '', repoOwner: '', repoName: '' })
+const changeTagOptions = ref([])
+const changeCurrentTag = ref('')
+
 function handleChange(row) {
-  ElMessage.info('基线变更功能开发中')
+  changeForm.baselineId = row.baseline_id
+  changeForm.repoOwner = row.repo_owner || row.repoOwner
+  changeForm.repoName = row.repo_name || row.repoName
+  changeForm.newTagName = ''
+  changeCurrentTag.value = row.tag_name || row.version || ''
+  changeTagOptions.value = []
+  changeDialogVisible.value = true
+  // 加载该仓库的所有版本
+  getTags(changeForm.repoOwner, changeForm.repoName).then(res => {
+    const tags = res.data || res
+    changeTagOptions.value = (Array.isArray(tags) ? tags : []).map(t => t.name)
+  }).catch(() => { changeTagOptions.value = [] })
+}
+
+async function submitChange() {
+  if (!changeForm.newTagName) { ElMessage.warning('请选择新版本'); return }
+  try {
+    await createApproval({
+      operationType: 'baseline_change',
+      title: `基线变更: ${changeCurrentTag.value} → ${changeForm.newTagName}`,
+      description: `将基线版本从 ${changeCurrentTag.value} 变更为 ${changeForm.newTagName}`,
+      repoOwner: changeForm.repoOwner, repoName: changeForm.repoName,
+      body: JSON.stringify({
+        baselineId: changeForm.baselineId, newTagName: changeForm.newTagName, newSha: ''
+      })
+    })
+    ElMessage.success('变更申请已提交，等待审批')
+    changeDialogVisible.value = false
+    loadBaselines()
+  } catch (e) {
+    ElMessage.error('提交失败: ' + (e?.response?.data?.message || e?.message || ''))
+  }
 }
 
 async function handleFreeze(row) {
   try {
-    await ElMessageBox.confirm(`确定要冻结基线 "${row.name}" 吗？冻结后该基线将不能再用于上线。`, '冻结基线', { type: 'warning' })
-    await freezeBaseline(row.id)
-    ElMessage.success('基线已冻结')
-    loadBaselines()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.warning('冻结基线失败')
-    }
+    await ElMessageBox.confirm(
+      `确定要冻结基线 "${row.name}" 吗？冻结后该基线不能再变更，对应仓库将被锁定为只读。`,
+      '冻结基线', { type: 'warning' }
+    )
+    await createApproval({
+      operationType: 'baseline_freeze',
+      title: `基线冻结: ${row.name}`,
+      description: `冻结基线 ${row.name}，锁定仓库`,
+      repoOwner: row.repo_owner || row.repoOwner, repoName: row.repo_name || row.repoName,
+      body: JSON.stringify({
+        baselineId: row.baseline_id,
+        repoOwner: row.repo_owner || row.repoOwner, repoName: row.repo_name || row.repoName
+      })
+    })
+    ElMessage.success('冻结申请已提交，等待审批')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.warning('冻结失败: ' + (e?.message || ''))
   }
 }
 

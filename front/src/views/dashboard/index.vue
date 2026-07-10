@@ -322,7 +322,8 @@ async function loadRecentActivities() {
     const list = data.list || data.records || data || []
     recentActivities.value = (Array.isArray(list) ? list : []).map(item => {
       const statusText = item.status === 'approved' ? '审批通过' : item.status === 'rejected' ? '审批拒绝' : '提交了审批'
-      const typeText = item.operation_type === 'version_release' ? '版本发布' : item.operation_type === 'baseline_create' ? '基线申请' : '合并请求'
+      const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档' }
+      const typeText = typeMap[item.operation_type] || '合并请求'
       return {
         id: item.approval_id,
         user: item.applicant_username || '未知',
