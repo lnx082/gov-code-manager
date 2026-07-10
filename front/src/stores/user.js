@@ -18,10 +18,9 @@ export const useUserStore = defineStore('user', () => {
       'admin': '系统管理员',
       'project_manager': '项目管理员',
       'developer': '开发人员',
-      'auditor': '审计人员',
-      'user': '普通用户'
+      'auditor': '审计人员'
     }
-    return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '普通用户'
+    return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '开发人员'
   })
 
   async function initUser() {

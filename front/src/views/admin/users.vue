@@ -41,7 +41,7 @@
       </el-table-column>
       <el-table-column prop="role_name" label="角色" width="120">
         <template #default="{ row }">
-          <el-tag type="primary" size="small">{{ row.role_name || '普通用户' }}</el-tag>
+          <el-tag type="primary" size="small">{{ row.role_name || '开发人员' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="department_name" label="部门" width="120">
@@ -347,7 +347,6 @@ async function loadRoles() {
       { code: 'project_manager', name: '项目管理员' },
       { code: 'developer', name: '开发人员' },
       { code: 'auditor', name: '审计人员' },
-      { code: 'user', name: '普通用户' }
     ]
   }
 }

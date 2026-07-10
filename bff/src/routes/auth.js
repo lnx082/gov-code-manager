@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import db from '../database/connection.js';
+import { setCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -28,46 +29,65 @@ router.post('/login', authLimiter, async (req, res, next) => {
       });
     }
 
-    // 从 Gitea 用户信息构建权限
-    const isAdmin = giteaUser.is_admin === true;
-    const role = isAdmin ? 'admin' : 'user';
-    const roleName = isAdmin ? '系统管理员' : '普通用户';
-    const permissions = isAdmin
-      ? ['*']
-      : ['repo:view', 'branch:view', 'version:view'];
+    // 初始化角色/权限（新用户默认，已有用户从数据库加载）
+    let isAdmin = false;
+    let role = 'user';
+    let permissions = ['repo:view', 'branch:view', 'version:view'];
+
+    // 角色名映射
+    function getRoleName(roleCode) {
+      const map = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员' };
+      return map[roleCode] || '开发人员';
+    }
 
     // 同步用户信息到本地 user_profiles 表
     try {
       const existingUser = await db('user_profiles').where('user_id', giteaUser.id).first();
       const now = new Date();
-      const profileData = {
-        gitea_username: giteaUser.login || username,
-        nickname: giteaUser.full_name || username,
-        email: giteaUser.email || '',
-        role_code: role,
-        last_login_time: now,
-        last_login_ip: clientIp,
-        updated_at: now,
-      };
+
       if (existingUser) {
-        await db('user_profiles').where('user_id', giteaUser.id).update(profileData);
+        // 已有用户：只更新登录时间，不覆盖角色/权限
+        await db('user_profiles').where('user_id', giteaUser.id).update({
+          gitea_username: giteaUser.login || username,
+          nickname: giteaUser.full_name || username,
+          email: giteaUser.email || '',
+          last_login_time: now,
+          last_login_ip: clientIp,
+          updated_at: now,
+        });
+        // 使用数据库中已有的角色和权限
+        role = existingUser.role_code || 'user';
+        permissions = await loadRolePermissions(role);
+        isAdmin = (role === 'admin');
       } else {
+        // 新用户：从 Gitea 推断角色（仅 admin 可识别，其他默认 user）
+        role = giteaUser.is_admin === true ? 'admin' : 'user';
+        isAdmin = (role === 'admin');
+        permissions = isAdmin ? ['*'] : ['repo:view', 'branch:view', 'version:view'];
         await db('user_profiles').insert({
           user_id: giteaUser.id,
-          ...profileData,
+          gitea_username: giteaUser.login || username,
+          nickname: giteaUser.full_name || username,
+          email: giteaUser.email || '',
+          role_code: role,
           department_id: null,
           secret_level: 'internal',
           is_active: true,
           account_locked: false,
           failed_login_attempts: 0,
           permissions: JSON.stringify([]),
+          last_login_time: now,
+          last_login_ip: clientIp,
           created_at: now,
+          updated_at: now,
         });
       }
     } catch (profileError) {
       // 本地用户同步失败不影响登录
       console.warn('同步用户信息失败:', profileError.message);
     }
+
+    const roleName = getRoleName(role);
 
     // 创建会话记录
     try {
@@ -88,6 +108,8 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     // 为 BFF 代理请求创建 Gitea API Token
     const giteaToken = await createGiteaToken(username, password);
+    // 缓存 Gitea Token，供仓库/分支列表接口在部门过滤前拉取全量数据
+    setCachedAdminToken(giteaToken);
 
     // 生成 JWT（包含 Gitea 用户信息和 Gitea Token）
     const token = jwt.sign(
@@ -192,6 +214,18 @@ async function authenticateWithGitea(username, password) {
     console.error('Gitea 认证失败:', error.message);
     return null;
   }
+}
+
+// 从数据库加载角色对应的权限列表
+async function loadRolePermissions(roleCode) {
+  try {
+    const role = await db('roles').where('code', roleCode).first();
+    if (role && role.permissions) {
+      const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+      return Array.isArray(perms) ? perms : ['repo:view', 'branch:view', 'version:view'];
+    }
+  } catch (e) { /* ignore */ }
+  return ['repo:view', 'branch:view', 'version:view'];
 }
 
 // 为用户生成 Gitea Basic Auth 凭证（用于 BFF 代理和前端直连 Gitea API）

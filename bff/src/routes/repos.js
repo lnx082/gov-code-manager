@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
 import db from '../database/connection.js';
+import { getCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -49,8 +50,8 @@ router.get('/', authenticate, async (req, res, next) => {
     const userDeptName = profile?.department_name || '';
     const userSecretLevel = profile?.secret_level || 'secret';
 
-    // 获取 Gitea Token
-    const giteaToken = req.user?.giteaToken || '';
+    // 所有用户统一用缓存 admin token 拉全量仓库，后续按部门 + 密级过滤
+    let giteaToken = getCachedAdminToken() || req.user?.giteaToken || '';
     const authHeader = giteaToken.startsWith('Basic ')
       ? giteaToken
       : `token ${giteaToken}`;

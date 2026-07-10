@@ -23,7 +23,7 @@
             </div>
             <div class="user-details">
               <span class="username">{{ userStore.username }}</span>
-              <span class="user-role">{{ userStore.role }}</span>
+              <span class="user-role">{{ userStore.roleName }}</span>
             </div>
             <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
           </div>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
+import { getCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -189,7 +190,12 @@ router.all('/*', authenticate, async (req, res, next) => {
     const queryString = new URLSearchParams(req.query).toString();
     if (queryString) giteaUrl += '?' + queryString;
 
-    const giteaToken = req.user?.giteaToken || '';
+    // 读操作（GET）：使用缓存的 admin token，确保能看到所有仓库（部门过滤在上层处理）
+    let giteaToken = req.user?.giteaToken || '';
+    if (req.method === 'GET') {
+      const cached = getCachedAdminToken();
+      if (cached) giteaToken = cached;
+    }
     const authHeader = giteaToken || req.headers.authorization || '';
 
     const fetchOptions = {
