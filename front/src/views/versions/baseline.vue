@@ -78,11 +78,9 @@
         <el-form-item label="基线说明" prop="description" class="form-required">
           <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="说明基线的用途和适用范围" />
         </el-form-item>
-        <el-form-item label="审批流程">
-          <el-select v-model="createForm.approvalFlowId" style="width: 100%" clearable>
-            <el-option v-for="flow in approvalFlows" :key="flow.id" :label="flow.name" :value="flow.id" />
-          </el-select>
-        </el-form-item>
+        <div class="form-tip" style="margin-left:120px;margin-bottom:12px;color:#909399;font-size:12px">
+          提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
@@ -126,7 +124,6 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBaselineList, createBaseline, freezeBaseline } from '@/api/admin'
 import { getTags, getMyRepos } from '@/api/gitea'
-import { getApprovalFlows } from '@/api/bff'
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
@@ -135,7 +132,6 @@ const detailDialogVisible = ref(false)
 const baselineList = ref([])
 const versionOptions = ref([])
 const repoList = ref([])
-const approvalFlows = ref([])
 const filterRepoId = ref('')
 const versionSearch = ref('')
 
@@ -151,8 +147,7 @@ function parseDisplayName(desc, fallback) {
 const createForm = reactive({
   name: '',
   versionKey: '',
-  description: '',
-  approvalFlowId: ''
+  description: ''
 })
 
 const createRules = {
@@ -176,19 +171,8 @@ const filteredVersionOptions = computed(() => {
 
 onMounted(() => {
   loadBaselines()
-  loadData()
+  loadVersions()
 })
-
-async function loadData() {
-  await Promise.all([loadVersions(), loadApprovalFlows()])
-}
-
-async function loadApprovalFlows() {
-  try {
-    const res = await getApprovalFlows()
-    approvalFlows.value = (res.data || res).list || (res.data || res) || []
-  } catch { /* keep empty */ }
-}
 
 async function loadBaselines() {
   loading.value = true
@@ -261,7 +245,6 @@ function showCreateDialog() {
   createForm.name = ''
   createForm.versionKey = ''
   createForm.description = ''
-  createForm.approvalFlowId = ''
   filterRepoId.value = ''
   versionSearch.value = ''
   createDialogVisible.value = true
@@ -285,8 +268,7 @@ async function handleCreate() {
       repoOwner: version.repoOwner,
       repoName: version.repoName,
       sha: version.sha,
-      description: createForm.description,
-      approvalFlowId: createForm.approvalFlowId || undefined
+      description: createForm.description
     })
     ElMessage.success('基线创建申请已提交，等待审批')
     createDialogVisible.value = false

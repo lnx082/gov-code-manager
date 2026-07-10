@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';
+import config from '../config/index.js';
+import { getCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -227,7 +229,17 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // 创建审批申请
 router.post('/', authenticate, async (req, res, next) => {
   try {
-    const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel, giteaPrNumber } = req.body;
+    const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel, giteaPrNumber, approvalFlowId, body } = req.body;
+
+    // 未指定审批流程时，自动使用默认流程
+    let flowId = approvalFlowId || null;
+    if (!flowId) {
+      const defaultFlow = await db('approval_flows')
+        .where('is_default', true)
+        .where('is_active', true)
+        .first();
+      if (defaultFlow) flowId = defaultFlow.flow_id;
+    }
 
     const [insertId] = await db('approvals').insert({
       operation_type: operationType,
@@ -240,6 +252,8 @@ router.post('/', authenticate, async (req, res, next) => {
       urgency: urgency || 'normal',
       secret_level: secretLevel || 'internal',
       gitea_pr_number: giteaPrNumber || null,
+      approval_flow_id: flowId,
+      body: body || null,
       status: 'pending',
       current_step: 1,
       applicant_user_id: req.user.userId,
@@ -253,6 +267,7 @@ router.post('/', authenticate, async (req, res, next) => {
       message: '审批申请已提交',
       data: {
         approvalId: insertId,
+        approvalFlowId: flowId,
       },
     });
   } catch (error) {
@@ -260,49 +275,48 @@ router.post('/', authenticate, async (req, res, next) => {
   }
 });
 
-// 处理审批
+// 处理审批（支持多步审批流程）
 router.post('/:id/process', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { action, body } = req.body;
-    
+
     // 兼容 Gitea 格式 (APPROVE/REJECT) 和其他格式 (approved/rejected)
-    const normalizedAction = action === 'APPROVE' || action === 'approved' ? 'approved' : 
+    const normalizedAction = action === 'APPROVE' || action === 'approved' ? 'approved' :
                             action === 'REJECT' || action === 'rejected' ? 'rejected' : action;
-    
+
     // 审批意见不能为空
     if (!body || body.trim() === '') {
-      return res.status(400).json({ 
-        code: 400, 
-        message: '审批意见不能为空，请填写审批说明' 
+      return res.status(400).json({
+        code: 400,
+        message: '审批意见不能为空，请填写审批说明'
       });
     }
-    
+
     const approval = await db('approvals').where('approval_id', id).first();
     if (!approval) {
       return res.status(404).json({ code: 404, message: '审批不存在' });
     }
-    
+
     // 检查是否已处理过
     if (approval.status !== 'pending') {
-      return res.status(400).json({ 
-        code: 400, 
-        message: `该审批已处理，当前状态：${approval.status}` 
+      return res.status(400).json({
+        code: 400,
+        message: `该审批已处理，当前状态：${approval.status}`
       });
     }
-    
-    // 更新审批状态
-    const newStatus = normalizedAction;
-    
-    await db('approvals')
-      .where('approval_id', id)
-      .update({
-        status: newStatus,
-        updated_at: new Date(),
-        completed_at: new Date(),
-      });
-    
-    // 记录审批操作（approval_records 表没有 reviewer_username 列）
+
+    // 获取审批流程定义（获取总步数）
+    let totalSteps = 1;
+    if (approval.approval_flow_id) {
+      const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
+      if (flow) {
+        const steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []);
+        totalSteps = steps.length || 1;
+      }
+    }
+
+    // 记录审批操作
     await db('approval_records').insert({
       approval_id: id,
       step: approval.current_step,
@@ -311,14 +325,105 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
       comment: body.trim(),
       action_time: new Date(),
     });
-    
+
+    if (normalizedAction === 'rejected') {
+      // 拒绝：直接结束
+      await db('approvals').where('approval_id', id).update({
+        status: 'rejected',
+        updated_at: new Date(),
+        completed_at: new Date(),
+      });
+      return res.json({ code: 200, message: '审批已拒绝' });
+    }
+
+    // 通过：检查是否还有后续步骤
+    const nextStep = approval.current_step + 1;
+    if (nextStep <= totalSteps) {
+      // 还有下一步 → 进入下一轮审批
+      await db('approvals').where('approval_id', id).update({
+        current_step: nextStep,
+        status: 'pending',  // 保持 pending，等待下一步审批人
+        updated_at: new Date(),
+      });
+      return res.json({
+        code: 200,
+        message: `审批已通过（第 ${approval.current_step} 步），等待第 ${nextStep} 步审批`,
+        data: { nextStep, totalSteps }
+      });
+    }
+
+    // 所有步骤完成 → 最终通过 + 执行后置操作
+    await db('approvals').where('approval_id', id).update({
+      status: 'approved',
+      updated_at: new Date(),
+      completed_at: new Date(),
+    });
+
+    // 审批全部通过后，执行实际业务操作（如发布版本）
+    try {
+      await executePostApprovalAction(approval);
+    } catch (postErr) {
+      console.error('后置操作失败:', postErr.message);
+    }
+
     res.json({
       code: 200,
-      message: normalizedAction === 'approved' ? '审批已通过' : '审批已拒绝',
+      message: '审批全部通过，操作已执行',
     });
   } catch (error) {
     next(error);
   }
 });
+
+// 审批通过后的后置操作：创建 Gitea tag / release
+async function executePostApprovalAction(approval) {
+  const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
+  const adminToken = getCachedAdminToken() || '';
+
+  // 从 body 中解析操作参数
+  let bodyData = {};
+  try {
+    bodyData = approval.body ? JSON.parse(approval.body) : {};
+  } catch { bodyData = {}; }
+
+  if (approval.operation_type === 'version_release') {
+    const { repoOwner, repoName, tagName, releaseTitle, releaseBody, targetBranch, prerelease } = bodyData;
+    if (!repoOwner || !repoName || !tagName) {
+      console.error('[PostApproval] 缺少版本发布参数:', bodyData);
+      return;
+    }
+    const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
+
+    // 1. 创建 tag
+    const tagRes = await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+      body: JSON.stringify({ tag_name: tagName, message: releaseBody || tagName, target: targetBranch || 'main' }),
+    });
+    if (!tagRes.ok) {
+      const err = await tagRes.text();
+      console.error(`[PostApproval] Tag 创建失败: ${tagRes.status} ${err}`);
+      return;
+    }
+    console.log(`[PostApproval] Tag ${tagName} 创建成功`);
+
+    // 2. 创建 release
+    try {
+      await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}/releases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+        body: JSON.stringify({
+          tag_name: tagName, name: releaseTitle || tagName, body: releaseBody || '',
+          target_commitish: targetBranch || 'main', prerelease: prerelease || false,
+        }),
+      });
+      console.log(`[PostApproval] Release ${tagName} 创建成功`);
+    } catch (e) {
+      console.warn('[PostApproval] Release 创建失败（tag 已创建）:', e.message);
+    }
+  } else if (approval.operation_type === 'baseline_create') {
+    console.log(`[PostApproval] 基线 ${approval.title} 审批通过`);
+  }
+}
 
 export default router;

@@ -113,19 +113,9 @@
             <el-radio label="beta"><el-icon><VideoPlay /></el-icon> 测试版本</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="审批流程" prop="approvalFlowId">
-          <el-select v-model="createForm.approvalFlowId" placeholder="选择审批流程" style="width: 100%">
-            <el-option v-for="flow in approvalFlows" :key="flow.id" :label="flow.name" :value="flow.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="审批人" prop="reviewers">
-          <el-select v-model="createForm.reviewers" multiple placeholder="选择审批人" style="width: 100%">
-            <el-option v-for="u in reviewerOptions" :key="u.id" :label="u.username + (u.nickname ? ' (' + u.nickname + ')' : '')" :value="u.id" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="关联审批">
           <el-switch v-model="createForm.requireApproval" />
-          <span class="switch-tip">正式版本需要完成审批流程后才能创建</span>
+          <span class="switch-tip">提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -156,12 +146,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTags, getMyRepos, getBranches } from '@/api/gitea'
-import { getApprovalFlows, createApproval } from '@/api/bff'
-import { getUserList } from '@/api/user'
-import { useUserStore } from '@/stores/user'
+import { createApproval } from '@/api/bff'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
-
-const userStore = useUserStore()
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
@@ -175,8 +161,6 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const versionList = ref([])
 const repoList = ref([])
 const createBranchList = ref([])
-const approvalFlows = ref([])
-const reviewerOptions = ref([])
 
 // 解析中文显示名
 function parseDisplayName(desc, fallback) {
@@ -192,9 +176,7 @@ const createForm = reactive({
   name: '',
   message: '',
   type: 'release',
-  requireApproval: true,
-  approvalFlowId: '',
-  reviewers: []
+  requireApproval: true
 })
 
 const createRules = {
@@ -296,23 +278,8 @@ async function showCreateTag() {
   createForm.message = ''
   createForm.type = 'release'
   createForm.requireApproval = true
-  createForm.approvalFlowId = ''
-  createForm.reviewers = []
   createBranchList.value = []
   createTagDialogVisible.value = true
-  // 加载审批流程和审批人列表
-  if (approvalFlows.value.length === 0) {
-    try {
-      const flowRes = await getApprovalFlows()
-      approvalFlows.value = (flowRes.data || flowRes).list || (flowRes.data || flowRes) || []
-    } catch { /* keep empty */ }
-  }
-  if (reviewerOptions.value.length === 0) {
-    try {
-      const userRes = await getUserList({ page: 1, pageSize: 200 })
-      reviewerOptions.value = (userRes.data || userRes).list || (userRes.data || userRes) || []
-    } catch { /* keep empty */ }
-  }
 }
 
 async function handleCreateTag() {
@@ -327,17 +294,14 @@ async function handleCreateTag() {
   }
   createSubmitting.value = true
   try {
-    // 提交审批申请，审批通过后由 BFF 调用 Gitea API 创建 tag/release
+    // 提交审批申请（自动使用默认审批流程），审批通过后由 BFF 执行 tag/release
     await createApproval({
       operationType: 'version_release',
       title: createForm.title || `${repo.displayName} ${createForm.name}`,
       description: createForm.message,
-      target: `${repo.owner}/${repo.repo}`,
+      repoOwner: repo.owner,
+      repoName: repo.repo,
       targetBranch: createForm.targetBranch,
-      tagName: createForm.name.trim(),
-      releaseTitle: createForm.title || createForm.name.trim(),
-      releaseType: createForm.type,
-      // 附加信息存入 body，供 BFF 审批通过后使用
       body: JSON.stringify({
         repoOwner: repo.owner,
         repoName: repo.repo,
@@ -346,9 +310,7 @@ async function handleCreateTag() {
         releaseBody: createForm.message.trim(),
         targetBranch: createForm.targetBranch,
         prerelease: createForm.type !== 'release'
-      }),
-      approvalFlowId: createForm.approvalFlowId || undefined,
-      reviewerUserIds: createForm.reviewers.length > 0 ? createForm.reviewers : undefined
+      })
     })
     ElMessage.success('版本发布申请已提交，等待审批通过后将自动发布')
     createTagDialogVisible.value = false
