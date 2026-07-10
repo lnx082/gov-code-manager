@@ -269,9 +269,14 @@ router.all('/*', authenticate, async (req, res, next) => {
     const giteaToken = req.user?.giteaToken || '';
     const authHeader = giteaToken || req.headers.authorization || '';
 
+    // 清除条件请求头，防止 Gitea 返回 304 空响应
+    const forwardHeaders = { 'Authorization': authHeader, 'Content-Type': 'application/json' };
+    if (req.headers['if-none-match']) delete req.headers['if-none-match'];
+    if (req.headers['if-modified-since']) delete req.headers['if-modified-since'];
+
     const fetchOptions = {
       method: req.method,
-      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      headers: forwardHeaders,
     };
 
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
@@ -279,6 +284,10 @@ router.all('/*', authenticate, async (req, res, next) => {
     }
 
     const response = await fetch(giteaUrl, fetchOptions);
+    // 禁止缓存，防止浏览器返回 304 空数据
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = await response.json();

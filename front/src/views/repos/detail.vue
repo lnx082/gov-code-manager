@@ -236,7 +236,11 @@ async function loadMembers() {
     const m = await getRepoMembers(route.params.owner, route.params.name)
     const data = m.data || m; const arr = (Array.isArray(data) ? data : []).map(x => ({ username: x.username||x.login||'', role: x.permissions?.admin?'admin':x.permissions?.push?'write':'read' }))
     const cur = userStore.userInfo?.username || userStore.username || ''
-    if (cur && !arr.some(x => x.username===cur)) arr.unshift({ username: cur, role: 'owner' })
+    const repoOwner = route.params.owner || repoInfo.owner || ''
+    // 当前用户不在列表中则添加为 owner
+    if (cur && !arr.some(x => x.username===cur)) arr.unshift({ username: cur, role: cur === repoOwner ? 'owner' : (arr.length > 0 ? 'write' : 'owner') })
+    // 仓库拥有者不在列表中则添加
+    if (repoOwner && !arr.some(x => x.username===repoOwner)) arr.unshift({ username: repoOwner, role: 'owner' })
     memberList.value = arr
   } catch { memberList.value = [] }
   finally { memberLoading.value = false }

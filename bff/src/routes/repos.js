@@ -127,8 +127,8 @@ router.get('/', authenticate, async (req, res, next) => {
         // 管理员 —— 不过滤
         if (isAdmin) return true;
 
-        // 部门隔离：仓库必须有主管部门，且与用户同部门
-        if (!repo._department_id || repo._department_id !== userDeptId) {
+        // 部门隔离：仓库无部门信息时放行（owner 不在 user_profiles 中），有部门则必须匹配
+        if (repo._department_id && repo._department_id !== userDeptId) {
           return false;
         }
 
