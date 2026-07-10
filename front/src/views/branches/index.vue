@@ -88,11 +88,13 @@
           {{ formatTime(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
-          <el-button type="primary" link @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
-          <el-button type="danger" link @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
+          <div class="action-buttons">
+            <el-button size="small" @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
+            <el-button size="small" type="success" plain @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
+            <el-button size="small" type="danger" plain @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -177,7 +179,8 @@ async function loadBranches() {
         owner: r.owner?.login || r.owner?.username || r.owner || '',
         repo: r.name,
         repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
-        repoName: r.name
+        repoName: r.name,
+        defaultBranch: r.default_branch || 'main'
       }
     })
 
@@ -196,16 +199,24 @@ async function loadBranches() {
           repoId: repo.id,
           repoOwner: repo.owner,
           repoName: repo.repo,
-          displayName: repo.displayName
+          displayName: repo.displayName,
+          sha: b.commit?.sha || b.sha || '',
+          commitMessage: b.commit?.message || b.commitMessage || '',
+          author: b.commit?.author?.name || b.commit?.committer?.name || b.author || '',
+          updatedAt: b.commit?.author?.date || b.commit?.committer?.date || b.updatedAt || '',
+          isDefault: b.name === repo.defaultBranch,
+          isProtected: b.protected || false
         }))
       } catch { /* skip failed repos */ }
     }
-    branchList.value = branches
     pagination.total = branches.length
     stats.total = branches.length
     stats.protected = branches.filter(b => b.protected).length
     stats.active = branches.filter(b => !b.protected).length
     stats.pending = 0
+    // 客户端分页
+    const start = (pagination.page - 1) * pagination.pageSize
+    branchList.value = branches.slice(start, start + pagination.pageSize)
   } catch {
     ElMessage.warning('加载分支列表失败')
   } finally {
@@ -322,6 +333,13 @@ function formatTime(time) {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .pagination-wrapper {

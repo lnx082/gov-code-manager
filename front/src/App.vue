@@ -6,12 +6,11 @@
         <el-icon :size="28" class="header-emblem"><Platform /></el-icon>
         <div class="header-title">
           <h1>党政软件版本管控平台</h1>
-          <span class="header-subtitle">GovCode Version Control Platform</span>
         </div>
       </div>
       <div class="header-right">
         <el-badge :value="noticeCount" :hidden="noticeCount === 0" class="notice-badge">
-          <el-button class="header-btn" @click="showNoticeDialog = true">
+          <el-button class="header-btn" @click="showNoticeDialog = true; loadNotices()">
             <el-icon class="btn-icon"><Bell /></el-icon>
             <span class="btn-text">通知</span>
           </el-button>
@@ -93,7 +92,7 @@
             <el-menu-item index="/approval/history">审批历史</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="audit" v-if="userStore.hasPermission('audit:view')">
+          <el-sub-menu index="audit" v-if="userStore.role === 'admin' || userStore.role === 'auditor'">
             <template #title>
               <el-icon class="menu-icon"><Search /></el-icon>
               <span>审计管理</span>
@@ -115,10 +114,12 @@
           </el-sub-menu>
         </el-menu>
 
-        <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
-          <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
-        </div>
       </aside>
+
+      <!-- 侧边栏折叠按钮（固定屏幕左下角） -->
+      <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed" :style="{ left: sidebarCollapsed ? '64px' : '220px' }">
+        <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
+      </div>
 
       <!-- 主内容区 -->
       <main class="app-main">
@@ -132,14 +133,14 @@
 
     <!-- 底部版权 -->
     <footer class="gov-footer">
-      <p>党政软件版本管控平台 © 2024 版权所有 | 技术支持：信息化建设办公室</p>
+      <p>党政软件版本管控平台 © 2026 版权所有 | 技术支持：电科院52组</p>
     </footer>
 
     <!-- 通知弹窗 -->
     <el-dialog v-model="showNoticeDialog" title="系统通知" width="600px">
       <div class="notice-list">
         <el-empty v-if="notices.length === 0" description="暂无通知" />
-        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item">
+        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item" style="cursor:pointer" @click="showNoticeDialog = false; router.push('/approval/pending')">
           <div class="notice-title">{{ notice.title }}</div>
           <div class="notice-content">{{ notice.content }}</div>
           <div class="notice-time">{{ notice.createTime }}</div>
@@ -153,11 +154,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import request from '@/api'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -166,15 +168,43 @@ const sidebarCollapsed = ref(false)
 const showNoticeDialog = ref(false)
 const noticeCount = ref(0)
 const notices = ref([])
+let noticeTimer = null
 
-onMounted(() => {
-  userStore.initUser()
-  loadNotices()
+onMounted(async () => {
+  await userStore.initUser()
+  loadNoticeCount()
+  // 每 15 秒轮询一次通知数
+  noticeTimer = setInterval(loadNoticeCount, 15000)
 })
 
-function loadNotices() {
-  notices.value = []
-  noticeCount.value = notices.value.length
+onUnmounted(() => {
+  if (noticeTimer) clearInterval(noticeTimer)
+})
+
+async function loadNoticeCount() {
+  try {
+    const res = await request.get('/notifications/count')
+    noticeCount.value = (res.data || res)?.count || 0
+  } catch { noticeCount.value = 0 }
+}
+
+async function loadNotices() {
+  try {
+    const res = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
+    const list = (res.data || res)?.list || []
+    // 映射步骤号为人读名称
+    notices.value = list.map(item => {
+      const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
+      const stepText = stepNames[item.current_step] || `步骤 ${item.current_step}`
+      const typeMap = { version_release: '版本发布', baseline_create: '基线申请', merge: '合并请求' }
+      return {
+        id: item.approval_id,
+        title: item.title,
+        content: `${typeMap[item.operation_type] || item.operation_type} | ${stepText} | 申请人: ${item.applicant_username}`,
+        createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : ''
+      }
+    })
+  } catch { notices.value = [] }
 }
 
 function handleUserCommand(command) {
@@ -202,8 +232,8 @@ function handleUserCommand(command) {
 
 <style lang="scss" scoped>
 .app-container {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
@@ -331,6 +361,9 @@ function handleUserCommand(command) {
   transition: width 0.3s ease;
   overflow: hidden;
   border-right: 1px solid #e4e7ed;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 
   .sidebar-menu {
     flex: 1;
@@ -375,22 +408,28 @@ function handleUserCommand(command) {
     }
   }
 
-  .sidebar-toggle {
-    padding: 12px;
-    text-align: center;
-    color: #909399;
-    cursor: pointer;
-    background: #fafafa;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-    border-top: 1px solid #e4e7ed;
-    font-size: 14px;
+.sidebar-toggle {
+  position: fixed;
+  bottom: 0;
+  z-index: 101;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 0 6px 0 0;
+  transition: left 0.3s ease;
+  font-size: 14px;
 
-    &:hover {
-      background: #ffebee;
-      color: #c62828;
-    }
+  &:hover {
+    background: #ffebee;
+    color: #c62828;
   }
+}
 }
 
 /* 主内容区 */
@@ -403,11 +442,12 @@ function handleUserCommand(command) {
 
 /* 底部版权 */
 .gov-footer {
-  background: #303133;
-  color: rgba(255, 255, 255, 0.85);
-  padding: 12px 20px;
+  background: #fff;
+  color: #666;
+  padding: 16px 20px;
   text-align: center;
   font-size: 13px;
+  border-top: 1px solid #e4e7ed;
 }
 
 .notice-badge {

@@ -94,8 +94,9 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     const roleName = getRoleName(role);
 
-    // 创建会话记录
+    // 创建会话记录（先删旧记录，每人只保留一条）
     try {
+      await db('sessions').where('user_id', giteaUser.id).delete();
       const sessionId = `SESSION-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
       await db('sessions').insert({
         session_id: sessionId,

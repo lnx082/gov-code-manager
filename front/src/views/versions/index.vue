@@ -276,8 +276,9 @@ async function loadVersions() {
         })
       } catch { /* skip baseline check */ }
     }
-    versionList.value = allTags
     pagination.total = allTags.length
+    const start = (pagination.page - 1) * pagination.pageSize
+    versionList.value = allTags.slice(start, start + pagination.pageSize)
   } catch {
     ElMessage.warning('加载版本列表失败')
   } finally {
