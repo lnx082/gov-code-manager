@@ -354,11 +354,11 @@ export function getNotifications(params) {
 }
 
 export function markNotificationRead(notificationId) {
-  return bffService.put(`/notifications/${notificationId}/read`)
+  return bffService.post(`/notifications/${notificationId}/read`)
 }
 
 export function markAllNotificationsRead() {
-  return bffService.put('/notifications/read-all')
+  return bffService.post('/notifications/read-all')
 }
 
 export function publishNotification(data) {

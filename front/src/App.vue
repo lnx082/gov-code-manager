@@ -152,7 +152,9 @@
           <div class="notice-content">{{ notice.content }}</div>
           <div class="notice-footer">
             <span class="notice-time">{{ notice.createTime }}</span>
-            <el-button type="primary" link size="small" @click="handleNoticeClick(notice)">查看详情</el-button>
+            <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
+            <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
+            <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
           </div>
         </div>
       </div>
@@ -171,6 +173,7 @@ import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collectio
 import { useUserStore } from '@/stores/user'
 import request from '@/api'
 import { markNotificationRead } from '@/api/bff'
+
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -193,16 +196,23 @@ onUnmounted(() => {
 })
 
 async function loadNoticeCount() {
+  let count = 0
   try {
     const res = await request.get('/notifications/count')
-    noticeCount.value = (res.data || res)?.count || 0
-  } catch (_) { noticeCount.value = 0 }
+    count += (res.data || res)?.count || 0
+  } catch (_) { /* ignore */ }
+  try {
+    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 1, isRead: false } })
+    count += (sysRes.data || sysRes)?.total || 0
+  } catch (_) { /* ignore */ }
+  noticeCount.value = count
 }
 
 async function loadNotices() {
   const all = []
+  // 加载全部通知（含已读，便于展示历史）
   try {
-    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 10, isRead: false } })
+    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 50 } })
     const sysList = (sysRes.data || sysRes)?.list || []
     for (const item of sysList) {
       all.push({
@@ -211,21 +221,22 @@ async function loadNotices() {
         content: item.content || '',
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
         isSys: true,
-        notiId: item.notification_id
+        notiId: item.notification_id,
+        read: item.is_read === true || item.is_read === 'true'
       })
     }
   } catch (_) { /* ignore */ }
+  // 审批通知
   try {
     const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
     const pendList = (pendRes.data || pendRes)?.list || []
     const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
+    const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
     for (const item of pendList) {
-      const stepText = stepNames[item.current_step] || ('步骤 ' + item.current_step)
-      const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
       all.push({
-        id: item.approval_id,
+        id: 'pend_' + item.approval_id,
         title: item.title,
-        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + stepText + ' | 申请人: ' + item.applicant_username,
+        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + stepNames[item.current_step] + ' | 申请人: ' + item.applicant_username,
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
         isSys: false
       })
@@ -256,17 +267,22 @@ function handleUserCommand(command) {
   }
 }
 
-// 通知点击：系统通知标记已读，审批通知跳转审批页
-async function handleNoticeClick(notice) {
-  showNoticeDialog.value = false
-  if (notice.isSys && notice.notiId) {
+async function handleSysNotice(notice) {
+  if (notice.notiId) {
     try {
       await markNotificationRead(notice.notiId)
-      loadNoticeCount()
-    } catch (_) { /* ignore */ }
-  } else {
-    router.push('/approval/pending')
+      ElMessage.success('已标记为已读')
+    } catch {
+      ElMessage.warning('操作失败')
+    }
   }
+  notice.read = true
+  loadNoticeCount()
+}
+
+function handleApprovalNotice() {
+  showNoticeDialog.value = false
+  router.push('/approval/pending')
 }
 </script>
 
