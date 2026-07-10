@@ -120,6 +120,22 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { name, versionName, repoOwner, repoName, sha, description } = req.body;
 
+    // 同一仓库只能有一个活跃基线
+    const existingBaseline = await db('baselines')
+      .where('repo_owner', repoOwner).where('repo_name', repoName)
+      .where('status', 'active').first();
+    if (existingBaseline) {
+      return res.status(400).json({ code: 400, message: '该仓库已存在活跃基线，只能变更基线不能重复创建' });
+    }
+
+    // 同一仓库不能有多个待审批的基线创建申请
+    const pendingApproval = await db('approvals')
+      .where('repo_owner', repoOwner).where('repo_name', repoName)
+      .where('operation_type', 'baseline_create').where('status', 'pending').first();
+    if (pendingApproval) {
+      return res.status(400).json({ code: 400, message: '该仓库已有待审批的基线创建申请' });
+    }
+
     // 查找默认审批流程
     const defaultFlow = await db('approval_flows')
       .where('is_default', true).where('is_active', true).first();
@@ -158,6 +174,15 @@ async function executeBaselineCreate(approval) {
     const m = (approval.description || '').match(/<!--BODY (.+?) BODY-->/);
     if (m) bodyData = JSON.parse(m[1]);
   } catch { return; }
+
+  // 双重保险：同一仓库只能有一个活跃基线
+  const existing = await db('baselines')
+    .where('repo_owner', bodyData.repoOwner).where('repo_name', bodyData.repoName)
+    .where('status', 'active').first();
+  if (existing) {
+    console.warn(`[Baseline] 仓库 ${bodyData.repoOwner}/${bodyData.repoName} 已有活跃基线，跳过创建`);
+    return;
+  }
 
   await db('baselines').insert({
     baseline_name: bodyData.name,

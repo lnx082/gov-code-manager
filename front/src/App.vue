@@ -199,7 +199,7 @@ async function loadNotices() {
     notices.value = list.map(item => {
       const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
       const stepText = stepNames[item.current_step] || `步骤 ${item.current_step}`
-      const typeMap = { version_release: '版本发布', baseline_create: '基线申请', merge: '合并请求' }
+      const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
       return {
         id: item.approval_id,
         title: item.title,
