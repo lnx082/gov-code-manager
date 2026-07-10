@@ -14,7 +14,7 @@
           <el-button type="primary" size="large" @click="$router.push('/repos/create')">
             <el-icon><Plus /></el-icon> 创建仓库
           </el-button>
-          <el-button size="large" @click="$router.push('/approval/pending')">
+          <el-button size="large" @click="$router.push('/approval/pending')" v-if="isAdmin || userStore.role === 'project_manager'">
             <el-icon><DocumentChecked /></el-icon> 待我审批
             <el-badge :value="pendingApprovals" :hidden="pendingApprovals === 0" />
           </el-button>
