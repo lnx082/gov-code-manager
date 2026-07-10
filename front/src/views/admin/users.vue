@@ -428,7 +428,12 @@ async function handleSubmit() {
           secretLevel: userForm.secretLevel,
           sendNotify: userForm.sendNotify
         })
-        ElMessage.success('用户创建成功')
+        if (res.data?.giteaCreated) {
+          ElMessage.success('用户创建成功（已同步创建 Gitea 账户）')
+        } else {
+          const giteaErr = res.data?.giteaError || '无详细错误信息'
+          ElMessage.warning(`用户已创建（本地），但 Gitea 账户同步失败：${giteaErr}。请在 BFF 日志中查看详细信息。`)
+        }
       }
       showCreateDialog.value = false
       loadUsers()

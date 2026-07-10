@@ -112,18 +112,26 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
     
     // 获取 Gitea 的用户 ID（通过 Gitea API）
     let giteaUserId = null;
-    const giteaAdminToken = config.gitea?.token;
+    let giteaErrorMsg = '';
+    // 优先使用配置的 admin token，否则使用当前管理员用户的 Gitea 凭据
+    const giteaAdminToken = config.gitea?.token || req.user?.giteaToken;
     if (giteaAdminToken) {
       try {
         const giteaUrl = config.gitea.url;
+        // 智能设置 Authorization header：Basic 格式直接使用，纯 token 加 Bearer
+        const authHeader = giteaAdminToken.startsWith('Basic ') || giteaAdminToken.startsWith('Bearer ')
+          ? giteaAdminToken
+          : `Bearer ${giteaAdminToken}`;
+        console.log(`[Gitea] 尝试创建用户 ${username}，Auth 类型: ${authHeader.substring(0, 10)}...`);
         // 调用 Gitea API 创建用户
         const giteaRes = await fetch(`${giteaUrl}/api/v1/admin/users`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${giteaAdminToken}`
+            'Authorization': authHeader
           },
           body: JSON.stringify({
+            username: username,
             login_name: username,
             email: userEmail,
             password: password,
@@ -131,18 +139,27 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
             must_change_password: false
           })
         });
-        
+
         if (giteaRes.ok) {
           const giteaUser = await giteaRes.json();
           giteaUserId = giteaUser.id;
+          console.log(`[Gitea] 用户 ${username} 创建成功，Gitea ID: ${giteaUserId}`);
+        } else {
+          const errBody = await giteaRes.text();
+          giteaErrorMsg = `Gitea 返回 ${giteaRes.status}: ${errBody}`;
+          console.error(`[Gitea] 用户 ${username} 创建失败 — ${giteaErrorMsg}`);
         }
       } catch (giteaError) {
-        console.warn('Gitea 用户创建失败，将仅创建本地记录:', giteaError.message);
+        giteaErrorMsg = giteaError.message;
+        console.error('[Gitea] 用户创建请求异常:', giteaErrorMsg);
       }
+    } else {
+      giteaErrorMsg = '无可用的 Gitea 管理员凭据（未配置 GITEA_ADMIN_TOKEN 且当前用户无 giteaToken）';
+      console.warn('[Gitea] ' + giteaErrorMsg);
     }
     
     // 在本地数据库创建用户记录
-    // 若 Gitea 未提供用户 ID，使用负时间戳作为本地标识（避免 NULL 违反 NOT NULL）
+    // 若 Gitea 未提供用户 ID，使用负时间戳作为本地标识
     const localUserId = giteaUserId || -(Date.now() % 2147483647);
     await db('user_profiles').insert({
       user_id: localUserId,
@@ -160,10 +177,11 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
       updated_at: new Date(),
     });
     
+    const giteaCreated = !!giteaUserId;
     res.json({
       code: 200,
-      message: '用户创建成功',
-      data: { userId: localUserId }
+      message: giteaCreated ? '用户创建成功（已同步创建 Gitea 账户）' : '用户创建成功（本地记录，Gitea 同步未完成）',
+      data: { userId: localUserId, giteaCreated, giteaError: giteaErrorMsg || undefined }
     });
   } catch (error) {
     next(error);

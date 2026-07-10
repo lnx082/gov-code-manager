@@ -1,7 +1,17 @@
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import router from '@/router'
-import Cookies from 'js-cookie'
+
+// token 存储工具 — 使用 sessionStorage 实现标签页独立登录
+const TOKEN_KEY = 'gitea_token'
+const API_TOKEN_KEY = 'gitea_api_token'
+
+function getToken() { return sessionStorage.getItem(TOKEN_KEY) || '' }
+function setToken(v) { sessionStorage.setItem(TOKEN_KEY, v) }
+function removeToken() { sessionStorage.removeItem(TOKEN_KEY) }
+function getApiToken() { return sessionStorage.getItem(API_TOKEN_KEY) || '' }
+function setApiToken(v) { sessionStorage.setItem(API_TOKEN_KEY, v) }
+function removeApiToken() { sessionStorage.removeItem(API_TOKEN_KEY) }
 
 // 创建 BFF API 实例
 const service = axios.create({
@@ -15,7 +25,7 @@ const service = axios.create({
 // 请求拦截器 - BFF
 service.interceptors.request.use(
   config => {
-    const token = Cookies.get('gitea_token')
+    const token = getToken()
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
@@ -31,19 +41,19 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   response => {
     const res = response.data
-    
+
     // 根据业务状态码判断
     if (res.code !== undefined && res.code !== 200 && res.code !== 0) {
       ElMessage.error(res.message || '请求失败')
       return Promise.reject(new Error(res.message || '请求失败'))
     }
-    
+
     return res
   },
   error => {
     if (error.response) {
       const { status, data } = error.response
-      
+
       switch (status) {
         case 401:
           ElMessageBox.confirm('登录已过期，请重新登录', '提示', {
@@ -51,9 +61,10 @@ service.interceptors.response.use(
             cancelButtonText: '取消',
             type: 'warning'
           }).then(() => {
-            Cookies.remove('gitea_token')
-            router.push('/login')
-          })
+            removeToken()
+            removeApiToken()
+            window.location.href = '/login'
+          }).catch(() => {})
           break
         case 403:
           ElMessage.error(data?.message || '没有权限访问该资源')
@@ -70,7 +81,7 @@ service.interceptors.response.use(
     } else {
       ElMessage.error('网络连接失败，请检查网络')
     }
-    
+
     return Promise.reject(error)
   }
 )
@@ -91,8 +102,7 @@ const giteaService = axios.create({
 // Gitea 请求拦截器 — 通过 BFF 代理访问 Gitea，发送 JWT Token
 giteaService.interceptors.request.use(
   config => {
-    // 发送 JWT Token 给 BFF，BFF gitea.js 代理会提取 giteaToken 转发给 Gitea
-    const jwtToken = Cookies.get('gitea_token')
+    const jwtToken = getToken()
     if (jwtToken) {
       config.headers['Authorization'] = `Bearer ${jwtToken}`
     }
@@ -101,7 +111,23 @@ giteaService.interceptors.request.use(
   error => Promise.reject(error)
 )
 
+// Gitea 响应拦截器 — 拦截 401 清除过期 token
+giteaService.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      removeToken()
+      removeApiToken()
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 export { giteaService }
 
 // BFF Service 别名（与默认导出相同的实例）
 export const bffService = service
+
+// 暴露 token 工具给 store 使用
+export { getToken, setToken, removeToken, getApiToken, setApiToken, removeApiToken }
