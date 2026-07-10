@@ -40,7 +40,7 @@
       <el-form inline>
         <el-form-item label="仓库">
           <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 200px">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="分支类型">
@@ -69,7 +69,11 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="repoName" label="所属仓库" width="180" />
+      <el-table-column label="所属仓库" width="180">
+        <template #default="{ row }">
+          {{ row.displayName || row.repoName }}
+        </template>
+      </el-table-column>
       <el-table-column label="最新提交" min-width="200">
         <template #default="{ row }">
           <div class="commit-cell">
@@ -109,7 +113,7 @@
         </el-form-item>
         <el-form-item label="所属仓库" prop="repoId">
           <el-select v-model="createForm.repoId" placeholder="选择仓库">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="基于分支" prop="baseBranch">
@@ -161,14 +165,21 @@ async function loadBranches() {
     // Load repo list from Gitea
     const reposRes = await getMyRepos({ page: 1, limit: 100 })
     const repos = reposRes.data || reposRes
-    repoList.value = (Array.isArray(repos) ? repos : []).map(r => ({
-      id: r.id,
-      name: r.full_name || r.name,
-      owner: r.owner?.login || r.owner?.username || r.owner || '',
-      repo: r.name,
-      repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
-      repoName: r.name
-    }))
+    repoList.value = (Array.isArray(repos) ? repos : []).map(r => {
+      // 解析中文显示名
+      const desc = r.description || ''
+      const dm = desc.match(/\[显示名=([^\]]+)\]/)
+      const displayName = dm ? dm[1] : (r.full_name || r.name)
+      return {
+        id: r.id,
+        name: r.full_name || r.name,
+        displayName,
+        owner: r.owner?.login || r.owner?.username || r.owner || '',
+        repo: r.name,
+        repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
+        repoName: r.name
+      }
+    })
 
     // Load branches from each repo
     const branches = []
@@ -184,7 +195,8 @@ async function loadBranches() {
           ...b,
           repoId: repo.id,
           repoOwner: repo.owner,
-          repoName: repo.repo
+          repoName: repo.repo,
+          displayName: repo.displayName
         }))
       } catch { /* skip failed repos */ }
     }
