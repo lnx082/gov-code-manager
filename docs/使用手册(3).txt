@@ -1,0 +1,140 @@
+服务器ip：123.60.219.19   192.168.1.6
+账户密码： 用户root  密码 svcSVC123
+                用户 git 
+gitea  管理员用户名besti  密码huawei666
+xvhaoyang_wxb        Gov@123456 新：12345678
+数据库  用户名omm  密码Omm@312312
+数据库超级用户密码openGauss@123
+
+./sysinfo.sh     root桌面下运行这个指令可以看服务器全局信息概览
+# SSH 连接服务器
+ssh root@123.60.219.19
+
+# 使用 gsql 连接数据库（openGauss 官方工具）
+gsql -d gov_code_manager -h 127.0.0.1 -p 5432 -U dev_admin -W Besti@2026_db
+
+# 或者如果数据库在远程
+gsql -d gov_code_manager -h 123.60.219.19 -p 5432 -U dev_admin -W Besti@2026_db
+
+
+项目相关
+主程序 	Gitea 核心运行引擎 (约 95MB)	/home/git/gitea
+配置文件 控制域名、端口、注册权限等各项设置	/home/git/custom/conf/app.ini
+数据库文件 	存储用户账号、密码、项目信息等数据	/home/git/data/gitea.db
+代码仓库 	实际存放 git push 上传的代码的目录	/home/git/data/gitea-repositories
+================ 💻 服务器基础环境与软件版本清查 ================
+
+▶ 1. 操作系统版本:
+Kylin Linux Advanced Server release V10 (Tercel)
+4.19.90-17.5.ky10.aarch64
+
+▶ 2. 核心代码与运行环境:
+go version go1.21.5 linux/arm64
+git version 2.23.0
+SQLite3: 3.24.0
+
+▶ 3. 其他常见开发语言/工具:
+Node.js: v18.19.1
+Python 3: Python 3.7.4
+Java: openjdk version "1.8.0_242"
+
+▶ 4. 常见服务端软件:
+Docker: 未安装
+Nginx: 未安装
+
+============================= 清查完毕 =============================
+
+
+
+====================================================
+               服务器全局信息概览
+====================================================
+>>> 1. 操作系统与内核版本
+Kylin Linux Advanced Server V10 (Tercel)
+Linux 4.19.90-17.5.ky10.aarch64
+
+>>> 2. 硬件资源使用情况 (内存 & 磁盘)
+[内存状态]
+              total        used        free      shared  buff/cache   available
+Mem:          7.1Gi       942Mi       3.3Gi       255Mi       3.0Gi       4.7Gi
+Swap:            0B          0B          0B
+[主磁盘状态]
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda2        48G   15G   32G  32% /
+/dev/vda1      1022M  5.8M 1017M   1% /boot/efi
+
+>>> 3. 当前开放并监听的端口
+Netid  Local          Peer
+udp    0.0.0.0:68     users:(("dhclient",pid=1484,fd=6))
+udp    0.0.0.0:68     users:(("dhclient",pid=1480,fd=6))
+udp    127.0.0.1:323  users:(("chronyd",pid=1330,fd=5))
+udp    [::1]:323      users:(("chronyd",pid=1330,fd=6))
+tcp    0.0.0.0:22     users:(("sshd",pid=2111,fd=3))
+tcp    0.0.0.0:5432   users:(("gaussdb",pid=4613,fd=8))
+tcp    0.0.0.0:5433   users:(("gaussdb",pid=4613,fd=10))
+tcp    [::]:22        users:(("sshd",pid=2111,fd=4))
+tcp    [::]:5432      users:(("gaussdb",pid=4613,fd=9))
+tcp    *:3000         users:(("gitea",pid=1437,fd=17))
+tcp    [::]:5433      users:(("gaussdb",pid=4613,fd=11))
+
+>>> 4. openGauss 数据库运行状态
+openGauss 正在运行中 (共有 1 个相关进程)
+tcp     LISTEN   0        1024             0.0.0.0:5432          0.0.0.0:*                                                                                                                                          users:(("gaussdb",pid=4613,fd=8))
+tcp     LISTEN   0        1024                [::]:5432             [::]:*                                                                                                                                          users:(("gaussdb",pid=4613,fd=9))
+
+>>> 5. 各种开发环境版本
+openjdk version "1.8.0_242"
+Python 3.7.4
+gcc (GCC) 7.3.0
+gsql (openGauss 5.0.0 build
+git version 2.23.0
+
+====================== 检查完毕 ======================
+
+
+
+
+
+
+
+
+====================================================
+       服务器状态巡检 (Gitea & openGauss 专版)
+====================================================
+>>> 1. 操作系统与硬件资源
+操作系统: Kylin Linux Advanced Server V10 (Tercel)
+系统内核: Linux 4.19.90-17.5.ky10.aarch64
+内存状态: 总计 7.1Gi / 已用 966Mi / 剩余 3.2Gi
+主 磁 盘: 总计 48G / 已用 15G / 可用 32G (使用率 32%)
+
+>>> 2. openGauss 数据库状态
+运行状态: ● 运行中 (核心PID: 4613)
+监听端口: 5432
+/home/omm/.bashrc: line 11: ulimit: open files: cannot modify limit: Operation n                                                                                                                                   ot permitted
+版本信息: gsql (openGauss 5.0.0 build
+
+>>> 3. Gitea 代码托管服务状态
+运行状态: ● 运行中 (PID: 1437)
+监听端口: *:3000
+系统服务: 存在 (gitea.service)，状态为 active
+版本信息: Gitea version 1.21.0 built with GNU Make 4.2.1, go1.21.5 : bindata, sq                                                                                                                                   lite, sqlite_unlock_notify
+
+>>> 4. 当前全部开放的监听端口 (上帝视角)
+协议    本地地址:端口           对应服务进程
+----------------------------------------------------
+tcp  0.0.0.0:22    sshd
+tcp  0.0.0.0:5432  gaussdb
+tcp  0.0.0.0:5433  gaussdb
+tcp  [::]:22       sshd
+tcp  [::]:5432     gaussdb
+tcp  *:3000        gitea
+tcp  [::]:5433     gaussdb
+
+>>> 5. 核心环境与依赖版本
+git     : git version 2.23.0
+gcc     : gcc (GCC) 7.3.0
+python3 : Python 3.7.4
+java    : openjdk version "1.8.0_242"
+
+==================== 巡检完毕 ====================
+
