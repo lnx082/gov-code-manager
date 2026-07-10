@@ -83,12 +83,12 @@
             <el-menu-item index="/versions/archive">归档管理</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="approval" v-if="userStore.role === 'admin' || userStore.role === 'project_manager'">
+          <el-sub-menu index="approval">
             <template #title>
               <el-icon class="menu-icon"><DocumentChecked /></el-icon>
               <span>审批管理</span>
             </template>
-            <el-menu-item index="/approval/pending">待我审批</el-menu-item>
+            <el-menu-item index="/approval/pending" v-if="userStore.role === 'admin' || userStore.role === 'project_manager'">待我审批</el-menu-item>
             <el-menu-item index="/approval/my-requests">我的申请</el-menu-item>
             <el-menu-item index="/approval/history">审批历史</el-menu-item>
           </el-sub-menu>

@@ -2,7 +2,6 @@ import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
-import { getCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -426,7 +425,7 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
 // 审批通过后的后置操作：创建 Gitea tag / release
 async function executePostApprovalAction(approval) {
   const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
-  const adminToken = getCachedAdminToken() || '';
+  const adminToken = config.gitea?.token || '';
 
   // 从 description 中解析操作参数（格式：<!--BODY {json} BODY-->）
   let bodyData = {};

@@ -1,9 +1,14 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from '../config/index.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import db from '../database/connection.js';
-import { setCachedAdminToken } from '../services/adminTokenCache.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = path.join(__dirname, '..', '..', '.env');
 
 const router = Router();
 
@@ -108,8 +113,22 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     // 为 BFF 代理请求创建 Gitea API Token
     const giteaToken = await createGiteaToken(username, password);
-    // 缓存 Gitea Token，供仓库/分支列表接口在部门过滤前拉取全量数据
-    setCachedAdminToken(giteaToken);
+    // 管理员首次登录时将其 Gitea 凭据写入 .env（Basic Auth 格式）供仓库/BFF 接口使用
+    if (isAdmin && !config.gitea?.token) {
+      try {
+        let envContent = fs.readFileSync(ENV_FILE, 'utf8');
+        if (envContent.includes('GITEA_ADMIN_TOKEN=')) {
+          envContent = envContent.replace(/GITEA_ADMIN_TOKEN=.*/, `GITEA_ADMIN_TOKEN=${giteaToken}`);
+        } else {
+          envContent += `\nGITEA_ADMIN_TOKEN=${giteaToken}\n`;
+        }
+        fs.writeFileSync(ENV_FILE, envContent, 'utf8');
+        config.gitea.token = giteaToken;
+        console.log('[Auth] 管理员 Gitea 凭据已写入 .env');
+      } catch (e) {
+        console.warn('[Auth] 写入 .env 失败:', e.message);
+      }
+    }
 
     // 生成 JWT（包含 Gitea 用户信息和 Gitea Token）
     const token = jwt.sign(
@@ -175,17 +194,32 @@ router.get('/me', async (req, res, next) => {
       return res.status(401).json({ code: 401, message: '令牌无效或已过期' });
     }
 
-    // JWT 中包含完整用户信息
+    // 从数据库获取完整用户信息（部门、密级、角色名等）
+    const profile = await db('user_profiles')
+      .select('user_profiles.*', 'departments.name as department_name', 'roles.name as role_name')
+      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+      .leftJoin('roles', 'user_profiles.role_code', 'roles.code')
+      .where('user_id', decoded.userId)
+      .first();
+
+    const roleNameMap = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员' };
+    const roleCode = profile?.role_code || decoded.roleCode || 'user';
+    const roleName = roleNameMap[roleCode] || profile?.role_name || '开发人员';
+
     res.json({
       code: 200,
       data: {
         id: decoded.userId,
         username: decoded.username,
-        nickname: decoded.nickname,
-        email: decoded.email || '',
+        nickname: profile?.nickname || decoded.nickname,
+        email: profile?.email || decoded.email || '',
         avatar: decoded.avatarUrl || '',
-        role: decoded.roleCode,
-        roleName: decoded.isAdmin ? '系统管理员' : '普通用户',
+        role: roleCode,
+        roleName,
+        departmentName: profile?.department_name || '',
+        departmentId: profile?.department_id || null,
+        secretLevel: profile?.secret_level || 'secret',
+        lastLoginTime: profile?.last_login_time || null,
         permissions: decoded.permissions || [],
       },
     });

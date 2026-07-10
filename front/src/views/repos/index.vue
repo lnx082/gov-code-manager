@@ -203,8 +203,10 @@ async function loadRepos() {
       mapped = mapped.filter(r => r.secretLevel === searchForm.secretLevel)
     }
 
-    repoList.value = mapped
+    // 客户端分页
     pagination.total = mapped.length
+    const start = (pagination.page - 1) * pagination.pageSize
+    repoList.value = mapped.slice(start, start + pagination.pageSize)
   } catch (error) {
     console.error('获取仓库列表失败:', error)
     ElMessage.warning('加载仓库列表失败，请重新登录')

@@ -11,7 +11,7 @@ const CACHE_FILE = path.join(__dirname, '..', '..', '.admin_token_cache');
 
 let cachedAdminToken = null;
 let cachedAt = 0;
-const TTL = 30 * 60 * 1000; // 30 分钟
+const TTL = 365 * 24 * 60 * 60 * 1000; // 365 天（Basic Auth 不自动过期）
 
 // 启动时从磁盘恢复
 try {
