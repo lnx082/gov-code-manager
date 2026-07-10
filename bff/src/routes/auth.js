@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config/index.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
+import { authenticate } from '../middleware/auth.js';
 import db from '../database/connection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -171,8 +172,11 @@ router.post('/login', authLimiter, async (req, res, next) => {
   }
 });
 
-// 登出 — JWT 无状态，前端清除 token 即可
-router.post('/logout', async (req, res) => {
+// 登出 — 删除会话记录
+router.post('/logout', authenticate, async (req, res) => {
+  try {
+    await db('sessions').where('user_id', req.user.userId).delete();
+  } catch { /* ignore */ }
   res.json({
     code: 200,
     message: '登出成功',

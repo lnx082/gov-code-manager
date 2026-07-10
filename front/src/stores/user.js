@@ -52,9 +52,9 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  function logout() {
+  async function logout() {
     try {
-      logoutApi()
+      await logoutApi()
     } catch (e) {
       // 忽略错误
     }

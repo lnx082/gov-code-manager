@@ -142,24 +142,38 @@
           <template #header>
             <span><el-icon><Monitor /></el-icon> 系统状态</span>
           </template>
-          <div class="system-status">
+          <div class="system-status" v-if="sysInfo">
             <div class="status-item">
-              <span class="status-label">总仓库数</span>
-              <span class="status-value">{{ stats.repoCount }}</span>
+              <span class="status-label">Gitea 服务</span>
+              <span class="status-indicator" :class="sysInfo.services?.gitea?.online ? 'online' : 'offline'">
+                <span class="dot"></span> {{ sysInfo.services?.gitea?.online ? '正常' : '离线' }}
+              </span>
             </div>
             <div class="status-item">
-              <span class="status-label">总版本数</span>
-              <span class="status-value">{{ stats.versionCount }}</span>
+              <span class="status-label">数据库</span>
+              <span class="status-indicator" :class="sysInfo.services?.database?.online ? 'online' : 'offline'">
+                <span class="dot"></span> {{ sysInfo.services?.database?.online ? '正常' : '离线' }}
+              </span>
+            </div>
+            <el-divider />
+            <div class="status-item"><span class="status-label">BFF 主机</span><span class="status-value">{{ sysInfo.hostname }}</span></div>
+            <div class="status-item"><span class="status-label">系统</span><span class="status-value">{{ sysInfo.platform }} {{ sysInfo.arch }}</span></div>
+            <div class="status-item"><span class="status-label">CPU</span><span class="status-value">{{ sysInfo.cpu?.model?.substring(0, 30) }} ({{ sysInfo.cpu?.cores }}核)</span></div>
+            <div class="status-item">
+              <span class="status-label">CPU</span>
+              <el-progress :percentage="sysInfo.cpu?.usage||0" :stroke-width="8" :color="sysInfo.cpu?.usage > 80 ? '#f56c6c' : '#67c23a'" />
             </div>
             <div class="status-item">
-              <span class="status-label">总用户数</span>
-              <span class="status-value">{{ stats.userCount || '-' }}</span>
+              <span class="status-label">内存</span>
+              <el-progress :percentage="sysInfo.memory?.usagePct||0" :stroke-width="8" :color="sysInfo.memory?.usagePct > 80 ? '#f56c6c' : '#67c23a'" :format="() => formatBytes(sysInfo.memory?.used) + ' / ' + formatBytes(sysInfo.memory?.total)" />
             </div>
-            <div class="status-item">
-              <span class="status-label">在线用户</span>
-              <span class="status-value">{{ stats.onlineUsers }}</span>
+            <div class="status-item" v-if="sysInfo.disk?.total > 0">
+              <span class="status-label">磁盘</span>
+              <el-progress :percentage="sysInfo.disk?.usagePct||0" :stroke-width="8" :color="sysInfo.disk?.usagePct > 80 ? '#f56c6c' : '#67c23a'" :format="() => formatBytes(sysInfo.disk?.total - sysInfo.disk?.free) + ' / ' + formatBytes(sysInfo.disk?.total)" />
             </div>
+            <div class="status-item"><span class="status-label">运行时间</span><span class="status-value">{{ formatUptime(sysInfo.uptime) }}</span></div>
           </div>
+          <el-empty v-else description="无法获取系统信息" />
         </el-card>
       </div>
     </div>
@@ -195,6 +209,7 @@ import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getPendingApprovals, getApprovalList } from '@/api/approval'
 import { getSessions } from '@/api/bff'
+import request from '@/api'
 import { Solar } from 'lunar-javascript'
 
 const userStore = useUserStore()
@@ -255,11 +270,13 @@ const pendingApprovals = computed(() => stats.pendingApprovals)
 
 const pendingList = ref([])
 const recentActivities = ref([])
+const sysInfo = ref(null)
 
 onMounted(() => {
   loadDashboardData()
   loadPendingApprovals()
   loadRecentActivities()
+  loadSystemInfo()
 })
 
 async function loadDashboardData() {
@@ -327,6 +344,29 @@ function getTypeTagType(type) {
 function getTypeName(type) {
   const map = { merge: '合并请求', version: '版本发布', baseline: '基线申请' }
   return map[type] || '其他'
+}
+
+async function loadSystemInfo() {
+  try {
+    const res = await request.get('/statistics/system')
+    sysInfo.value = (res.data || res)?.data || (res.data || res)
+  } catch { sysInfo.value = null }
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function formatUptime(seconds) {
+  if (!seconds) return '-'
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return (d > 0 ? d + '天 ' : '') + h + '小时 ' + m + '分钟'
 }
 </script>
 
@@ -640,14 +680,14 @@ function getTypeName(type) {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #67c23a;
+
+      &.online { color: #67c23a; .dot { background: #67c23a; animation: pulse 2s infinite; } }
+      &.offline { color: #f56c6c; .dot { background: #f56c6c; animation: none; } }
 
       .dot {
         width: 8px;
         height: 8px;
-        background: #67c23a;
         border-radius: 50%;
-        animation: pulse 2s infinite;
       }
     }
   }
