@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import db from '../database/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -68,13 +68,20 @@ router.post('/read-all', authenticate, async (req, res, next) => {
   }
 });
 
-// 获取待审批通知计数（实时：当前步骤需要当前用户审批的数量）
+// 获取未读通知总数（系统通知 + 待我审批）
 router.get('/count', authenticate, async (req, res, next) => {
   try {
     const userRole = req.user.roleCode || 'user';
     const isAdmin = userRole === 'admin';
 
-    // 步骤名 → 角色码映射
+    // 1. 未读系统通知数
+    let sysUnread = 0;
+    try {
+      const r = await db('notifications').where('user_id', req.user.userId).where('is_read', false).count('* as c').first();
+      sysUnread = parseInt(r?.c || 0);
+    } catch { /* ignore */ }
+
+    // 2. 待我审批数
     function getRoleForStep(name) {
       if (!name) return null;
       if (name.includes('系统管理员')) return 'admin';
@@ -82,23 +89,61 @@ router.get('/count', authenticate, async (req, res, next) => {
       return null;
     }
 
-    const allPending = await db('approvals').where('status', 'pending');
-    let count = 0;
-    for (const approval of allPending) {
-      let steps = [];
-      if (approval.approval_flow_id) {
-        const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
-        if (flow) {
-          try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); } catch {}
+    let pendingCount = 0;
+    try {
+      const allPending = await db('approvals').where('status', 'pending');
+      for (const approval of allPending) {
+        let steps = [];
+        if (approval.approval_flow_id) {
+          const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
+          if (flow) {
+            try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); } catch {}
+          }
         }
+        const stepIdx = (approval.current_step || 1) - 1;
+        const requiredRole = getRoleForStep(steps[stepIdx] || '');
+        if (requiredRole && requiredRole === userRole) pendingCount++;
+        else if (!approval.approval_flow_id && isAdmin) pendingCount++;
       }
-      const stepIdx = (approval.current_step || 1) - 1;
-      const requiredRole = getRoleForStep(steps[stepIdx] || '');
-      if (requiredRole && requiredRole === userRole) count++;
-      else if (!approval.approval_flow_id && isAdmin) count++;
+    } catch { /* ignore */ }
+
+    res.json({ code: 200, data: { count: sysUnread + pendingCount } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 发布通知（管理员）
+router.post('/', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const { title, content } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ code: 400, message: '标题和内容不能为空' });
     }
 
-    res.json({ code: 200, data: { count } });
+    // 获取所有用户
+    const users = await db('user_profiles').select('user_id');
+    if (users.length === 0) {
+      return res.status(400).json({ code: 400, message: '没有可推送的用户' });
+    }
+
+    // 为每个用户创建通知
+    const notifications = users.map(u => ({
+      user_id: u.user_id,
+      type: 'system',
+      title,
+      content,
+      is_read: false,
+      created_at: new Date(),
+    }));
+
+    // 分批插入避免单条 SQL 过大
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < notifications.length; i += BATCH_SIZE) {
+      await db('notifications').insert(notifications.slice(i, i + BATCH_SIZE));
+    }
+
+    res.json({ code: 200, message: `通知已发布，推送给 ${notifications.length} 位用户` });
   } catch (error) {
     next(error);
   }

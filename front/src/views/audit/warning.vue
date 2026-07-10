@@ -30,7 +30,7 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="filterForm.status" clearable style="width: 150px">
-            <el-option label="待处理" value="pending" />
+            <el-option label="待处理" value="unhandled" />
             <el-option label="已处理" value="handled" />
             <el-option label="已忽略" value="ignored" />
           </el-select>
@@ -64,7 +64,7 @@
       </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'pending' ? 'warning' : 'info'" size="small">
+          <el-tag :type="(row.status === 'unhandled' || row.status === 'pending') ? 'warning' : 'info'" size="small">
             {{ getStatusName(row.status) }}
           </el-tag>
         </template>
@@ -76,9 +76,9 @@
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="handleWarning(row)" v-if="row.status === 'pending'">处理</el-button>
+          <el-button type="primary" link @click="handleWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">处理</el-button>
           <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
-          <el-button type="danger" link @click="ignoreWarning(row)" v-if="row.status === 'pending'">忽略</el-button>
+          <el-button type="danger" link @click="ignoreWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">忽略</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -124,7 +124,7 @@ const handleDialogVisible = ref(false)
 const filterForm = reactive({
   level: '',
   type: '',
-  status: 'pending'
+  status: ''
 })
 
 const pagination = reactive({
@@ -161,7 +161,21 @@ async function loadWarnings() {
     const res = await getRiskWarnings(params)
     const data = res.data || res
     const list = data.list || data.records || data || []
-    warningList.value = Array.isArray(list) ? list : []
+    // 映射后端字段名 → 前端模板字段
+    warningList.value = (Array.isArray(list) ? list : []).map(r => ({
+      id: r.warning_id || r.id,
+      level: r.level || 'low',
+      type: r.type || '',
+      title: r.title || '',
+      description: r.description || r.title || '',
+      username: r.related_username || '-',
+      time: r.created_at || r.createdAt || '',
+      status: r.status || 'pending',
+      handler: r.handler_username || '',
+      created_at: r.created_at,
+      triggered_rule: r.triggered_rule || '',
+      source_ip: r.source_ip || '',
+    }))
     pagination.total = data.total || warningList.value.length
   } catch (error) {
     ElMessage.warning('加载风险预警失败')
@@ -228,7 +242,7 @@ function getTypeName(type) {
 }
 
 function getStatusName(status) {
-  const map = { 'pending': '待处理', 'handled': '已处理', 'ignored': '已忽略' }
+  const map = { 'unhandled': '待处理', 'pending': '待处理', 'handled': '已处理', 'ignored': '已忽略' }
   return map[status] || status
 }
 </script>

@@ -361,6 +361,10 @@ export function markAllNotificationsRead() {
   return bffService.put('/notifications/read-all')
 }
 
+export function publishNotification(data) {
+  return bffService.post('/notifications', data)
+}
+
 export function deleteNotification(notificationId) {
   return bffService.delete(`/notifications/${notificationId}`)
 }

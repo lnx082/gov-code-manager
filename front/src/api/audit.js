@@ -30,12 +30,12 @@ export function getUserStats(params) {
 
 // 获取风险预警列表
 export function getRiskWarnings(params) {
-  return request.get('/warnings', { params })
+  return request.get('/risk-warnings', { params })
 }
 
 // 处理风险预警
 export function handleRiskWarning(id, data) {
-  return request.post(`/warnings/${id}/handle`, data)
+  return request.post(`/risk-warnings/${id}/handle`, data)
 }
 
 // 获取报表列表
@@ -48,8 +48,8 @@ export function generateReport(data) {
   return request.post('/reports/generate', data)
 }
 
-// 导出报表
-export function exportReport(id) {
+// 下载报表
+export function downloadReportFile(id) {
   return request.get(`/reports/${id}/export`, { responseType: 'blob' })
 }
 

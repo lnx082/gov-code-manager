@@ -107,28 +107,41 @@ router.post('/logs/verify-integrity', authenticate, requirePermission('audit:vie
   }
 });
 
-// 获取操作统计
+// 获取操作统计（报表页顶部统计卡片）
 router.get('/stats/operations', authenticate, requirePermission('audit:view'), async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
-    
+
     let query = db('audit_logs');
-    
-    if (startDate) {
-      query = query.where('timestamp', '>=', startDate);
-    }
-    if (endDate) {
-      query = query.where('timestamp', '<=', endDate);
-    }
-    
-    const stats = await query
-      .select('action_type')
-      .count('* as count')
-      .groupBy('action_type');
-    
+    if (startDate) query = query.where('timestamp', '>=', startDate);
+    if (endDate) query = query.where('timestamp', '<=', endDate);
+
+    // 总操作数
+    const totalOp = await query.clone().count('* as count').first();
+    // 活跃用户数
+    const activeUsers = await query.clone().select('username').count('* as count').whereNotNull('username').groupBy('username');
+    // 仓库操作数（含 repos 路径的请求）
+    const repoOps = await query.clone().where('request_path', 'like', '%/repos/%').count('* as count').first();
+    // 风险预警数
+    let riskCount = 0;
+    try {
+      const risk = await db('risk_warnings').count('* as count').first();
+      riskCount = parseInt(risk?.count || 0);
+    } catch { /* 忽略 */ }
+
     res.json({
       code: 200,
-      data: stats,
+      data: {
+        totalOperations: parseInt(totalOp?.count || 0),
+        totalUsers: activeUsers?.length || 0,
+        totalRepos: parseInt(repoOps?.count || 0),
+        riskCount,
+        // 兼容旧字段名
+        total: parseInt(totalOp?.count || 0),
+        users: activeUsers?.length || 0,
+        repos: parseInt(repoOps?.count || 0),
+        risks: riskCount,
+      },
     });
   } catch (error) {
     next(error);

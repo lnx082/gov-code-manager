@@ -5,17 +5,23 @@ import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 
 export function authenticate(req, res, next) {
+  // 优先从 Authorization 头获取，其次从 query 参数获取（用于 window.open 下载）
+  let token = null;
   const authHeader = req.headers.authorization;
-  
-  if (!authHeader?.startsWith('Bearer ')) {
+
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.query.token) {
+    token = req.query.token;
+  }
+
+  if (!token) {
     return res.status(401).json({
       code: 401,
       message: '未提供认证令牌',
     });
   }
-  
-  const token = authHeader.substring(7);
-  
+
   try {
     const decoded = jwt.verify(token, config.jwt.secret);
     req.user = decoded;

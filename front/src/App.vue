@@ -143,10 +143,17 @@
     <el-dialog v-model="showNoticeDialog" title="系统通知" width="600px">
       <div class="notice-list">
         <el-empty v-if="notices.length === 0" description="暂无通知" />
-        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item" style="cursor:pointer" @click="showNoticeDialog = false; router.push('/approval/pending')">
-          <div class="notice-title">{{ notice.title }}</div>
+        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item">
+          <div class="notice-header">
+            <div class="notice-title">{{ notice.title }}</div>
+            <el-tag v-if="notice.isSys" size="small" type="info">系统通知</el-tag>
+            <el-tag v-else size="small" type="warning">审批通知</el-tag>
+          </div>
           <div class="notice-content">{{ notice.content }}</div>
-          <div class="notice-time">{{ notice.createTime }}</div>
+          <div class="notice-footer">
+            <span class="notice-time">{{ notice.createTime }}</span>
+            <el-button type="primary" link size="small" @click="handleNoticeClick(notice)">查看详情</el-button>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -163,6 +170,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import request from '@/api'
+import { markNotificationRead } from '@/api/bff'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -188,26 +196,42 @@ async function loadNoticeCount() {
   try {
     const res = await request.get('/notifications/count')
     noticeCount.value = (res.data || res)?.count || 0
-  } catch { noticeCount.value = 0 }
+  } catch (_) { noticeCount.value = 0 }
 }
 
 async function loadNotices() {
+  const all = []
   try {
-    const res = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
-    const list = (res.data || res)?.list || []
-    // 映射步骤号为人读名称
-    notices.value = list.map(item => {
-      const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
-      const stepText = stepNames[item.current_step] || `步骤 ${item.current_step}`
+    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 10, isRead: false } })
+    const sysList = (sysRes.data || sysRes)?.list || []
+    for (const item of sysList) {
+      all.push({
+        id: 'sys_' + item.notification_id,
+        title: item.title || '系统通知',
+        content: item.content || '',
+        createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
+        isSys: true,
+        notiId: item.notification_id
+      })
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
+    const pendList = (pendRes.data || pendRes)?.list || []
+    const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
+    for (const item of pendList) {
+      const stepText = stepNames[item.current_step] || ('步骤 ' + item.current_step)
       const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
-      return {
+      all.push({
         id: item.approval_id,
         title: item.title,
-        content: `${typeMap[item.operation_type] || item.operation_type} | ${stepText} | 申请人: ${item.applicant_username}`,
-        createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : ''
-      }
-    })
-  } catch { notices.value = [] }
+        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + stepText + ' | 申请人: ' + item.applicant_username,
+        createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
+        isSys: false
+      })
+    }
+  } catch (_) { /* ignore */ }
+  notices.value = all
 }
 
 function handleUserCommand(command) {
@@ -229,6 +253,19 @@ function handleUserCommand(command) {
         ElMessage.success('已安全退出')
       }).catch(() => {})
       break
+  }
+}
+
+// 通知点击：系统通知标记已读，审批通知跳转审批页
+async function handleNoticeClick(notice) {
+  showNoticeDialog.value = false
+  if (notice.isSys && notice.notiId) {
+    try {
+      await markNotificationRead(notice.notiId)
+      loadNoticeCount()
+    } catch (_) { /* ignore */ }
+  } else {
+    router.push('/approval/pending')
   }
 }
 </script>
@@ -465,10 +502,16 @@ function handleUserCommand(command) {
     padding: 15px;
     border-bottom: 1px solid #eee;
 
-    .notice-title {
-      font-weight: 600;
-      color: #333;
+    .notice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 5px;
+
+      .notice-title {
+        font-weight: 600;
+        color: #333;
+      }
     }
 
     .notice-content {
@@ -477,9 +520,15 @@ function handleUserCommand(command) {
       margin-bottom: 8px;
     }
 
-    .notice-time {
-      color: #999;
-      font-size: 12px;
+    .notice-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .notice-time {
+        color: #999;
+        font-size: 12px;
+      }
     }
   }
 }

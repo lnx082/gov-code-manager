@@ -61,34 +61,6 @@
     <div class="main-content">
       <!-- 左侧 -->
       <div class="content-left">
-        <!-- 待处理事项（仅管理员/项目管理员可见） -->
-        <el-card class="panel-card" shadow="hover" v-if="isAdmin || userStore.role === 'project_manager'">
-          <template #header>
-            <div class="card-header">
-              <span><el-icon><DocumentChecked /></el-icon> 待处理审批</span>
-              <el-link type="danger" @click="$router.push('/approval/pending')">查看全部</el-link>
-            </div>
-          </template>
-          <div class="pending-list" v-if="pendingList.length > 0">
-            <div v-for="item in pendingList" :key="item.id" class="pending-item" @click="$router.push('/approval/pending')">
-              <div class="item-icon" :class="item.type">
-                <el-icon v-if="item.type === 'merge'"><Share /></el-icon><el-icon v-else-if="item.type === 'version'"><Collection /></el-icon><el-icon v-else><Document /></el-icon>
-              </div>
-              <div class="item-content">
-                <div class="item-title">{{ item.title }}</div>
-                <div class="item-info">
-                  <span><el-icon><User /></el-icon> {{ item.applicant }}</span>
-                  <span><el-icon><Clock /></el-icon> {{ item.createTime }}</span>
-                </div>
-              </div>
-              <el-tag :type="getTypeTagType(item.type)" size="small">
-                {{ getTypeName(item.type) }}
-              </el-tag>
-            </div>
-          </div>
-          <el-empty v-else description="暂无待处理事项" />
-        </el-card>
-
         <!-- 最新动态 -->
         <el-card class="panel-card" shadow="hover">
           <template #header>
@@ -134,6 +106,10 @@
               <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>审计日志</span>
             </div>
+            <div class="quick-link-item" @click="openPublishDialog" v-if="isAdmin">
+              <div class="link-icon red"><el-icon><Bell /></el-icon></div>
+              <span>发布通知</span>
+            </div>
           </div>
         </el-card>
 
@@ -177,6 +153,22 @@
         </el-card>
       </div>
     </div>
+    <!-- 发布通知弹窗 -->
+    <el-dialog v-model="showPublishDialog" title="发布通知" width="500px" :close-on-click-modal="false" v-if="isAdmin">
+      <el-form :model="publishForm" label-width="80px">
+        <el-form-item label="标题">
+          <el-input v-model="publishForm.title" placeholder="请输入通知标题" maxlength="100" />
+        </el-form-item>
+        <el-form-item label="内容">
+          <el-input v-model="publishForm.content" type="textarea" :rows="5" placeholder="请输入通知内容" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showPublishDialog = false">取消</el-button>
+        <el-button type="primary" @click="handlePublish" :loading="publishing">发布</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 在线用户弹窗 -->
     <el-dialog v-model="showOnlineDialog" title="在线用户" width="700px" :close-on-click-modal="false">
       <el-table :data="onlineUserList" v-loading="loadingOnline" stripe border max-height="400">
@@ -204,11 +196,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search } from '@element-plus/icons-vue'
+import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search, Bell } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
-import { getPendingApprovals, getApprovalList } from '@/api/approval'
-import { getSessions } from '@/api/bff'
+import { getSessions, publishNotification } from '@/api/bff'
 import request from '@/api'
 import { Solar } from 'lunar-javascript'
 
@@ -268,13 +259,39 @@ const stats = reactive({
 
 const pendingApprovals = computed(() => stats.pendingApprovals)
 
-const pendingList = ref([])
 const recentActivities = ref([])
 const sysInfo = ref(null)
 
+// 发布通知
+const showPublishDialog = ref(false)
+const publishing = ref(false)
+const publishForm = reactive({ title: '', content: '' })
+
+function openPublishDialog() {
+  publishForm.title = ''
+  publishForm.content = ''
+  showPublishDialog.value = true
+}
+
+async function handlePublish() {
+  if (!publishForm.title || !publishForm.content) {
+    ElMessage.warning('请填写完整标题和内容')
+    return
+  }
+  publishing.value = true
+  try {
+    await publishNotification({ title: publishForm.title, content: publishForm.content })
+    ElMessage.success('通知已发布')
+    showPublishDialog.value = false
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.message || '发布失败')
+  } finally {
+    publishing.value = false
+  }
+}
+
 onMounted(() => {
   loadDashboardData()
-  loadPendingApprovals()
   loadRecentActivities()
   loadSystemInfo()
 })
@@ -293,24 +310,6 @@ async function loadDashboardData() {
     }
   } catch (error) {
     ElMessage.warning('加载统计数据失败')
-  }
-}
-
-async function loadPendingApprovals() {
-  try {
-    const res = await getPendingApprovals({ page: 1, pageSize: 5 })
-    const data = res.data || res
-    const list = data.list || data.records || data || []
-    pendingList.value = (Array.isArray(list) ? list : []).map(item => ({
-      id: item.id,
-      type: item.operationType || item.type || 'merge',
-      title: item.title || item.description || item.target,
-      applicant: item.applicantName || item.applicant || item.username || '',
-      createTime: item.createdAt || item.createTime || ''
-    }))
-    stats.pendingApprovals = pendingList.value.length
-  } catch (error) {
-    ElMessage.warning('加载待审批列表失败')
   }
 }
 
@@ -512,56 +511,6 @@ function formatUptime(seconds) {
     justify-content: space-between;
     align-items: center;
     font-weight: 600;
-  }
-}
-
-/* 待处理列表 */
-.pending-list {
-  .pending-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.2s;
-
-    &:hover {
-      background: #f5f7fa;
-    }
-
-    .item-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-
-      &.merge { background: #ecf5ff; }
-      &.version { background: #f0f9eb; }
-      &.baseline { background: #fdf6ec; }
-    }
-
-    .item-content {
-      flex: 1;
-
-      .item-title {
-        font-size: 14px;
-        color: #333;
-        margin-bottom: 4px;
-      }
-
-      .item-info {
-        font-size: 12px;
-        color: #999;
-
-        span {
-          margin-right: 10px;
-        }
-      }
-    }
   }
 }
 
