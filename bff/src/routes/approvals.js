@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';
 import config from '../config/index.js';
+import { executeBaselineCreate } from './baselines.js';
 
 const router = Router();
 
@@ -96,16 +97,12 @@ router.get('/pending', authenticate, async (req, res, next) => {
       const currentStepName = steps[currentStepIdx] || '';
       const requiredRole = getRoleForStep(currentStepName);
 
-      // 管理员能看到所有待审批
-      // 项目管理员看到自己角色的步骤
-      // 其他角色同理
-      if (isAdmin) {
-        filtered.push(approval);
-      } else if (requiredRole && requiredRole === userRole) {
+      // 按角色过滤：每人只看自己负责的步骤
+      if (requiredRole && requiredRole === userRole) {
         filtered.push(approval);
       }
-      // 如果没有审批流程，所有人都能看到（兼容旧数据）
-      else if (!approval.approval_flow_id) {
+      // 兼容无审批流程的旧数据：管理员可见
+      else if (!approval.approval_flow_id && isAdmin) {
         filtered.push(approval);
       }
     }
@@ -471,7 +468,7 @@ async function executePostApprovalAction(approval) {
       console.warn('[PostApproval] Release 创建失败（tag 已创建）:', e.message);
     }
   } else if (approval.operation_type === 'baseline_create') {
-    console.log(`[PostApproval] 基线 ${approval.title} 审批通过`);
+    await executeBaselineCreate(approval);
   }
 }
 

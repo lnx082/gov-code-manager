@@ -147,6 +147,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTags, getMyRepos, getBranches } from '@/api/gitea'
 import { createApproval } from '@/api/bff'
+import request from '@/api'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -252,6 +253,18 @@ async function loadVersions() {
           sha: t.commit?.sha || '',
         }))
       } catch { /* skip failed repos */ }
+    }
+    // 批量查询基线状态
+    if (allTags.length > 0) {
+      try {
+        const tagKeys = allTags.map(t => `${t.repoOwner}/${t.repoName}@${t.name}`).join(',')
+        const baselineRes = await request.get('/baselines/check', { params: { tags: tagKeys } })
+        const baselineMap = baselineRes.data || baselineRes || {}
+        allTags.forEach(t => {
+          const key = `${t.repoOwner}/${t.repoName}@${t.name}`
+          t.isBaseline = baselineMap[key] || false
+        })
+      } catch { /* skip baseline check */ }
     }
     versionList.value = allTags
     pagination.total = allTags.length
