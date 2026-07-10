@@ -2,8 +2,7 @@
  * Axios 实例创建 + 请求/响应拦截器（BFF + Gitea 双通道）
  */
 import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import router from '@/router'
+import { ElMessage } from 'element-plus'
 
 // token 存储工具 — 使用 sessionStorage 实现标签页独立登录
 const TOKEN_KEY = 'gitea_token'
@@ -15,6 +14,23 @@ function removeToken() { sessionStorage.removeItem(TOKEN_KEY) }
 function getApiToken() { return sessionStorage.getItem(API_TOKEN_KEY) || '' }
 function setApiToken(v) { sessionStorage.setItem(API_TOKEN_KEY, v) }
 function removeApiToken() { sessionStorage.removeItem(API_TOKEN_KEY) }
+
+// 防止多个 401 并发重复跳转
+let isRedirecting = false
+
+// 统一的登录过期处理：清空 token 并跳转登录页
+function handleUnauthorized() {
+  if (isRedirecting) return
+  isRedirecting = true
+  removeToken()
+  removeApiToken()
+  // 检查是否已在登录页
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  } else {
+    isRedirecting = false
+  }
+}
 
 // 创建 BFF API 实例
 const service = axios.create({
@@ -59,15 +75,7 @@ service.interceptors.response.use(
 
       switch (status) {
         case 401:
-          ElMessageBox.confirm('登录已过期，请重新登录', '提示', {
-            confirmButtonText: '重新登录',
-            cancelButtonText: '取消',
-            type: 'warning'
-          }).then(() => {
-            removeToken()
-            removeApiToken()
-            window.location.href = '/login'
-          }).catch(() => {})
+          handleUnauthorized()
           break
         case 403:
           ElMessage.error(data?.message || '没有权限访问该资源')
@@ -119,9 +127,7 @@ giteaService.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      removeToken()
-      removeApiToken()
-      window.location.href = '/login'
+      handleUnauthorized()
     }
     return Promise.reject(error)
   }

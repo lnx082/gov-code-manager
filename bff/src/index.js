@@ -59,6 +59,9 @@ app.use(morgan(config.logging.format));
 // 请求日志
 app.use(requestLogger);
 
+// 审计中间件（必须在所有业务路由之前注册，才能拦截 res.send）
+app.use(auditMiddleware);
+
 // 健康检查
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
@@ -156,9 +159,6 @@ app.use(`${API_PREFIX}/integrity`, integrityRoutes);
 
 // Gitea 透传代理（必须最后挂载，避免拦截其他路由）
 app.use(`${API_PREFIX}/gitea`, giteaRoutes);
-
-// 审计中间件（在所有业务路由之后）
-app.use(auditMiddleware);
 
 // 404 处理
 app.use((req, res) => {

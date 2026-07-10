@@ -23,20 +23,28 @@
           />
         </el-form-item>
         <el-form-item label="操作用户">
-          <el-input v-model="filterForm.username" placeholder="请输入用户名" clearable />
+          <el-select v-model="filterForm.username" placeholder="选择用户" clearable filterable style="width: 180px">
+            <el-option v-for="u in userOptions" :key="u.gitea_username" :label="u.gitea_username" :value="u.gitea_username" />
+          </el-select>
         </el-form-item>
         <el-form-item label="操作类型">
           <el-select v-model="filterForm.actionType" placeholder="选择类型" clearable style="width: 150px">
             <el-option label="登录" value="login" />
-            <el-option label="提交" value="commit" />
+            <el-option label="查看" value="view" />
+            <el-option label="创建" value="create" />
+            <el-option label="更新" value="update" />
+            <el-option label="删除" value="delete" />
+            <el-option label="审批" value="approval" />
             <el-option label="合并" value="merge" />
+            <el-option label="提交" value="commit" />
             <el-option label="版本" value="version" />
             <el-option label="下载" value="download" />
-            <el-option label="删除" value="delete" />
           </el-select>
         </el-form-item>
         <el-form-item label="操作对象">
-          <el-input v-model="filterForm.target" placeholder="仓库/版本名称" clearable />
+          <el-select v-model="filterForm.target" placeholder="选择仓库" clearable filterable style="width: 180px">
+            <el-option v-for="r in repoOptions" :key="r.full_name" :label="r.displayName" :value="r.full_name" />
+          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleFilter">搜索</el-button>
@@ -127,10 +135,40 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAuditLogs } from '@/api/audit'
+import { getAuditLogs, exportAuditLogs } from '@/api/audit'
+import { getUserList, getFilteredRepos } from '@/api/bff'
 
 const loading = ref(false)
 const detailDialogVisible = ref(false)
+const userOptions = ref([])
+const repoOptions = ref([])
+
+async function loadUsers() {
+  try {
+    const res = await getUserList({ page: 1, pageSize: 200 })
+    const list = res.data?.list || []
+    userOptions.value = list.filter(u => u.gitea_username)
+  } catch {
+    userOptions.value = []
+  }
+}
+
+async function loadRepoList() {
+  try {
+    const res = await getFilteredRepos({ page: 1, pageSize: 200 })
+    const data = res.data || res
+    const list = data.list || []
+    // 解析中文显示名
+    repoOptions.value = list.map(r => {
+      const desc = r.description || ''
+      const match = desc.match(/\[显示名=([^\]]+)\]/)
+      const displayName = match ? match[1] : (r.full_name || r.name)
+      return { ...r, displayName, full_name: r.full_name || r.name }
+    })
+  } catch {
+    repoOptions.value = []
+  }
+}
 
 const filterForm = reactive({
   dateRange: [],
@@ -149,6 +187,8 @@ const logList = ref([])
 const currentLog = ref(null)
 
 onMounted(() => {
+  loadUsers()
+  loadRepoList()
   loadLogs()
 })
 
@@ -170,7 +210,23 @@ async function loadLogs() {
     const res = await getAuditLogs(params)
     const data = res.data || res
     const list = data.list || data.records || data || []
-    logList.value = Array.isArray(list) ? list : []
+    // 映射后端字段名 → 前端模板字段
+    logList.value = (Array.isArray(list) ? list : []).map(r => ({
+      id: r.log_id || r.id,
+      timestamp: r.timestamp,
+      username: r.username,
+      actionType: r.action_type,
+      actionName: r.action_name,
+      target: r.target_name || r.request_path || '',
+      description: r.action_name || '',
+      ip: r.request_ip || '-',
+      request_ip: r.request_ip,
+      result: r.result,
+      success: r.result === 'success',
+      role: r.role_code || '',
+      userAgent: r.request_user_agent || '',
+      details: r,
+    }))
     pagination.total = data.total || logList.value.length
   } catch (error) {
     ElMessage.warning('加载审计日志失败')
@@ -197,8 +253,22 @@ async function handleExport() {
       params.startTime = filterForm.dateRange[0]
       params.endTime = filterForm.dateRange[1]
     }
-    // 导出功能将在后续版本实现
-    ElMessage.info('日志导出功能开发中')
+    if (filterForm.username) params.username = filterForm.username
+    if (filterForm.actionType) params.actionType = filterForm.actionType
+    if (filterForm.target) params.target = filterForm.target
+
+    const res = await exportAuditLogs(params)
+    // 创建下载链接
+    const blob = new Blob([res], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `审计日志_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('日志导出成功')
   } catch (error) {
     ElMessage.warning('日志导出失败')
   }
@@ -210,18 +280,29 @@ function viewDetail(row) {
 }
 
 function getActionTypeTag(type) {
-  const map = { 'login': 'primary', 'commit': 'success', 'merge': 'warning', 'version': 'info', 'download': 'danger', 'delete': 'danger' }
+  const map = {
+    login: 'primary', view: '', create: 'success', update: 'warning',
+    delete: 'danger', approval: 'primary', merge: 'warning',
+    commit: 'success', version: 'info', download: 'danger'
+  }
   return map[type] || 'info'
 }
 
 function getActionTypeName(type) {
-  const map = { 'login': '登录', 'commit': '提交', 'merge': '合并', 'version': '版本', 'download': '下载', 'delete': '删除' }
+  const map = {
+    login: '登录', view: '查看', create: '创建', update: '更新',
+    delete: '删除', approval: '审批', merge: '合并',
+    commit: '提交', version: '版本', download: '下载'
+  }
   return map[type] || type
 }
 
 function formatTime(time) {
   if (!time) return '-'
-  return time
+  const d = new Date(time)
+  if (isNaN(d.getTime())) return time
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 </script>
 

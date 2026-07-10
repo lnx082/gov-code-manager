@@ -10,7 +10,7 @@ const router = Router();
 // 获取审计日志列表
 router.get('/logs', authenticate, requirePermission('audit:view'), async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 20, username, actionType, startDate, endDate } = req.query;
+    const { page = 1, pageSize = 20, username, actionType, target, startDate, endDate } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     
     let query = db('audit_logs');
@@ -27,7 +27,13 @@ router.get('/logs', authenticate, requirePermission('audit:view'), async (req, r
     if (endDate) {
       query = query.where('timestamp', '<=', endDate);
     }
-    
+    if (target) {
+      query = query.where(function() {
+        this.where('target_name', 'like', `%${target}%`)
+            .orWhere('request_path', 'like', `%${target}%`);
+      });
+    }
+
     const total = await query.clone().count('* as count').first();
     const list = await query.orderBy('timestamp', 'desc')
       .limit(parseInt(pageSize))
@@ -124,6 +130,58 @@ router.get('/stats/operations', authenticate, requirePermission('audit:view'), a
       code: 200,
       data: stats,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 导出审计日志（CSV格式）
+router.get('/export', authenticate, requirePermission('audit:view'), async (req, res, next) => {
+  try {
+    const { username, actionType, target, startDate, endDate } = req.query;
+
+    let query = db('audit_logs').orderBy('timestamp', 'desc');
+
+    if (username) query = query.where('username', 'like', `%${username}%`);
+    if (actionType) query = query.where('action_type', actionType);
+    if (startDate) query = query.where('timestamp', '>=', startDate);
+    if (endDate) query = query.where('timestamp', '<=', endDate);
+    if (target) {
+      query = query.where(function() {
+        this.where('target_name', 'like', `%${target}%`)
+            .orWhere('request_path', 'like', `%${target}%`);
+      });
+    }
+
+    const logs = await query.limit(10000);
+
+    // 生成 CSV
+    const headers = ['时间', '用户名', '操作类型', '操作描述', 'IP地址', '结果', '请求路径', 'User-Agent'];
+    const csvRows = [headers.join(',')];
+
+    for (const log of logs) {
+      const time = log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').slice(0, 19) : '';
+      const row = [
+        time,
+        `"${(log.username || '').replace(/"/g, '""')}"`,
+        `"${(log.action_type || '').replace(/"/g, '""')}"`,
+        `"${(log.action_name || '').replace(/"/g, '""')}"`,
+        log.request_ip || '',
+        log.result || '',
+        `"${(log.request_path || '').replace(/"/g, '""')}"`,
+        `"${(log.request_user_agent || '').replace(/"/g, '""')}"`,
+      ];
+      csvRows.push(row.join(','));
+    }
+
+    const csv = '﻿' + csvRows.join('\n'); // BOM for Excel UTF-8
+
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="audit_logs_${new Date().toISOString().slice(0, 10)}.csv"`,
+      'Content-Length': Buffer.byteLength(csv, 'utf-8'),
+    });
+    res.send(csv);
   } catch (error) {
     next(error);
   }
