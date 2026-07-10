@@ -14,8 +14,8 @@
           <el-select v-model="filterForm.type" clearable style="width: 150px">
             <el-option label="全部" value="" />
             <el-option label="合并请求" value="merge" />
-            <el-option label="版本发布" value="version" />
-            <el-option label="基线申请" value="baseline" />
+            <el-option label="版本发布" value="version_release" />
+            <el-option label="基线申请" value="baseline_create" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -121,8 +121,8 @@
         </div>
         
         <el-divider content-position="left">审批进度</el-divider>
-        <el-steps :active="currentRequest.current_step" finish-status="success" align-center>
-          <el-step v-for="(step, index) in (currentRequest.steps || ['提交申请', '技术审核', '审批通过'])" :key="index" :title="step" />
+        <el-steps :active="currentRequest.status === 'approved' ? (currentRequest.steps || []).length : ((currentRequest.current_step || 1) - 1)" finish-status="success" align-center>
+          <el-step v-for="(step, index) in (currentRequest.steps || ['项目管理员审批', '系统管理员审批'])" :key="index" :title="step" />
         </el-steps>
       </div>
       <template #footer>
@@ -208,8 +208,13 @@ async function handleCancel(row) {
 }
 
 function getProgress(row) {
-  const steps = row.steps?.length || 3
-  return Math.round((row.current_step / steps) * 100)
+  // 已通过 → 100%，已拒绝 → 0%
+  if (row.status === 'approved') return 100
+  if (row.status === 'rejected') return 0
+  // 进行中：已完成的步骤数 / 总步骤数
+  const totalSteps = row.totalSteps || row.steps?.length || 2
+  const completedSteps = (row.current_step || 1) - 1
+  return Math.round((completedSteps / totalSteps) * 100)
 }
 
 function getProgressColor(progress) {
@@ -219,12 +224,12 @@ function getProgressColor(progress) {
 }
 
 function getTypeTagType(type) {
-  const map = { 'merge': 'primary', 'version': 'success', 'baseline': 'warning', 'branch': 'info' }
+  const map = { 'merge': 'primary', 'version_release': 'success', 'baseline_create': 'warning', 'branch': 'info' }
   return map[type] || 'info'
 }
 
 function getTypeName(type) {
-  const map = { 'merge': '合并请求', 'version': '版本发布', 'baseline': '基线申请', 'branch': '分支创建' }
+  const map = { 'merge': '合并请求', 'version_release': '版本发布', 'baseline_create': '基线申请', 'branch': '分支创建' }
   return map[type] || type
 }
 

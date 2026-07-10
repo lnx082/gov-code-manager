@@ -145,7 +145,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getTags, getMyRepos, getBranches } from '@/api/gitea'
+import { getTags, getMyRepos, getBranches, getReleases } from '@/api/gitea'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
@@ -240,9 +240,18 @@ async function loadVersions() {
     for (const repo of reposToLoad) {
       try {
         if (!repo.owner || !repo.repo) continue
-        const tagRes = await getTags(repo.owner, repo.repo)
+        const [tagRes, releaseRes] = await Promise.all([
+          getTags(repo.owner, repo.repo),
+          getReleases(repo.owner, repo.repo, { limit: 100 }).catch(() => ({ data: [] }))
+        ])
         const tags = tagRes.data || tagRes
         const tagArray = Array.isArray(tags) ? tags : []
+        // 用 Release 数据确定 tag 类型
+        const releases = (releaseRes.data || releaseRes || [])
+        const releaseMap = {}
+        ;(Array.isArray(releases) ? releases : []).forEach(r => {
+          releaseMap[r.tag_name] = r.prerelease ? 'beta' : 'release'
+        })
         tagArray.forEach(t => allTags.push({
           ...t,
           repoOwner: repo.owner,
@@ -251,6 +260,7 @@ async function loadVersions() {
           name: t.name,
           message: t.message || '',
           sha: t.commit?.sha || '',
+          type: releaseMap[t.name] || (t.name?.includes('beta') || t.name?.includes('rc') ? 'beta' : 'release'),
         }))
       } catch { /* skip failed repos */ }
     }

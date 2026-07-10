@@ -249,15 +249,32 @@ router.get('/:id', authenticate, async (req, res, next) => {
       return res.status(404).json({ code: 404, message: '审批不存在' });
     }
     
-    // 获取审批记录
+    // 获取审批记录（含审批人名称）
     const records = await db('approval_records')
-      .where('approval_id', id)
-      .orderBy('action_time', 'asc');
-    
+      .select('approval_records.*', 'user_profiles.gitea_username as reviewer_name')
+      .leftJoin('user_profiles', 'approval_records.reviewer_user_id', 'user_profiles.user_id')
+      .where('approval_records.approval_id', id)
+      .orderBy('approval_records.action_time', 'asc');
+
+    // 获取审批流程步骤
+    let steps = ['提交申请', '审批通过'];
+    let totalSteps = 2;
+    if (approval.approval_flow_id) {
+      const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
+      if (flow) {
+        try {
+          steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []);
+          totalSteps = steps.length;
+        } catch { /* use defaults */ }
+      }
+    }
+
     res.json({
       code: 200,
       data: {
         ...approval,
+        steps,
+        totalSteps,
         approval_records: records,
       },
     });
