@@ -15,6 +15,7 @@ import { requestLogger } from './middleware/requestLogger.js';
 // 导入路由
 import authRoutes from './routes/auth.js';
 import repoRoutes from './routes/repos.js';
+import repoMetaRoutes from './routes/repoMeta.js';
 import approvalRoutes from './routes/approvals.js';
 import approvalFlowRoutes from './routes/approvalFlows.js';
 import versionRoutes from './routes/versions.js';
@@ -90,6 +91,9 @@ app.use(`${API_PREFIX}/auth`, authRoutes);
 
 // 仓库路由
 app.use(`${API_PREFIX}/repos`, repoRoutes);
+
+// 仓库元数据路由（部门密级映射 + 中文名）
+app.use(`${API_PREFIX}/repo-meta`, repoMetaRoutes);
 
 // 分支路由（Gitea 代理）
 app.use(`${API_PREFIX}/branches`, branchRoutes);

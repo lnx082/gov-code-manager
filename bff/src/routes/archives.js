@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate } from '../middleware/auth.js';
+import { getRepoVisibilityFilter } from './repoMeta.js';
 
 const router = Router();
 
@@ -12,14 +13,34 @@ router.get('/', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 20, archiveType } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
-    
+
+    // 部门密级过滤
+    const filter = await getRepoVisibilityFilter(req.user);
     let query = db('archives');
-    
-    if (archiveType) {
-      query = query.where('archive_type', archiveType);
+    if (archiveType) query = query.where('archive_type', archiveType);
+    if (filter) {
+      query = query
+        .leftJoin('repo_metadata', function () {
+          this.on('archives.repo_owner', 'repo_metadata.repo_owner')
+            .andOn('archives.repo_name', 'repo_metadata.repo_name');
+        })
+        .where('repo_metadata.department_id', filter.department_id)
+        .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels)
+        .select('archives.*');
     }
-    
-    const total = await query.clone().count('* as count').first();
+
+    let countQuery = db('archives');
+    if (archiveType) countQuery = countQuery.where('archive_type', archiveType);
+    if (filter) {
+      countQuery = countQuery
+        .leftJoin('repo_metadata', function () {
+          this.on('archives.repo_owner', 'repo_metadata.repo_owner')
+            .andOn('archives.repo_name', 'repo_metadata.repo_name');
+        })
+        .where('repo_metadata.department_id', filter.department_id)
+        .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels);
+    }
+    const total = await countQuery.count('* as count').first();
     const list = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize))
       .offset(offset);
