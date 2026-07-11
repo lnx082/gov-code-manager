@@ -18,7 +18,8 @@ router.get('/', authenticate, async (req, res, next) => {
     let query = db('user_profiles')
       .select('user_profiles.*', 'roles.name as role_name', 'departments.name as department_name')
       .leftJoin('roles', 'user_profiles.role_code', 'roles.code')
-      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id');
+      .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
+      .where('user_profiles.is_active', true);
 
     if (username) {
       query = query.where('gitea_username', 'like', `%${username}%`);
@@ -31,7 +32,7 @@ router.get('/', authenticate, async (req, res, next) => {
     }
 
     // 单独统计总数
-    let countQuery = db('user_profiles');
+    let countQuery = db('user_profiles').where('is_active', true);
     if (username) {
       countQuery = countQuery.where('gitea_username', 'like', `%${username}%`);
     }
@@ -171,7 +172,7 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
       password_hash: hashedPassword,
       email: userEmail,
       department_id: departmentId || null,
-      role_code: roleCode || 'user',
+      role_code: roleCode || 'developer',
       secret_level: secretLevel || 'internal',
       permissions: JSON.stringify([]),
       is_active: true,
@@ -191,10 +192,22 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
   }
 });
 
+// 检查目标用户是否为系统管理员（禁止操作）
+async function checkNotAdmin(id) {
+  const target = await db('user_profiles').where('user_id', id).first();
+  if (target && target.role_code === 'admin') {
+    const err = new Error('不能对系统管理员执行此操作');
+    err.status = 400;
+    throw err;
+  }
+  return target;
+}
+
 // 更新用户
 router.put('/:id', authenticate, async (req, res, next) => {
   try {
     const { id } = req.params;
+    await checkNotAdmin(id);
     const { nickname, role_code, department_id, is_active, email, secret_level } = req.body;
 
     const updateData = { updated_at: new Date() };
@@ -222,6 +235,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
+    await checkNotAdmin(id);
     const { newPassword } = req.body;
     
     if (!newPassword || newPassword.length < 6) {
@@ -252,6 +266,7 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, 
 router.post('/:id/lock', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
+    await checkNotAdmin(id);
     const { locked } = req.body;
     
     // locked_until 为时间戳：NULL=未锁定，未来时间=锁定
@@ -273,24 +288,32 @@ router.post('/:id/lock', authenticate, requireAdmin, async (req, res, next) => {
   }
 });
 
-// 删除用户（管理员）
+// 删除用户（软删除：标记为注销，保留记录防止重新登录）
 router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // 检查是否是删除自己
     if (parseInt(id) === req.user.userId) {
-      return res.status(400).json({ 
-        code: 400, 
-        message: '不能删除当前登录用户' 
+      return res.status(400).json({
+        code: 400,
+        message: '不能删除当前登录用户',
       });
     }
-    
-    await db('user_profiles').where('user_id', id).delete();
-    
+    await checkNotAdmin(id);
+
+    await db('user_profiles')
+      .where('user_id', id)
+      .update({
+        is_active: false,
+        account_locked: true,
+        role_code: 'user',
+        updated_at: new Date(),
+      });
+
     res.json({
       code: 200,
-      message: '删除成功',
+      message: '用户已注销',
     });
   } catch (error) {
     next(error);

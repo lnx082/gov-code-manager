@@ -3,8 +3,9 @@
  */
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
+import db from '../database/connection.js';
 
-export function authenticate(req, res, next) {
+export async function authenticate(req, res, next) {
   // 优先从 Authorization 头获取，其次从 query 参数获取（用于 window.open 下载）
   let token = null;
   const authHeader = req.headers.authorization;
@@ -25,6 +26,18 @@ export function authenticate(req, res, next) {
   try {
     const decoded = jwt.verify(token, config.jwt.secret);
     req.user = decoded;
+
+    // 检查用户状态（已登录用户也实时生效）
+    try {
+      const profile = await db('user_profiles').where('user_id', decoded.userId).first();
+      if (!profile || profile.is_active === false) {
+        return res.status(401).json({ code: 401, message: '用户不存在或已注销' });
+      }
+      if (profile.account_locked === true) {
+        return res.status(403).json({ code: 403, message: '账号已被锁定，无法执行操作' });
+      }
+    } catch { /* 查询失败不影响正常请求 */ }
+
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

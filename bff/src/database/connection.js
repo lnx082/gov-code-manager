@@ -91,14 +91,13 @@ async function fixDatabaseSchema(database) {
         { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
         { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
         { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
-        { role_code: 'user', role_name: '普通用户', description: '普通用户，基础权限', permissions: '["repo:view", "version:view"]', is_system: true, sort_order: 5 }
       ]);
       console.log('  ✅ 默认角色插入成功');
     }
   } catch (err) {
     console.warn(`  ⚠️  插入默认角色失败: ${err.message}`);
   }
-  
+
   // 确保 departments 表有数据
   try {
     const deptsCount = await database('departments').count('* as count').first();
@@ -126,6 +125,13 @@ async function fixDatabaseSchema(database) {
     }
   } catch (err) {
     console.warn(`  ⚠️  迁移 secret_level 失败: ${err.message}`);
+  }
+
+  // 删除已废弃的"普通用户"角色
+  try {
+    await database('roles').where('code', 'user').delete();
+  } catch (err) {
+    console.warn(`  ⚠️  删除废弃角色失败: ${err.message}`);
   }
 
   console.log('✅ 数据库表结构检查完成');
@@ -546,7 +552,6 @@ export async function seedDefaultData() {
         { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
         { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
         { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
-        { role_code: 'user', role_name: '普通用户', description: '普通用户，仅有查看权限', permissions: JSON.stringify(['repo:view', 'branch:view', 'version:view']), is_system: true, sort_order: 5 }
       ]);
       console.log('   ✅ 默认角色已插入');
     }

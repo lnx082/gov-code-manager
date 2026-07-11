@@ -179,7 +179,7 @@ async function handleLogin() {
       ElMessage.success('登录成功')
       router.push('/dashboard')
     } catch (error) {
-      ElMessage.error(error.message || '登录失败，请检查账号密码')
+      ElMessage.error('账号或密码错误，请重新输入')
     } finally {
       loading.value = false
     }

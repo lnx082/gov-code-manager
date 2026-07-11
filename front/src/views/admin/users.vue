@@ -77,12 +77,15 @@
       </el-table-column>
       <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-          <el-button type="warning" link @click="handleResetPassword(row)">重置密码</el-button>
-          <el-button type="danger" link @click="handleLock(row)">
-            {{ row.account_locked ? '解锁' : '锁定' }}
-          </el-button>
-          <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          <template v-if="row.role_code !== 'admin'">
+            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button type="warning" link @click="handleResetPassword(row)">重置密码</el-button>
+            <el-button type="danger" link @click="handleLock(row)">
+              {{ row.account_locked ? '解锁' : '锁定' }}
+            </el-button>
+            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          </template>
+          <el-tag v-else type="danger" size="small">系统管理员不可操作</el-tag>
         </template>
       </el-table-column>
     </el-table>
@@ -153,7 +156,7 @@
         <el-form-item label="角色" prop="roleCode">
           <el-select v-model="userForm.roleCode" placeholder="选择角色" style="width: 100%">
             <el-option
-              v-for="role in roles"
+              v-for="role in roles.filter(r => r.code !== 'admin')"
               :key="role.code"
               :label="role.name"
               :value="role.code"
@@ -253,7 +256,7 @@ const userForm = reactive({
   confirmPassword: '',
   email: '',
   departmentId: null,
-  roleCode: 'user',
+  roleCode: 'developer',
   secretLevel: 'secret',
   sendNotify: true
 })
@@ -386,7 +389,7 @@ function resetUserForm() {
   userForm.password = ''
   userForm.confirmPassword = ''
   userForm.departmentId = null
-  userForm.roleCode = 'user'
+  userForm.roleCode = 'developer'
   userForm.secretLevel = 'secret'
   userForm.sendNotify = true
 }
@@ -396,7 +399,7 @@ function handleEdit(row) {
   currentEditUser.value = row
   userForm.username = row.gitea_username
   userForm.departmentId = row.department_id
-  userForm.roleCode = row.role_code || 'user'
+  userForm.roleCode = row.role_code || 'developer'
   userForm.secretLevel = row.secret_level || 'internal'
   showCreateDialog.value = true
 }

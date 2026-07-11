@@ -38,9 +38,28 @@ router.post('/login', authLimiter, async (req, res, next) => {
       });
     }
 
+    // 检查用户状态（锁定/注销）
+    try {
+      const statusCheck = await db('user_profiles').where('user_id', giteaUser.id).first();
+      if (statusCheck) {
+        if (statusCheck.is_active === false) {
+          return res.status(403).json({
+            code: 403,
+            message: '账号已注销，无法登录',
+          });
+        }
+        if (statusCheck.account_locked === true) {
+          return res.status(403).json({
+            code: 403,
+            message: '账号已被锁定，请联系管理员',
+          });
+        }
+      }
+    } catch { /* 忽略查询错误 */ }
+
     // 初始化角色/权限（新用户默认，已有用户从数据库加载）
     let isAdmin = false;
-    let role = 'user';
+    let role = 'developer';
     let permissions = ['repo:view', 'branch:view', 'version:view'];
 
     // 角色名映射
@@ -65,12 +84,12 @@ router.post('/login', authLimiter, async (req, res, next) => {
           updated_at: now,
         });
         // 使用数据库中已有的角色和权限
-        role = existingUser.role_code || 'user';
+        role = existingUser.role_code || 'developer';
         permissions = await loadRolePermissions(role);
         isAdmin = (role === 'admin');
       } else {
-        // 新用户：从 Gitea 推断角色（仅 admin 可识别，其他默认 user）
-        role = giteaUser.is_admin === true ? 'admin' : 'user';
+        // 新用户：从 Gitea 推断角色（仅 admin 可识别，其他默认 developer）
+        role = giteaUser.is_admin === true ? 'admin' : 'developer';
         isAdmin = (role === 'admin');
         permissions = isAdmin ? ['*'] : ['repo:view', 'branch:view', 'version:view'];
         await db('user_profiles').insert({
@@ -211,7 +230,7 @@ router.get('/me', async (req, res, next) => {
       .first();
 
     const roleNameMap = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员' };
-    const roleCode = profile?.role_code || decoded.roleCode || 'user';
+    const roleCode = profile?.role_code || decoded.roleCode || 'developer';
     const roleName = roleNameMap[roleCode] || profile?.role_name || '开发人员';
 
     res.json({

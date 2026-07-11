@@ -150,9 +150,10 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
-  
+
+  // 未认证 → 跳转登录
   if (to.meta.requiresAuth !== false && !userStore.isAuthenticated) {
     if (to.path !== '/login') {
       next('/login')
@@ -160,6 +161,12 @@ router.beforeEach((to, from, next) => {
     }
   }
 
+  // 已认证但权限未加载 → 等待 initUser 完成
+  if (to.meta.permission && userStore.isAuthenticated && !userStore.userInfo) {
+    try { await userStore.initUser() } catch { /* ignore */ }
+  }
+
+  // 权限检查
   if (to.meta.permission && !userStore.hasPermission(to.meta.permission)) {
     ElMessage.error('您没有权限访问该页面')
     next('/dashboard')

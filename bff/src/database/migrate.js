@@ -364,7 +364,6 @@ async function insertDefaultData(db) {
       { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
       { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
       { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
-      { role_code: 'user', role_name: '普通用户', description: '普通用户，仅有查看权限', permissions: JSON.stringify(['repo:view', 'branch:view', 'version:view']), is_system: true, sort_order: 5 },
     ]);
     console.log('✅ 默认角色数据已插入');
   }

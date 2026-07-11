@@ -43,7 +43,13 @@ router.post('/:id/handle', authenticate, requirePermission('audit:view'), async 
   try {
     const { id } = req.params;
     const { action, comment } = req.body;
-    
+
+    // 获取预警信息
+    const warning = await db('risk_warnings').where('warning_id', id).first();
+    if (!warning) {
+      return res.status(404).json({ code: 404, message: '预警不存在' });
+    }
+
     await db('risk_warnings')
       .where('warning_id', id)
       .update({
@@ -52,7 +58,23 @@ router.post('/:id/handle', authenticate, requirePermission('audit:view'), async 
         handler_comment: comment,
         handled_at: new Date(),
       });
-    
+
+    // 如果选择了"通知用户"，给相关用户发送系统通知
+    if (action === 'notify' && warning.related_user_id) {
+      try {
+        await db('notifications').insert({
+          user_id: warning.related_user_id,
+          type: 'risk_warning',
+          title: '风险预警处理通知',
+          content: `您触发的风险预警"${warning.title || ''}"已被处理。处理说明：${comment || '无'}`,
+          is_read: false,
+          created_at: new Date(),
+        });
+      } catch (notifyErr) {
+        console.warn('发送预警通知失败:', notifyErr.message);
+      }
+    }
+
     res.json({ code: 200, message: '处理成功' });
   } catch (error) {
     next(error);

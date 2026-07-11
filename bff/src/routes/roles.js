@@ -10,7 +10,7 @@ const router = Router();
 // 获取角色列表
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const roles = await db('roles').orderBy('sort_order', 'asc').orderBy('role_id', 'asc');
+    const roles = await db('roles').whereNot('code', 'user').orderBy('sort_order', 'asc').orderBy('role_id', 'asc');
     res.json({ code: 200, data: roles });
   } catch (error) {
     next(error);

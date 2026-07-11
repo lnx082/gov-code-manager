@@ -152,11 +152,27 @@
           <div class="notice-content">{{ notice.content }}</div>
           <div class="notice-footer">
             <span class="notice-time">{{ notice.createTime }}</span>
+            <el-button type="primary" link size="small" @click="viewNoticeDetail(notice)">查看详情</el-button>
             <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
             <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
             <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
           </div>
         </div>
+      </div>
+    </el-dialog>
+
+    <!-- 通知详情弹窗 -->
+    <el-dialog v-model="showDetailDialog" title="通知详情" width="500px">
+      <div v-if="detailNotice" class="notice-detail">
+        <div class="detail-header">
+          <h3>{{ detailNotice.title }}</h3>
+          <el-tag v-if="detailNotice.isSys" size="small" type="info">系统通知</el-tag>
+          <el-tag v-else size="small" type="warning">审批通知</el-tag>
+        </div>
+        <el-divider />
+        <div class="detail-body">{{ detailNotice.content }}</div>
+        <el-divider />
+        <div class="detail-time">发布时间：{{ detailNotice.createTime }}</div>
       </div>
     </el-dialog>
   </div>
@@ -180,8 +196,10 @@ const userStore = useUserStore()
 
 const sidebarCollapsed = ref(false)
 const showNoticeDialog = ref(false)
+const showDetailDialog = ref(false)
 const noticeCount = ref(0)
 const notices = ref([])
+const detailNotice = ref(null)
 let noticeTimer = null
 
 onMounted(async () => {
@@ -196,16 +214,10 @@ onUnmounted(() => {
 })
 
 async function loadNoticeCount() {
-  let count = 0
   try {
     const res = await request.get('/notifications/count')
-    count += (res.data || res)?.count || 0
-  } catch (_) { /* ignore */ }
-  try {
-    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 1, isRead: false } })
-    count += (sysRes.data || sysRes)?.total || 0
-  } catch (_) { /* ignore */ }
-  noticeCount.value = count
+    noticeCount.value = (res.data || res)?.count || 0
+  } catch (_) { noticeCount.value = 0 }
 }
 
 async function loadNotices() {
@@ -264,6 +276,18 @@ function handleUserCommand(command) {
         ElMessage.success('已安全退出')
       }).catch(() => {})
       break
+  }
+}
+
+function viewNoticeDetail(notice) {
+  detailNotice.value = notice
+  showDetailDialog.value = true
+  // 系统通知查看详情后自动标记已读
+  if (notice.isSys && !notice.read && notice.notiId) {
+    markNotificationRead(notice.notiId).then(() => {
+      notice.read = true
+      loadNoticeCount()
+    }).catch(_ => {})
   }
 }
 
@@ -546,6 +570,25 @@ function handleApprovalNotice() {
         font-size: 12px;
       }
     }
+  }
+}
+
+.notice-detail {
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    h3 { margin: 0; font-size: 16px; color: #333; }
+  }
+  .detail-body {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+  .detail-time {
+    font-size: 12px;
+    color: #999;
   }
 }
 

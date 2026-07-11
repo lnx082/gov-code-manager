@@ -110,6 +110,29 @@
         <el-button type="primary" @click="submitHandle">确认处理</el-button>
       </template>
     </el-dialog>
+
+    <!-- 预警详情弹窗 -->
+    <el-dialog v-model="showDetailDialog" title="预警详情" width="550px">
+      <div v-if="currentWarning" class="warning-detail">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="预警标题">{{ currentWarning.title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="预警内容">{{ currentWarning.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="预警级别">
+            <el-tag :type="currentWarning.level === 'high' ? 'danger' : currentWarning.level === 'medium' ? 'warning' : 'info'" size="small">
+              {{ currentWarning.level === 'high' ? '高危' : currentWarning.level === 'medium' ? '中危' : '低危' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="相关用户">{{ currentWarning.username || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="来源 IP">{{ currentWarning.source_ip || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="触发规则">{{ currentWarning.triggered_rule || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="触发时间">{{ currentWarning.time || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="处理状态">{{ currentWarning.status === 'handled' ? '已处理' : '未处理' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="showDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -120,6 +143,7 @@ import { getRiskWarnings, handleRiskWarning } from '@/api/bff'
 
 const loading = ref(false)
 const handleDialogVisible = ref(false)
+const showDetailDialog = ref(false)
 
 const filterForm = reactive({
   level: '',
@@ -213,7 +237,8 @@ async function submitHandle() {
 }
 
 function viewDetail(row) {
-  ElMessage.info('查看预警详情')
+  currentWarning.value = row
+  showDetailDialog.value = true
 }
 
 async function ignoreWarning(row) {
@@ -250,6 +275,12 @@ function getStatusName(status) {
 <style lang="scss" scoped>
 .warning-tip {
   color: #909399;
+}
+
+.warning-detail {
+  .el-descriptions {
+    margin-top: 10px;
+  }
 }
 
 .warning-content {
