@@ -124,6 +124,10 @@
           <div class="form-tip">只能是字母、数字、下划线，字母开头</div>
         </el-form-item>
 
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="userForm.email" placeholder="请输入邮箱（选填）" :disabled="isEditMode" />
+        </el-form-item>
+
         <el-form-item label="密码" prop="password" v-if="!isEditMode">
           <el-input 
             v-model="userForm.password" 
@@ -425,6 +429,7 @@ async function handleSubmit() {
         const res = await createUser({
           username: userForm.username,
           password: userForm.password,
+          email: userForm.email || undefined,
           departmentId: userForm.departmentId,
           roleCode: userForm.roleCode,
           secretLevel: userForm.secretLevel,

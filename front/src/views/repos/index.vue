@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2 class="page-title"><el-icon><Folder /></el-icon> 仓库列表</h2>
       <div class="button-group">
-        <el-button type="primary" @click="$router.push('/repos/create')">
+        <el-button type="primary" @click="$router.push('/repos/create')" v-if="canCreateRepo">
           <el-icon><Plus /></el-icon> 创建仓库
         </el-button>
         <el-button @click="loadRepos">
@@ -123,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { Folder, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -133,6 +133,10 @@ import { deleteRepo } from '@/api/gitea'
 
 const router = useRouter()
 const userStore = useUserStore()
+const canCreateRepo = computed(() => {
+  const role = userStore.userInfo?.role || ''
+  return role === 'admin' || role === 'project_manager'
+})
 const loading = ref(false)
 const repoList = ref([])
 const cloneDialogVisible = ref(false)

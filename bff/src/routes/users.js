@@ -337,6 +337,27 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
     }
     await checkNotAdmin(id);
 
+    const profile = await db('user_profiles').where('user_id', id).first();
+    if (!profile) {
+      return res.status(404).json({ code: 404, message: '用户不存在' });
+    }
+
+    // 同步删除 Gitea 用户
+    const giteaToken = config.gitea?.token || req.user?.giteaToken;
+    if (giteaToken && profile.gitea_username) {
+      try {
+        const authHdr = giteaToken.startsWith('Basic ') || giteaToken.startsWith('Bearer ')
+          ? giteaToken : `Bearer ${giteaToken}`;
+        await fetch(`${config.gitea.url}/api/v1/admin/users/${encodeURIComponent(profile.gitea_username)}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': authHdr, 'Content-Type': 'application/json' }
+        });
+      } catch (e) {
+        console.warn('Gitea 用户删除失败（继续本地操作）:', e.message);
+      }
+    }
+
+    // 本地软删除
     await db('user_profiles')
       .where('user_id', id)
       .update({
@@ -348,7 +369,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
 
     res.json({
       code: 200,
-      message: '用户已注销',
+      message: '用户已注销（含 Gitea 账号同步删除）',
     });
   } catch (error) {
     next(error);

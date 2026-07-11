@@ -9,31 +9,62 @@ import { executeBaselineCreate } from './baselines.js';
 
 const router = Router();
 
+// 密级层级映射
+const SECURITY_HIERARCHY = { 'public': 1, 'internal': 2, 'secret': 3, 'confidential': 4, 'top-secret': 5 };
+
+// 获取当前用户的部门隔离过滤条件
+async function getDeptFilter(user) {
+  if (user.roleCode === 'admin') return { deptFilter: null, secretFilter: null };
+
+  const profile = await db('user_profiles').where('user_id', user.userId).first();
+  const deptId = profile?.department_id || null;
+  const userLevel = SECURITY_HIERARCHY[profile?.secret_level] || 1;
+
+  if (user.roleCode === 'project_manager') {
+    // 项目管理员：只看本部门全部（无密级限制）
+    return { deptFilter: deptId, secretFilter: null };
+  }
+
+  // 开发人员/审计人员/普通用户：本部门 + 密级 ≤ 自己密级
+  const allowedLevels = Object.entries(SECURITY_HIERARCHY)
+    .filter(([, v]) => v <= userLevel)
+    .map(([k]) => k);
+  return { deptFilter: deptId, secretFilter: allowedLevels };
+}
+
+// 应用部门密级过滤
+function applyFilters(query, deptFilter, secretFilter) {
+  if (deptFilter) {
+    // 通过 applicant_user_id 关联 user_profiles 获取部门
+    query = query.whereIn('applicant_user_id', function () {
+      this.select('user_id').from('user_profiles').where('department_id', deptFilter);
+    });
+  }
+  if (secretFilter) {
+    query = query.whereIn('secret_level', secretFilter);
+  }
+  return query;
+}
+
 // 获取审批列表
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 20, status, type } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
-    
+    const { deptFilter, secretFilter } = await getDeptFilter(req.user);
+
     let query = db('approvals');
 
-    if (status) {
-      query = query.where('status', status);
-    }
-    if (type) {
-      query = query.where('operation_type', type);
-    }
+    if (status) query = query.where('status', status);
+    if (type) query = query.where('operation_type', type);
+    if (req.query.applicantUserId === 'me') query = query.where('applicant_user_id', req.user.userId);
+    query = applyFilters(query, deptFilter, secretFilter);
 
-    // 如果是获取我的申请
-    if (req.query.applicantUserId === 'me') {
-      query = query.where('applicant_user_id', req.user.userId);
-    }
-
-    // 单独构建 count 查询避免 select * + count(*) 的 GROUP BY 冲突
     let countQuery = db('approvals');
     if (status) countQuery = countQuery.where('status', status);
     if (type) countQuery = countQuery.where('operation_type', type);
     if (req.query.applicantUserId === 'me') countQuery = countQuery.where('applicant_user_id', req.user.userId);
+    countQuery = applyFilters(countQuery, deptFilter, secretFilter);
     const total = await countQuery.count('* as count').first();
 
     const list = await query.orderBy('created_at', 'desc')
@@ -82,17 +113,26 @@ router.get('/pending', authenticate, async (req, res, next) => {
 
     const allPending = await query.orderBy('created_at', 'desc');
 
+    // 获取部门密级过滤条件
+    const { deptFilter, secretFilter } = await getDeptFilter(req.user);
+
     // 按用户角色过滤：只展示当前步骤需要当前用户审批的申请
     const filtered = [];
     for (const approval of allPending) {
+      // 部门密级过滤
+      if (deptFilter) {
+        const applicant = await db('user_profiles').where('user_id', approval.applicant_user_id).first();
+        if (!applicant || applicant.department_id !== deptFilter) continue;
+      }
+      if (secretFilter && !secretFilter.includes(approval.secret_level)) continue;
+
       // 加载审批流程步骤
       let steps = [];
       if (approval.approval_flow_id) {
         const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
         if (flow) {
-          try {
-            steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []);
-          } catch { steps = []; }
+          try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); }
+          catch { steps = []; }
         }
       }
 
@@ -100,14 +140,8 @@ router.get('/pending', authenticate, async (req, res, next) => {
       const currentStepName = steps[currentStepIdx] || '';
       const requiredRole = getRoleForStep(currentStepName);
 
-      // 按角色过滤：每人只看自己负责的步骤
-      if (requiredRole && requiredRole === userRole) {
-        filtered.push(approval);
-      }
-      // 兼容无审批流程的旧数据：管理员可见
-      else if (!approval.approval_flow_id && isAdmin) {
-        filtered.push(approval);
-      }
+      if (requiredRole && requiredRole === userRole) { filtered.push(approval); }
+      else if (!approval.approval_flow_id && isAdmin) { filtered.push(approval); }
     }
 
     const total = filtered.length;
@@ -222,9 +256,14 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
 // 获取审批统计
 router.get('/stats/summary', authenticate, async (req, res, next) => {
   try {
-    const pending = await db('approvals').where('status', 'pending').count('* as count').first();
-    const approved = await db('approvals').where('status', 'approved').count('* as count').first();
-    const rejected = await db('approvals').where('status', 'rejected').count('* as count').first();
+    const { deptFilter, secretFilter } = await getDeptFilter(req.user);
+    const buildCountQuery = (status) => {
+      let q = db('approvals').where('status', status);
+      return applyFilters(q, deptFilter, secretFilter);
+    };
+    const pending = await buildCountQuery('pending').count('* as count').first();
+    const approved = await buildCountQuery('approved').count('* as count').first();
+    const rejected = await buildCountQuery('rejected').count('* as count').first();
 
     res.json({
       code: 200,

@@ -153,6 +153,25 @@ async function fixDatabaseSchema(database) {
     console.warn(`  ⚠️  删除废弃角色失败: ${err.message}`);
   }
 
+  // 仓库元数据表（仓库→部门→密级映射 + 中文显示名）
+  try {
+    await database.raw(`
+      CREATE TABLE IF NOT EXISTS repo_metadata (
+        repo_owner VARCHAR(100) NOT NULL,
+        repo_name VARCHAR(100) NOT NULL,
+        department_id INTEGER,
+        secret_level VARCHAR(20) DEFAULT 'internal',
+        display_name VARCHAR(200),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (repo_owner, repo_name)
+      )
+    `);
+    console.log('✅ repo_metadata 表已就绪');
+  } catch (err) {
+    console.warn('  ⚠️  创建 repo_metadata 表失败:', err.message);
+  }
+
   console.log('✅ 数据库表结构检查完成');
 }
 

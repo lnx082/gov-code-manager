@@ -76,7 +76,7 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="viewDetail(row)">查看</el-button>
-          <el-button type="success" link @click="handleApprove(row)" v-if="row.status === 'pending'">审批</el-button>
+          <el-button type="success" link @click="handleApprove(row)" v-if="canApprove && row.status === 'pending'">审批</el-button>
           <el-button type="danger" link @click="handleClose(row)" v-if="row.status === 'pending'">关闭</el-button>
         </template>
       </el-table-column>
@@ -120,15 +120,8 @@
             <el-option v-for="branch in targetBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
-        <el-form-item label="关联审批流程">
-          <el-select v-model="createForm.approvalFlowId" placeholder="选择审批流程" clearable>
-            <el-option v-for="flow in approvalFlows" :key="flow.id" :label="flow.name" :value="flow.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="指派审批人">
-          <el-select v-model="createForm.reviewers" multiple placeholder="选择审批人">
-            <el-option v-for="user in reviewerOptions" :key="user.value" :label="user.label" :value="user.value" />
-          </el-select>
+        <el-form-item label="审批流程">
+          <span class="form-text">系统将自动使用默认审批流程，审批人自动分配为部门项目管理员和系统管理员</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -185,7 +178,7 @@
       </div>
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button @click="showApprovalDialog" type="primary" v-if="currentMR?.status === 'pending' || currentMR?.status === 'open'">审批</el-button>
+        <el-button @click="showApprovalDialog" type="primary" v-if="canApprove && (currentMR?.status === 'pending' || currentMR?.status === 'open')">审批</el-button>
         <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved'">合并</el-button>
       </template>
     </el-dialog>
@@ -213,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
@@ -225,6 +218,10 @@ import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const userStore = useUserStore()
+const canApprove = computed(() => {
+  const role = userStore.userInfo?.role || ''
+  return role === 'admin' || role === 'project_manager'
+})
 
 const loading = ref(false)
 const submittingApproval = ref(false)
@@ -294,6 +291,16 @@ async function loadRepos() {
   try {
     const res = await getMyRepos()
     const repos = res.data || res
+    // 获取用户可见的仓库元数据（部门+密级过滤）
+    let visibleRepos = null
+    try {
+      const metaRes = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff'}/repo-meta/visible`, {
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('gitea_token')}` }
+      })
+      const meta = await metaRes.json()
+      visibleRepos = meta.data || meta || []
+    } catch { /* 获取失败则显示全部 */ }
+
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => {
       const ownerName = r.owner?.login || r.owner?.username || r.owner?.name || ''
       const repoName = r.name || ''
@@ -305,6 +312,12 @@ async function loadRepos() {
         full_name: r.full_name || `${ownerName}/${repoName}`
       }
     })
+
+    // 按部门密级过滤
+    if (visibleRepos && visibleRepos.length > 0) {
+      const allowed = new Set(visibleRepos.map(m => `${m.repo_owner}/${m.repo_name}`))
+      repoList.value = repoList.value.filter(r => allowed.has(`${r.owner}/${r.repo}`))
+    }
   } catch (error) {
     console.error('加载仓库列表失败:', error)
     ElMessage.warning('加载仓库列表失败')
