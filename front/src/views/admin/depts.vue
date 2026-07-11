@@ -154,7 +154,11 @@ async function handleSubmit() {
 
 async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm('确定要删除该部门吗？', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(
+      `确定要删除部门「${row.name}」吗？\n若该部门下存在活跃用户或子部门，将无法删除。`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '尝试删除' }
+    )
     await deleteDept(row.dept_id)
     ElMessage.success('删除成功')
     loadDepts()

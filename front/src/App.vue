@@ -58,7 +58,8 @@
             <template #title>工作台</template>
           </el-menu-item>
 
-          <el-sub-menu index="repositories">
+          <!-- v-show 保持 DOM 结构稳定，只切换显隐，角色未加载时 userStore.userInfo 为 null 全部隐藏 -->
+          <el-sub-menu index="repositories" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
             <template #title>
               <el-icon class="menu-icon"><Folder /></el-icon>
               <span>仓库管理</span>
@@ -66,7 +67,7 @@
             <el-menu-item index="/repos">仓库列表</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="branches">
+          <el-sub-menu index="branches" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
             <template #title>
               <el-icon class="menu-icon"><Share /></el-icon>
               <span>分支管理</span>
@@ -75,7 +76,7 @@
             <el-menu-item index="/branches/merge">合并请求</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="versions">
+          <el-sub-menu index="versions" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
             <template #title>
               <el-icon class="menu-icon"><Collection /></el-icon>
               <span>版本管理</span>
@@ -85,17 +86,17 @@
             <el-menu-item index="/versions/archive">归档管理</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="approval">
+          <el-sub-menu index="approval" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
             <template #title>
               <el-icon class="menu-icon"><DocumentChecked /></el-icon>
               <span>审批管理</span>
             </template>
-            <el-menu-item index="/approval/pending" v-if="userStore.role === 'admin' || userStore.role === 'project_manager'">待我审批</el-menu-item>
+            <el-menu-item index="/approval/pending" v-show="userStore.role === 'admin' || userStore.role === 'project_manager'">待我审批</el-menu-item>
             <el-menu-item index="/approval/my-requests">我的申请</el-menu-item>
             <el-menu-item index="/approval/history">审批历史</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="audit" v-if="userStore.role === 'admin' || userStore.role === 'auditor'">
+          <el-sub-menu index="audit">
             <template #title>
               <el-icon class="menu-icon"><Search /></el-icon>
               <span>审计管理</span>
@@ -105,7 +106,7 @@
             <el-menu-item index="/audit/warning">风险预警</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="admin" v-if="userStore.hasPermission('admin:manage')">
+          <el-sub-menu index="admin" v-show="userStore.userInfo && userStore.hasPermission('admin:manage')">
             <template #title>
               <el-icon class="menu-icon"><Setting /></el-icon>
               <span>系统管理</span>

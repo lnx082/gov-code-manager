@@ -6,6 +6,7 @@ import db from '../database/connection.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import config from '../config/index.js';
+import { syncPasswordToGitea } from './auth.js';
 
 const router = Router();
 
@@ -16,7 +17,11 @@ router.get('/', authenticate, async (req, res, next) => {
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
 
     let query = db('user_profiles')
-      .select('user_profiles.*', 'roles.name as role_name', 'departments.name as department_name')
+      .select(
+        'user_profiles.*',
+        'roles.name as role_name',
+        'departments.name as department_name'
+      )
       .leftJoin('roles', 'user_profiles.role_code', 'roles.code')
       .leftJoin('departments', 'user_profiles.department_id', 'departments.dept_id')
       .where('user_profiles.is_active', true);
@@ -171,7 +176,7 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
     const localUserId = giteaUserId || -(Date.now() % 2147483647);
     await db('user_profiles').insert({
       user_id: localUserId,
-      gitea_username: username,
+      gitea_username: username.toLowerCase(),
       nickname: nickname || username,
       password_hash: hashedPassword,
       email: userEmail,
@@ -241,25 +246,55 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, 
     const { id } = req.params;
     await checkNotAdmin(id);
     const { newPassword } = req.body;
-    
+
     if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ 
-        code: 400, 
-        message: '新密码长度不能少于6位' 
+      return res.status(400).json({
+        code: 400,
+        message: '新密码长度不能少于6位'
       });
     }
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 先获取用户信息（用于同步 Gitea）
+    const profile = await db('user_profiles')
+      .where('user_id', id)
+      .first();
+
+    if (!profile) {
+      return res.status(404).json({ code: 404, message: '用户不存在' });
+    }
+
+    // 更新本地密码（先更新本地，确保用户能用本地兜底登录）
     await db('user_profiles')
       .where('user_id', id)
       .update({
         password_hash: hashedPassword,
         updated_at: new Date(),
       });
-    
+
+    // 后台同步 Gitea 密码（不阻塞响应，自愈机制）
+    let giteaSynced = false;
+    let giteaErrorMsg = '';
+
+    try {
+      giteaSynced = await syncPasswordToGitea(profile.gitea_username, newPassword, profile.role_code);
+      if (giteaSynced) {
+        console.log(`[PasswordReset] Gitea 用户 ${profile.gitea_username} 密码同步成功`);
+      }
+    } catch (syncErr) {
+      giteaErrorMsg = syncErr.message;
+      console.error(`[PasswordReset] Gitea 密码同步异常: ${giteaErrorMsg}`);
+    }
+
+    if (!giteaSynced && !giteaErrorMsg) {
+      giteaErrorMsg = 'Gitea 同步未完成（后台自动重试中，下次登录时自愈）';
+    }
+
     res.json({
       code: 200,
       message: '密码重置成功',
+      data: { giteaSynced, giteaError: giteaErrorMsg || undefined }
     });
   } catch (error) {
     next(error);
