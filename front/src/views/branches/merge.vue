@@ -120,15 +120,8 @@
             <el-option v-for="branch in targetBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
-        <el-form-item label="关联审批流程">
-          <el-select v-model="createForm.approvalFlowId" placeholder="选择审批流程" clearable>
-            <el-option v-for="flow in approvalFlows" :key="flow.id" :label="flow.name" :value="flow.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="指派审批人">
-          <el-select v-model="createForm.reviewers" multiple placeholder="选择审批人">
-            <el-option v-for="user in reviewerOptions" :key="user.value" :label="user.label" :value="user.value" />
-          </el-select>
+        <el-form-item label="审批流程">
+          <span class="form-text">系统将自动使用默认审批流程，审批人自动分配为部门项目管理员和系统管理员</span>
         </el-form-item>
       </el-form>
       <template #footer>
