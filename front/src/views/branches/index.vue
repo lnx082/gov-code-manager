@@ -136,7 +136,8 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBranches as getGiteaBranches, getMyRepos } from '@/api/gitea'
+import { getBranches as getGiteaBranches } from '@/api/gitea'
+import { getFilteredRepos } from '@/api/bff'
 import { Share, Plus, Search, Refresh, View, Connection, Delete } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -165,20 +166,16 @@ async function loadBranches() {
   loading.value = true
   try {
     // Load repo list from Gitea
-    const reposRes = await getMyRepos({ page: 1, limit: 100 })
-    const repos = reposRes.data || reposRes
+    const reposRes = await getFilteredRepos({ page: 1, pageSize: 200 })
+    const repos = reposRes.data?.list || reposRes.data || reposRes
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => {
-      // 解析中文显示名
-      const desc = r.description || ''
-      const dm = desc.match(/\[显示名=([^\]]+)\]/)
-      const displayName = dm ? dm[1] : (r.full_name || r.name)
       return {
         id: r.id,
         name: r.full_name || r.name,
-        displayName,
-        owner: r.owner?.login || r.owner?.username || r.owner || '',
+        displayName: r._department_name || r.full_name || r.name,
+        owner: typeof r.owner === 'string' ? r.owner : (r.owner?.login || r.owner?.username || ''),
         repo: r.name,
-        repoOwner: r.owner?.login || r.owner?.username || r.owner || '',
+        repoOwner: typeof r.owner === 'string' ? r.owner : (r.owner?.login || r.owner?.username || ''),
         repoName: r.name,
         defaultBranch: r.default_branch || 'main'
       }

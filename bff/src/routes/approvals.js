@@ -32,16 +32,28 @@ async function getDeptFilter(user) {
   return { deptFilter: deptId, secretFilter: allowedLevels };
 }
 
-// 应用部门密级过滤
+// 应用部门密级过滤（按申请人部门）
 function applyFilters(query, deptFilter, secretFilter) {
   if (deptFilter) {
-    // 通过 applicant_user_id 关联 user_profiles 获取部门
     query = query.whereIn('applicant_user_id', function () {
       this.select('user_id').from('user_profiles').where('department_id', deptFilter);
     });
   }
   if (secretFilter) {
     query = query.whereIn('secret_level', secretFilter);
+  }
+  return query;
+}
+
+// 应用部门密级过滤（按仓库所属部门，基于 repo_metadata 表）
+function applyRepoFilter(query, deptFilter, secretFilter) {
+  if (deptFilter || secretFilter) {
+    query = query.whereIn(db.raw('(repo_owner, repo_name)'), function () {
+      let q = this.select('repo_owner', 'repo_name').from('repo_metadata');
+      if (deptFilter) q = q.where('department_id', deptFilter);
+      if (secretFilter) q = q.whereIn('secret_level', secretFilter);
+      return q;
+    });
   }
   return query;
 }
@@ -262,11 +274,12 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
 
     let query = db('approvals').where('operation_type', 'merge');
     if (status) query = query.where('status', status);
-    query = applyFilters(query, deptFilter, secretFilter);
+    // 按仓库所属部门过滤（repo_metadata 表），而非申请人部门
+    query = applyRepoFilter(query, deptFilter, secretFilter);
 
     let countQuery = db('approvals').where('operation_type', 'merge');
     if (status) countQuery = countQuery.where('status', status);
-    countQuery = applyFilters(countQuery, deptFilter, secretFilter);
+    countQuery = applyRepoFilter(countQuery, deptFilter, secretFilter);
     const total = await countQuery.count('* as count').first();
 
     const list = await query.orderBy('created_at', 'desc')

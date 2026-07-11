@@ -252,6 +252,23 @@ router.post('/repos', authenticate, async (req, res, next) => {
       }
     }
 
+    // 5. 自动创建 repo_metadata 记录（部门+密级+显示名）
+    const owner = result.owner?.login || req.user.username;
+    const repoName = result.name || req.body.name;
+    const displayMatch = desc.match(/\[显示名=([^\]]+)\]/);
+    const secretMatch = desc.match(/\[(公开|内部|秘密|机密|绝密)\]/);
+    const displayName = displayMatch ? displayMatch[1] : (desc.split(']').pop()?.trim() || `${owner}/${repoName}`);
+    const secretLevel = secretMatch ? ({'公开':'public','内部':'internal','秘密':'secret','机密':'confidential','绝密':'top-secret'})[secretMatch[1]] || 'internal' : 'internal';
+
+    try {
+      await db('repo_metadata').insert({
+        repo_owner: owner, repo_name: repoName,
+        department_id: targetDeptId || null,
+        secret_level: secretLevel,
+        display_name: displayName
+      }).onConflict(['repo_owner', 'repo_name']).merge();
+    } catch { /* metadata 创建失败不影响主流程 */ }
+
     res.status(response.status).json(result);
   } catch (error) {
     next(error);

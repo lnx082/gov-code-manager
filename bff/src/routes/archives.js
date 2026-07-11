@@ -24,8 +24,10 @@ router.get('/', authenticate, async (req, res, next) => {
           this.on('archives.repo_owner', 'repo_metadata.repo_owner')
             .andOn('archives.repo_name', 'repo_metadata.repo_name');
         })
-        .where('repo_metadata.department_id', filter.department_id)
-        .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels)
+        .where(function () {
+          this.where('repo_metadata.department_id', filter.department_id)
+            .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels);
+        }).orWhereNull('repo_metadata.department_id')
         .select('archives.*');
     }
 
@@ -37,8 +39,10 @@ router.get('/', authenticate, async (req, res, next) => {
           this.on('archives.repo_owner', 'repo_metadata.repo_owner')
             .andOn('archives.repo_name', 'repo_metadata.repo_name');
         })
-        .where('repo_metadata.department_id', filter.department_id)
-        .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels);
+        .where(function () {
+          this.where('repo_metadata.department_id', filter.department_id)
+            .whereIn('repo_metadata.secret_level', filter.allowed_secret_levels);
+        }).orWhereNull('repo_metadata.department_id');
     }
     const total = await countQuery.count('* as count').first();
     const list = await query.orderBy('created_at', 'desc')
