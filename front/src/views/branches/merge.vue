@@ -291,6 +291,16 @@ async function loadRepos() {
   try {
     const res = await getMyRepos()
     const repos = res.data || res
+    // 获取用户可见的仓库元数据（部门+密级过滤）
+    let visibleRepos = null
+    try {
+      const metaRes = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff'}/repo-meta/visible`, {
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('gitea_token')}` }
+      })
+      const meta = await metaRes.json()
+      visibleRepos = meta.data || meta || []
+    } catch { /* 获取失败则显示全部 */ }
+
     repoList.value = (Array.isArray(repos) ? repos : []).map(r => {
       const ownerName = r.owner?.login || r.owner?.username || r.owner?.name || ''
       const repoName = r.name || ''
@@ -302,6 +312,12 @@ async function loadRepos() {
         full_name: r.full_name || `${ownerName}/${repoName}`
       }
     })
+
+    // 按部门密级过滤
+    if (visibleRepos && visibleRepos.length > 0) {
+      const allowed = new Set(visibleRepos.map(m => `${m.repo_owner}/${m.repo_name}`))
+      repoList.value = repoList.value.filter(r => allowed.has(`${r.owner}/${r.repo}`))
+    }
   } catch (error) {
     console.error('加载仓库列表失败:', error)
     ElMessage.warning('加载仓库列表失败')

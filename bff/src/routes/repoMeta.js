@@ -71,10 +71,29 @@ router.put('/:owner/:name', authenticate, async (req, res, next) => {
   }
 });
 
-// 获取所有仓库元数据（用于前端筛选中显示中文名）
+// 获取所有仓库元数据
 router.get('/', authenticate, async (req, res) => {
   try {
     const list = await db('repo_metadata').select('*');
+    res.json({ code: 200, data: list });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 获取当前用户可见的仓库列表（按部门密级过滤后）
+router.get('/visible', authenticate, async (req, res) => {
+  try {
+    const filter = await getRepoVisibilityFilter(req.user);
+    if (!filter) {
+      // 管理员看全部
+      const list = await db('repo_metadata').select('*');
+      return res.json({ code: 200, data: list });
+    }
+    const list = await db('repo_metadata')
+      .where('department_id', filter.department_id)
+      .whereIn('secret_level', filter.allowed_secret_levels)
+      .select('*');
     res.json({ code: 200, data: list });
   } catch (error) {
     next(error);
