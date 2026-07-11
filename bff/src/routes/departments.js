@@ -90,21 +90,35 @@ router.put('/:id', authenticate, requirePermission('admin:manage'), async (req, 
 router.delete('/:id', authenticate, requirePermission('admin:manage'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
+    // 检查部门是否存在
+    const dept = await db('departments').where('dept_id', id).first();
+    if (!dept) {
+      return res.status(404).json({ code: 404, message: '部门不存在' });
+    }
+
     // 检查是否有子部门
-    const childCount = await db('departments').where('parent_id', id).count('* as count').first();
+    const childCount = await db('departments').where('parent_id', id).where('is_active', true).count('* as count').first();
     if (parseInt(childCount.count) > 0) {
-      return res.status(400).json({ code: 400, message: '该部门下有子部门，无法删除' });
+      return res.status(400).json({ code: 400, message: '该部门下有子部门，请先删除子部门' });
     }
-    
-    // 检查是否有用户
-    const userCount = await db('user_profiles').where('department_id', id).count('* as count').first();
-    if (parseInt(userCount.count) > 0) {
-      return res.status(400).json({ code: 400, message: '该部门下有用户，无法删除' });
+
+    // 检查是否有活跃用户（"目前的系统用户"）
+    const activeUserCount = await db('user_profiles')
+      .where('department_id', id)
+      .where('is_active', true)
+      .count('* as count')
+      .first();
+    if (parseInt(activeUserCount.count) > 0) {
+      return res.status(400).json({
+        code: 400,
+        message: `该部门下还有 ${activeUserCount.count} 名活跃用户，无法删除。请先将用户移出部门后再试`,
+        data: { activeUserCount: parseInt(activeUserCount.count) }
+      });
     }
-    
+
     await db('departments').where('dept_id', id).delete();
-    
+
     res.json({ code: 200, message: '部门删除成功' });
   } catch (error) {
     next(error);

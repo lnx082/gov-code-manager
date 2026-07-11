@@ -46,8 +46,11 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '角色名称不能为空' });
     }
 
-    // 检查角色代码是否已存在
-    const existing = await db('roles').where('code', roleCode).first();
+    // 检查角色代码是否已存在（兼容两套列名）
+    const existing = await db('roles')
+      .where('role_code', roleCode)
+      .orWhere('code', roleCode)
+      .first();
     if (existing) {
       return res.status(400).json({ code: 400, message: '角色代码已存在' });
     }
@@ -55,6 +58,8 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
     await db('roles').insert({
       code: roleCode,
       name: roleName,
+      role_code: roleCode,
+      role_name: roleName,
       description: description || '',
       permissions: JSON.stringify(permissions || []),
       is_system: false,
@@ -82,7 +87,10 @@ router.put('/:roleId', authenticate, requireAdmin, async (req, res, next) => {
     }
 
     const updateData = { updated_at: new Date() };
-    if (roleName !== undefined) updateData.name = roleName;
+    if (roleName !== undefined) {
+      updateData.name = roleName;
+      updateData.role_name = roleName;
+    }
     if (description !== undefined) updateData.description = description;
     if (permissions !== undefined) updateData.permissions = JSON.stringify(permissions);
     if (sortOrder !== undefined) updateData.sort_order = sortOrder;
@@ -182,7 +190,10 @@ router.get('/permissions/all', authenticate, async (req, res, next) => {
 router.get('/default-permissions/:roleCode', authenticate, async (req, res, next) => {
   try {
     const { roleCode } = req.params;
-    const role = await db('roles').where('code', roleCode).first();
+    const role = await db('roles')
+      .where('role_code', roleCode)
+      .orWhere('code', roleCode)
+      .first();
     
     if (!role) {
       return res.status(404).json({ code: 404, message: '角色不存在' });

@@ -161,8 +161,8 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  // 已认证但权限未加载 → 等待 initUser 完成
-  if (to.meta.permission && userStore.isAuthenticated && !userStore.userInfo) {
+  // 已认证但用户信息未加载 → 等待 initUser 完成
+  if (userStore.isAuthenticated && !userStore.userInfo) {
     try { await userStore.initUser() } catch { /* ignore */ }
   }
 
@@ -171,6 +171,19 @@ router.beforeEach(async (to, from, next) => {
     ElMessage.error('您没有权限访问该页面')
     next('/dashboard')
     return
+  }
+
+  // 审计人员只能访问审计相关页面和工作台
+  if (userStore.userInfo && userStore.role === 'auditor' && to.path !== '/login') {
+    const auditAllowed = [
+      '/dashboard', '/profile', '/settings',
+      '/audit/logs', '/audit/reports', '/audit/warning'
+    ]
+    if (!auditAllowed.includes(to.path)) {
+      ElMessage.warning('您没有权限访问该页面')
+      next('/dashboard')
+      return
+    }
   }
 
   next()

@@ -47,6 +47,11 @@ async function fixDatabaseSchema(database) {
       { name: 'sort_order', def: 'INTEGER DEFAULT 0' },
       { name: 'is_system', def: 'BOOLEAN DEFAULT FALSE' },
       { name: 'is_active', def: 'BOOLEAN DEFAULT TRUE' },
+      // 兼容两套列名（老版本用 code/name，新版本用 role_code/role_name）
+      { name: 'code', def: 'VARCHAR(50)' },
+      { name: 'name', def: 'VARCHAR(100)' },
+      { name: 'role_code', def: 'VARCHAR(50)' },
+      { name: 'role_name', def: 'VARCHAR(100)' },
     ],
     departments: [
       { name: 'sort_order', def: 'INTEGER DEFAULT 0' },
@@ -81,16 +86,30 @@ async function fixDatabaseSchema(database) {
     }
   }
   
+  // 兼容两套列名：回填缺失的数据（老表有 code/name 但无 role_code/role_name，反之亦然）
+  try {
+    // role_code → code
+    await database.raw("UPDATE roles SET code = role_code WHERE code IS NULL AND role_code IS NOT NULL");
+    // code → role_code
+    await database.raw("UPDATE roles SET role_code = code WHERE role_code IS NULL AND code IS NOT NULL");
+    // role_name → name
+    await database.raw("UPDATE roles SET name = role_name WHERE name IS NULL AND role_name IS NOT NULL");
+    // name → role_name
+    await database.raw("UPDATE roles SET role_name = name WHERE role_name IS NULL AND name IS NOT NULL");
+  } catch (err) {
+    console.warn(`  ⚠️  回填 roles 列数据失败: ${err.message}`);
+  }
+
   // 确保 roles 表有数据
   try {
     const rolesCount = await database('roles').count('* as count').first();
     if (parseInt(rolesCount.count) === 0) {
       console.log('  📥 插入默认角色...');
       await database('roles').insert([
-        { role_code: 'admin', role_name: '系统管理员', description: '系统管理员，拥有全部权限', permissions: '["*"]', is_system: true, sort_order: 1 },
-        { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
-        { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
-        { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
+        { role_code: 'admin', role_name: '系统管理员', code: 'admin', name: '系统管理员', description: '系统管理员，拥有全部权限', permissions: '["*"]', is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', code: 'project_manager', name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', code: 'developer', name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', code: 'auditor', name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
       ]);
       console.log('  ✅ 默认角色插入成功');
     }
@@ -548,10 +567,10 @@ export async function seedDefaultData() {
     if (parseInt(roleCount.count) === 0) {
       // 插入默认角色
       await database('roles').insert([
-        { role_code: 'admin', role_name: '系统管理员', description: '系统管理员，拥有所有权限', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
-        { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
-        { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
-        { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
+        { role_code: 'admin', role_name: '系统管理员', code: 'admin', name: '系统管理员', description: '系统管理员，拥有所有权限', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', code: 'project_manager', name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', code: 'developer', name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', code: 'auditor', name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
       ]);
       console.log('   ✅ 默认角色已插入');
     }

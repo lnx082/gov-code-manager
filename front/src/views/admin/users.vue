@@ -39,9 +39,9 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="role_name" label="角色" width="120">
+      <el-table-column label="角色" width="120">
         <template #default="{ row }">
-          <el-tag type="primary" size="small">{{ row.role_name || '开发人员' }}</el-tag>
+          <el-tag type="primary" size="small">{{ getRoleName(row) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="department_name" label="部门" width="120">
@@ -463,10 +463,14 @@ async function handleResetPasswordSubmit() {
     submitting.value = true
     try {
       const userId = currentEditUser.value.user_id
-      await resetUserPassword(userId, {
+      const res = await resetUserPassword(userId, {
         newPassword: resetPasswordForm.newPassword
       })
-      ElMessage.success('密码重置成功')
+      if (res.data?.giteaSynced) {
+        ElMessage.success('密码重置成功，已同步 Gitea')
+      } else {
+        ElMessage.success('密码重置成功（用户可立即登录，密码将自动同步到 Gitea）')
+      }
       showResetPasswordDialog.value = false
     } catch (error) {
       ElMessage.error((error?.response?.data?.message) || error?.message || '密码重置失败')
@@ -539,6 +543,17 @@ function getSecretLevelName(level) {
 function formatTime(time) {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
+}
+
+const roleNameMap = {
+  'admin': '系统管理员',
+  'project_manager': '项目管理员',
+  'developer': '开发人员',
+  'auditor': '审计人员'
+}
+
+function getRoleName(row) {
+  return row.role_name || roleNameMap[row.role_code] || '开发人员'
 }
 </script>
 

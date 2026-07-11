@@ -11,12 +11,15 @@
           </div>
         </div>
         <div class="banner-right">
-          <el-button type="primary" size="large" @click="$router.push('/repos/create')">
+          <el-button type="primary" size="large" @click="$router.push('/repos/create')" v-if="!isAuditor">
             <el-icon><Plus /></el-icon> 创建仓库
           </el-button>
           <el-button size="large" @click="$router.push('/approval/pending')" v-if="isAdmin || userStore.role === 'project_manager'">
             <el-icon><DocumentChecked /></el-icon> 待我审批
             <el-badge :value="pendingApprovals" :hidden="pendingApprovals === 0" />
+          </el-button>
+          <el-button size="large" type="info" @click="$router.push('/audit/logs')" v-if="isAuditor">
+            <el-icon><Search /></el-icon> 审计日志
           </el-button>
         </div>
       </div>
@@ -24,6 +27,8 @@
 
     <!-- 统计卡片 -->
     <div class="stats-grid">
+      <!-- 非审计人员：显示业务统计 -->
+      <template v-if="!isAuditor">
       <div class="stat-card red clickable" @click="$router.push('/repos')">
         <div class="stat-icon"><el-icon><Folder /></el-icon></div>
         <div class="stat-info">
@@ -55,6 +60,32 @@
           <div class="stat-label">在线用户</div>
         </div>
       </div>
+      </template>
+
+      <!-- 审计人员：只看审计相关统计 -->
+      <template v-if="isAuditor">
+      <div class="stat-card orange clickable" @click="$router.push('/audit/logs')">
+        <div class="stat-icon"><el-icon><Search /></el-icon></div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.auditLogCount || '-' }}</div>
+          <div class="stat-label">审计日志</div>
+        </div>
+      </div>
+      <div class="stat-card red clickable" @click="$router.push('/audit/warning')">
+        <div class="stat-icon"><el-icon><WarningFilled /></el-icon></div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.unhandledWarnings || 0 }}</div>
+          <div class="stat-label">未处理预警</div>
+        </div>
+      </div>
+      <div class="stat-card green" :class="{ clickable: isAdmin }" @click="isAdmin && showOnlineUsers()" v-if="isAdmin">
+        <div class="stat-icon"><el-icon><User /></el-icon></div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.onlineUsers }}</div>
+          <div class="stat-label">在线用户</div>
+        </div>
+      </div>
+      </template>
     </div>
 
     <!-- 主内容 -->
@@ -84,12 +115,14 @@
 
       <!-- 右侧 -->
       <div class="content-right">
-        <!-- 快捷入口 -->
-        <el-card class="panel-card" shadow="hover">
+        <!-- 快捷入口（审计人员不显示） -->
+        <el-card class="panel-card" shadow="hover" v-if="!isAuditor">
           <template #header>
             <span><el-icon><Lightning /></el-icon> 快捷入口</span>
           </template>
           <div class="quick-links">
+            <!-- 非审计人员：业务快捷入口 -->
+            <template v-if="userStore.role !== 'auditor'">
             <div class="quick-link-item" @click="$router.push('/repos')">
               <div class="link-icon blue"><el-icon><Folder /></el-icon></div>
               <span>仓库管理</span>
@@ -102,7 +135,24 @@
               <div class="link-icon orange"><el-icon><Collection /></el-icon></div>
               <span>版本管理</span>
             </div>
-            <div class="quick-link-item" @click="$router.push('/audit/logs')" v-if="isAdmin || userStore.role === 'auditor'">
+            </template>
+            <!-- 审计人员：审计快捷入口 -->
+            <template v-if="userStore.role === 'auditor'">
+            <div class="quick-link-item" @click="$router.push('/audit/logs')">
+              <div class="link-icon red"><el-icon><Search /></el-icon></div>
+              <span>操作日志</span>
+            </div>
+            <div class="quick-link-item" @click="$router.push('/audit/reports')">
+              <div class="link-icon orange"><el-icon><DataAnalysis /></el-icon></div>
+              <span>审计报表</span>
+            </div>
+            <div class="quick-link-item" @click="$router.push('/audit/warning')">
+              <div class="link-icon red"><el-icon><WarningFilled /></el-icon></div>
+              <span>风险预警</span>
+            </div>
+            </template>
+            <!-- 管理员通用 -->
+            <div class="quick-link-item" @click="$router.push('/audit/logs')" v-if="isAdmin && userStore.role !== 'auditor'">
               <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>审计日志</span>
             </div>
@@ -196,7 +246,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search, Bell } from '@element-plus/icons-vue'
+import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search, Bell, WarningFilled, DataAnalysis } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getApprovalList } from '@/api/approval'
@@ -206,6 +256,11 @@ import { Solar } from 'lunar-javascript'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.hasPermission('admin:manage') || userStore.role === 'admin')
+
+// 三重兜底判断审计人员，绕过 computed 可能不正确的问题
+const isAuditor = computed(() => {
+  return userStore.userInfo?.role === 'auditor' || userStore.role === 'auditor' || userStore.roleName === '审计人员'
+})
 
 const currentDate = computed(() => {
   const now = new Date()

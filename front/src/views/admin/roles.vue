@@ -5,7 +5,12 @@
     </div>
 
     <el-table :data="roleList" stripe border>
-      <el-table-column prop="description" label="描述" show-overflow-tooltip />
+      <el-table-column label="角色名称" width="150">
+        <template #default="{ row }">
+          {{ row.role_name || row.name || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="description" label="描述" show-overflow-tooltip min-width="200" />
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_system ? 'primary' : 'info'" size="small">
@@ -32,7 +37,7 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="showPermissionDialog" title="角色权限" width="600px">
+    <el-dialog v-model="showPermissionDialog" :title="'角色权限 - ' + (currentRole?.role_name || currentRole?.name || '')" width="600px">
       <div v-if="currentRole">
         <p class="role-desc">{{ currentRole.description }}</p>
         <el-divider />
