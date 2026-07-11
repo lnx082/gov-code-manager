@@ -253,6 +253,29 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
   }
 });
 
+// 获取合并请求列表（供 merge.vue 使用，带部门密级过滤）
+router.get('/merge-requests', authenticate, async (req, res, next) => {
+  try {
+    const { page = 1, pageSize = 50, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(pageSize);
+    const { deptFilter, secretFilter } = await getDeptFilter(req.user);
+
+    let query = db('approvals').where('operation_type', 'merge');
+    if (status) query = query.where('status', status);
+    query = applyFilters(query, deptFilter, secretFilter);
+
+    let countQuery = db('approvals').where('operation_type', 'merge');
+    if (status) countQuery = countQuery.where('status', status);
+    countQuery = applyFilters(countQuery, deptFilter, secretFilter);
+    const total = await countQuery.count('* as count').first();
+
+    const list = await query.orderBy('created_at', 'desc')
+      .limit(parseInt(pageSize)).offset(offset);
+
+    res.json({ code: 200, data: { list, total: parseInt(total.count), page: parseInt(page), pageSize: parseInt(pageSize) } });
+  } catch (error) { next(error); }
+});
+
 // 获取审批统计
 router.get('/stats/summary', authenticate, async (req, res, next) => {
   try {

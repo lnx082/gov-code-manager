@@ -99,17 +99,21 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '密码长度不能少于6位' });
     }
     
-    // 检查用户名是否已存在
+    // 检查用户名是否已存在（处理软删除的旧账号）
     const existingUser = await db('user_profiles')
       .where('gitea_username', username)
       .first();
-    
+
     if (existingUser) {
-      return res.status(400).json({ code: 400, message: '用户名已存在' });
+      if (existingUser.is_active) {
+        return res.status(400).json({ code: 400, message: '用户名已存在' });
+      }
+      // 旧账号已注销，硬删除旧记录以便重新创建
+      await db('user_profiles').where('gitea_username', username).delete();
     }
     
     // 生成邮箱（如果未提供）
-    const userEmail = email || `${username}@gov.local`;
+    const userEmail = email || `${username}@example.com`;
     
     // 哈希密码
     const hashedPassword = await bcrypt.hash(password, 10);
