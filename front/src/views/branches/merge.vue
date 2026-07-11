@@ -76,7 +76,7 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="viewDetail(row)">查看</el-button>
-          <el-button type="success" link @click="handleApprove(row)" v-if="row.status === 'pending'">审批</el-button>
+          <el-button type="success" link @click="handleApprove(row)" v-if="canApprove && row.status === 'pending'">审批</el-button>
           <el-button type="danger" link @click="handleClose(row)" v-if="row.status === 'pending'">关闭</el-button>
         </template>
       </el-table-column>
@@ -185,7 +185,7 @@
       </div>
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
-        <el-button @click="showApprovalDialog" type="primary" v-if="currentMR?.status === 'pending' || currentMR?.status === 'open'">审批</el-button>
+        <el-button @click="showApprovalDialog" type="primary" v-if="canApprove && (currentMR?.status === 'pending' || currentMR?.status === 'open')">审批</el-button>
         <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved'">合并</el-button>
       </template>
     </el-dialog>
@@ -213,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
@@ -225,6 +225,10 @@ import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const userStore = useUserStore()
+const canApprove = computed(() => {
+  const role = userStore.userInfo?.role || ''
+  return role === 'admin' || role === 'project_manager'
+})
 
 const loading = ref(false)
 const submittingApproval = ref(false)
