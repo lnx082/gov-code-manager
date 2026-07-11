@@ -172,7 +172,7 @@ async function loadBranches() {
       return {
         id: r.id,
         name: r.full_name || r.name,
-        displayName: r._department_name || r.full_name || r.name,
+        displayName: r._display_name || r.full_name || r.name,
         owner: typeof r.owner === 'string' ? r.owner : (r.owner?.login || r.owner?.username || ''),
         repo: r.name,
         repoOwner: typeof r.owner === 'string' ? r.owner : (r.owner?.login || r.owner?.username || ''),

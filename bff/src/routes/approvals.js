@@ -282,8 +282,29 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
     countQuery = applyRepoFilter(countQuery, deptFilter, secretFilter);
     const total = await countQuery.count('* as count').first();
 
-    const list = await query.orderBy('created_at', 'desc')
+    const rawList = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize)).offset(offset);
+
+    // 格式化为前端期望的字段名
+    const list = rawList.map(item => ({
+      id: item.approval_id,
+      number: item.gitea_pr_number || item.approval_id,
+      title: item.title,
+      description: item.description,
+      sourceBranch: item.source_branch,
+      targetBranch: item.target_branch,
+      repoName: item.repo_name,
+      repo: item.repo_name,
+      owner: item.repo_owner,
+      status: item.status,
+      approvalRecords: [],
+      additions: 0, deletions: 0, fileChanges: 0, files: [],
+      author: item.applicant_username || '',
+      createdAt: item.created_at,
+      bffApprovalId: item.approval_id,
+      secretLevel: item.secret_level || 'secret',
+      urgency: item.urgency || 'normal',
+    }));
 
     res.json({ code: 200, data: { list, total: parseInt(total.count), page: parseInt(page), pageSize: parseInt(pageSize) } });
   } catch (error) { next(error); }
