@@ -104,17 +104,21 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
       return res.status(400).json({ code: 400, message: '密码长度不能少于6位' });
     }
     
-    // 检查用户名是否已存在
+    // 检查用户名是否已存在（处理软删除的旧账号）
     const existingUser = await db('user_profiles')
       .where('gitea_username', username)
       .first();
-    
+
     if (existingUser) {
-      return res.status(400).json({ code: 400, message: '用户名已存在' });
+      if (existingUser.is_active) {
+        return res.status(400).json({ code: 400, message: '用户名已存在' });
+      }
+      // 旧账号已注销，硬删除旧记录以便重新创建
+      await db('user_profiles').where('gitea_username', username).delete();
     }
     
     // 生成邮箱（如果未提供）
-    const userEmail = email || `${username}@gov.local`;
+    const userEmail = email || `${username}@example.com`;
     
     // 哈希密码
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -187,10 +191,15 @@ router.post('/', authenticate, requireAdmin, async (req, res, next) => {
     });
     
     const giteaCreated = !!giteaUserId;
+    // 自动添加为部门仓库协作者
+    let collabAdded = 0;
+    if (giteaCreated && departmentId) {
+      collabAdded = await syncDeptCollaborators(username, departmentId, giteaAdminToken, 'add');
+    }
     res.json({
       code: 200,
-      message: giteaCreated ? '用户创建成功（已同步创建 Gitea 账户）' : '用户创建成功（本地记录，Gitea 同步未完成）',
-      data: { userId: localUserId, giteaCreated, giteaError: giteaErrorMsg || undefined }
+      message: giteaCreated ? `用户创建成功` + (collabAdded ? `（已添加 ${collabAdded} 个仓库协作者）` : '') : '用户创建成功（本地记录，Gitea 同步未完成）',
+      data: { userId: localUserId, giteaCreated, collaboratorRepos: collabAdded, giteaError: giteaErrorMsg || undefined }
     });
   } catch (error) {
     next(error);
@@ -223,14 +232,28 @@ router.put('/:id', authenticate, async (req, res, next) => {
     if (email !== undefined) updateData.email = email;
     if (secret_level !== undefined) updateData.secret_level = secret_level;
 
-    await db('user_profiles')
-      .where('user_id', id)
-      .update(updateData);
-    
-    res.json({
-      code: 200,
-      message: '更新成功',
-    });
+    // 如果部门发生变化，同步协作者权限
+    let collabMsg = '';
+    if (department_id !== undefined) {
+      const oldProfile = await db('user_profiles').where('user_id', id).first();
+      const oldDept = oldProfile?.department_id;
+      const username = oldProfile?.gitea_username;
+      const giteaToken = config.gitea?.token || req.user?.giteaToken;
+      if (oldDept && oldDept !== department_id && username) {
+        // 删除旧部门仓库协作者
+        const removed = await syncDeptCollaborators(username, oldDept, giteaToken, 'remove');
+        // 添加新部门仓库协作者
+        const added = await syncDeptCollaborators(username, department_id, giteaToken, 'add');
+        collabMsg = `（已更新协作者：-${removed}/+${added}）`;
+      } else if (!oldDept && username) {
+        const added = await syncDeptCollaborators(username, department_id, giteaToken, 'add');
+        collabMsg = `（已添加 ${added} 个协作者）`;
+      }
+    }
+
+    await db('user_profiles').where('user_id', id).update(updateData);
+
+    res.json({ code: 200, message: '更新成功' + collabMsg });
   } catch (error) {
     next(error);
   }
@@ -432,5 +455,24 @@ router.post('/change-password', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+// 同步用户对部门仓库的协作者权限
+async function syncDeptCollaborators(username, departmentId, giteaToken, action) {
+  if (!departmentId || !username || !giteaToken) return 0;
+  const authHdr = giteaToken.startsWith('Basic ') || giteaToken.startsWith('Bearer ') ? giteaToken : `Bearer ${giteaToken}`;
+  const deptRepos = await db('repo_metadata').where('department_id', departmentId).select('repo_owner', 'repo_name');
+  let count = 0;
+  for (const repo of deptRepos) {
+    try {
+      const method = action === 'remove' ? 'DELETE' : 'PUT';
+      const body = action === 'remove' ? undefined : JSON.stringify({ permission: 'read' });
+      const res = await fetch(`${config.gitea.url}/api/v1/repos/${repo.repo_owner}/${repo.repo_name}/collaborators/${username}`, {
+        method, headers: { 'Authorization': authHdr, 'Content-Type': 'application/json' }, body
+      });
+      if (res.ok) count++;
+    } catch { /* skip */ }
+  }
+  return count;
+}
 
 export default router;

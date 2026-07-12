@@ -313,8 +313,8 @@ async function loadRepos() {
       }
     })
 
-    // 按部门密级过滤
-    if (visibleRepos && visibleRepos.length > 0) {
+    // 按部门密级过滤（始终生效，非管理员无可见仓库则列表为空）
+    if (visibleRepos !== null) {
       const allowed = new Set(visibleRepos.map(m => `${m.repo_owner}/${m.repo_name}`))
       repoList.value = repoList.value.filter(r => allowed.has(`${r.owner}/${r.repo}`))
     }

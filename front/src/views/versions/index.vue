@@ -145,7 +145,8 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getTags, getMyRepos, getBranches, getReleases } from '@/api/gitea'
+import { getTags, getBranches, getReleases } from '@/api/gitea'
+import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
@@ -212,13 +213,13 @@ async function onCreateRepoChange(repoId) {
 async function loadVersions() {
   loading.value = true
   try {
-    const reposRes = await getMyRepos({ page: 1, limit: 100 })
-    const repos = reposRes.data || reposRes
+    const reposRes = await getFilteredRepos({ page: 1, pageSize: 200 })
+    const repos = reposRes.data?.list || reposRes.data || reposRes
     const repoArray = Array.isArray(repos) ? repos : []
 
     // 构建 repoList，含中文显示名
     repoList.value = repoArray.map(r => {
-      const owner = r.owner?.login || r.owner?.username || ''
+      const owner = typeof r.owner === 'string' ? r.owner : (r.owner?.login || r.owner?.username || '')
       const name = r.name
       return {
         id: r.id,

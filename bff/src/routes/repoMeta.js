@@ -49,17 +49,16 @@ router.put('/:owner/:name', authenticate, async (req, res, next) => {
 
     const exists = await db('repo_metadata').where({ repo_owner: owner, repo_name: name }).first();
     if (exists) {
-      await db('repo_metadata').where({ repo_owner: owner, repo_name: name }).update({
-        department_id: department_id || exists.department_id,
-        secret_level: secret_level || exists.secret_level,
-        display_name: display_name || exists.display_name,
-        updated_at: new Date()
-      });
+      const updateData = { updated_at: new Date() };
+      if ('department_id' in req.body) updateData.department_id = department_id;
+      if ('secret_level' in req.body) updateData.secret_level = secret_level;
+      if ('display_name' in req.body) updateData.display_name = display_name;
+      await db('repo_metadata').where({ repo_owner: owner, repo_name: name }).update(updateData);
     } else {
       await db('repo_metadata').insert({
         repo_owner: owner,
         repo_name: name,
-        department_id: department_id || null,
+        department_id: department_id !== undefined ? department_id : null,
         secret_level: secret_level || 'internal',
         display_name: display_name || `${owner}/${name}`,
       });
