@@ -465,7 +465,7 @@ async function syncDeptCollaborators(username, departmentId, giteaToken, action)
   for (const repo of deptRepos) {
     try {
       const method = action === 'remove' ? 'DELETE' : 'PUT';
-      const body = action === 'remove' ? undefined : JSON.stringify({ permission: 'read' });
+      const body = action === 'remove' ? undefined : JSON.stringify({ permission: 'write' });
       const res = await fetch(`${config.gitea.url}/api/v1/repos/${repo.repo_owner}/${repo.repo_name}/collaborators/${username}`, {
         method, headers: { 'Authorization': authHdr, 'Content-Type': 'application/json' }, body
       });

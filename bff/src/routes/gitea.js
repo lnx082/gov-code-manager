@@ -241,7 +241,7 @@ router.post('/repos', authenticate, async (req, res, next) => {
             {
               method: 'PUT',
               headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ permission: 'read' }),
+              body: JSON.stringify({ permission: 'write' }),
             }
           );
           if (addRes.ok) added++;
