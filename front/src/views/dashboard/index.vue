@@ -11,7 +11,7 @@
           </div>
         </div>
         <div class="banner-right">
-          <el-button type="primary" size="large" @click="$router.push('/repos/create')" v-if="!isAuditor">
+          <el-button type="primary" size="large" @click="$router.push('/repos/create')" v-if="isAdmin || userStore.role === 'project_manager'">
             <el-icon><Plus /></el-icon> 创建仓库
           </el-button>
           <el-button size="large" @click="$router.push('/approval/pending')" v-if="isAdmin || userStore.role === 'project_manager'">
@@ -28,7 +28,7 @@
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <!-- 非审计人员：显示业务统计 -->
-      <template v-if="!isAuditor">
+      <template v-if="isAdmin || userStore.role === 'project_manager'">
       <div class="stat-card red clickable" @click="$router.push('/repos')">
         <div class="stat-icon"><el-icon><Folder /></el-icon></div>
         <div class="stat-info">
@@ -116,7 +116,7 @@
       <!-- 右侧 -->
       <div class="content-right">
         <!-- 快捷入口（审计人员不显示） -->
-        <el-card class="panel-card" shadow="hover" v-if="!isAuditor">
+        <el-card class="panel-card" shadow="hover" v-if="isAdmin || userStore.role === 'project_manager'">
           <template #header>
             <span><el-icon><Lightning /></el-icon> 快捷入口</span>
           </template>
