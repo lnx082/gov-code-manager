@@ -2,25 +2,19 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# 复制前端代码
-COPY src ./src
-COPY package.json ./
-COPY vite.config.js ./
-COPY index.html ./
+COPY package*.json ./
+RUN npm install
 
-# 安装依赖并构建
-RUN npm install && npm run build
+COPY . .
+
+RUN npm run build
 
 # 生产镜像
 FROM nginx:alpine
 
-# 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# 复制 nginx 配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# 暴露端口
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]

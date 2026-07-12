@@ -11,7 +11,7 @@ services:
       - .:/app
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://123.60.219.19:3000
+      - VITE_API_BASE_URL=http://123.60.219.19:8080/api/bff
       - CHOKIDAR_USEPOLLING=true
     networks:
       - app-network
