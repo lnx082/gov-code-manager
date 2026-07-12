@@ -5,7 +5,7 @@
     </div>
 
     <el-card>
-      <el-form :model="form" label-width="120px">
+      <el-form :model="form" label-width="120px" v-if="profileLoaded">
         <el-form-item label="用户名">
           <el-input v-model="form.username" disabled />
         </el-form-item>
@@ -13,16 +13,16 @@
           <el-input v-model="form.nickname" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-input :value="userStore.roleName" disabled />
+          <el-input :value="profileRoleName" disabled />
         </el-form-item>
         <el-form-item label="部门">
-          <el-input :value="userStore.userInfo?.departmentName || '未分配'" disabled />
+          <el-input :value="profileDepartmentName || '未分配'" disabled />
         </el-form-item>
         <el-form-item label="保密等级">
-          <el-input :value="getSecretLevelName(userStore.userInfo?.secretLevel)" disabled />
+          <el-input :value="getSecretLevelName(profileSecretLevel)" disabled />
         </el-form-item>
         <el-form-item label="最后登录">
-          <el-input :value="formatTime(userStore.userInfo?.lastLoginTime)" disabled />
+          <el-input :value="formatTime(profileLastLoginTime)" disabled />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSave">保存</el-button>
@@ -72,7 +72,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { getMySessions, deleteSession, updateUser, changePassword } from '@/api/user'
+import { getMySessions, deleteSession, updateUser, changePassword, getUserInfo } from '@/api/user'
 
 const userStore = useUserStore()
 
@@ -89,13 +89,42 @@ const passwordForm = reactive({
 
 const sessions = ref([])
 
-onMounted(() => {
-  if (userStore.userInfo) {
-    form.username = userStore.userInfo.username
-    form.nickname = userStore.userInfo.nickname
-  }
+// 直接从后端获取的数据，完全绕过 store 可能存在的旧缓存
+const profileRoleName = ref('')
+const profileDepartmentName = ref('')
+const profileSecretLevel = ref('')
+const profileLastLoginTime = ref(null)
+const profileLoaded = ref(false)
+
+onMounted(async () => {
+  await refreshUserInfo()
   loadSessions()
 })
+
+async function refreshUserInfo() {
+  try {
+    const res = await getUserInfo()
+    // getUserInfo 返回的是 axios 响应中 data 字段（已是 /auth/me 的 data 对象）
+    if (res?.data) {
+      form.username = res.data.username || ''
+      form.nickname = res.data.nickname || ''
+      // 直接用后端返回的最新数据，不依赖 store
+      profileRoleName.value = res.data.roleName || ''
+      profileDepartmentName.value = res.data.departmentName || ''
+      profileSecretLevel.value = res.data.secretLevel || ''
+      profileLastLoginTime.value = res.data.lastLoginTime || null
+    }
+  } catch (e) {
+    // 后端请求失败时，才降级使用 store 缓存
+    profileRoleName.value = userStore.roleName
+    profileDepartmentName.value = userStore.userInfo?.departmentName || ''
+    profileSecretLevel.value = userStore.userInfo?.secretLevel || ''
+    profileLastLoginTime.value = userStore.userInfo?.lastLoginTime || null
+    form.username = userStore.userInfo?.username || ''
+    form.nickname = userStore.userInfo?.nickname || ''
+  }
+  profileLoaded.value = true
+}
 
 async function loadSessions() {
   try {
@@ -152,8 +181,8 @@ async function handleDeleteSession(row) {
 }
 
 function getSecretLevelName(level) {
-  const map = { 'public': '公开', 'internal': '内部', 'secret': '涉密', 'top-secret': '机密' }
-  return map[level] || level || '内部'
+  const map = { 'public': '公开', 'internal': '秘密', 'secret': '秘密', 'confidential': '机密', 'top-secret': '绝密' }
+  return map[level] || level || '秘密'
 }
 
 function formatTime(time) {

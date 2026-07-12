@@ -131,9 +131,11 @@ router.post('/login', authLimiter, async (req, res, next) => {
     }
 
     // 同步用户信息到本地 user_profiles 表
+    let existingUser = null;
+    let userIdMatched = true;
     try {
-      let existingUser = await db('user_profiles').where('user_id', giteaUser.id).first();
-      let userIdMatched = true;
+      existingUser = await db('user_profiles').where('user_id', giteaUser.id).first();
+      userIdMatched = true;
 
       // ★ 如果按 user_id 找不到，尝试按 gitea_username 找（统一小写匹配，规避大小写不一致）
       if (!existingUser) {
@@ -203,6 +205,16 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     const roleName = getRoleName(role);
 
+    // 获取部门名称（用于登录响应）
+    let departmentName = '';
+    try {
+      const deptId = existingUser?.department_id;
+      if (deptId) {
+        const dept = await db('departments').where('dept_id', deptId).first();
+        departmentName = dept?.name || '';
+      }
+    } catch { /* 忽略 */ }
+
     // 创建会话记录（先删旧记录，每人只保留一条）
     try {
       await db('sessions').where('user_id', giteaUser.id).delete();
@@ -265,11 +277,15 @@ router.post('/login', authLimiter, async (req, res, next) => {
         user: {
           id: giteaUser.id,
           username: giteaUser.login || username,
-          nickname: giteaUser.full_name || username,
-          email: giteaUser.email || '',
+          nickname: existingUser?.nickname || giteaUser.full_name || username,
+          email: existingUser?.email || giteaUser.email || '',
           avatar: giteaUser.avatar_url || '',
           role: role,
           roleName: roleName,
+          departmentName: departmentName,
+          departmentId: existingUser?.department_id || null,
+          secretLevel: existingUser?.secret_level || 'secret',
+          lastLoginTime: existingUser?.last_login_time || null,
           permissions: permissions,
         },
       },

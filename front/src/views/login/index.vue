@@ -176,8 +176,8 @@ async function handleLogin() {
     loading.value = true
     try {
       await userStore.loginAction(loginForm.username, loginForm.password)
-      ElMessage.success('登录成功')
-      router.push('/dashboard')
+      // 登录后强制刷新页面，使 App.vue 的 initUser() 从 /auth/me 获取数据库最新数据
+      window.location.reload()
     } catch (error) {
       ElMessage.error('账号或密码错误，请重新输入')
     } finally {
