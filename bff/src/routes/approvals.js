@@ -45,15 +45,17 @@ function applyFilters(query, deptFilter, secretFilter) {
   return query;
 }
 
-// 应用部门密级过滤（按仓库所属部门，基于 repo_metadata 表）
+// 应用部门密级过滤（按仓库所属部门，JOIN repo_metadata 表）
 function applyRepoFilter(query, deptFilter, secretFilter) {
   if (deptFilter || secretFilter) {
-    query = query.whereIn(db.raw('(repo_owner, repo_name)'), function () {
-      let q = this.select('repo_owner', 'repo_name').from('repo_metadata');
-      if (deptFilter) q = q.where('department_id', deptFilter);
-      if (secretFilter) q = q.whereIn('secret_level', secretFilter);
-      return q;
-    });
+    const alias = 'rm_' + Math.random().toString(36).substring(2, 6);
+    query = query
+      .join(`repo_metadata AS ${alias}`, function () {
+        this.on(`approvals.repo_owner`, `${alias}.repo_owner`)
+          .andOn(`approvals.repo_name`, `${alias}.repo_name`);
+      });
+    if (deptFilter) query = query.where(`${alias}.department_id`, deptFilter);
+    if (secretFilter) query = query.whereIn(`${alias}.secret_level`, secretFilter);
   }
   return query;
 }
@@ -204,66 +206,6 @@ router.get('/by-pr/:prNumber', authenticate, async (req, res, next) => {
 });
 
 // 获取合并请求列表（merge.vue 的主数据源，不依赖 Gitea API）
-router.get('/merge-requests', authenticate, async (req, res, next) => {
-  try {
-    const { page = 1, pageSize = 50, status } = req.query;
-
-    let query = db('approvals')
-      .where('operation_type', 'merge');
-
-    if (status) {
-      query = query.where('status', status);
-    }
-
-    const countQuery = db('approvals')
-      .where('operation_type', 'merge');
-    if (status) countQuery.where('status', status);
-    const total = await countQuery.count('* as count').first();
-
-    const list = await query
-      .orderBy('created_at', 'desc')
-      .limit(parseInt(pageSize))
-      .offset((parseInt(page) - 1) * parseInt(pageSize));
-
-    const formatted = list.map(item => ({
-      id: item.gitea_pr_number || item.approval_id,
-      number: item.gitea_pr_number || item.approval_id,
-      title: item.title,
-      description: item.description,
-      sourceBranch: item.source_branch,
-      targetBranch: item.target_branch,
-      repoName: item.repo_owner ? `${item.repo_owner}/${item.repo_name}` : (item.repo_name || ''),
-      owner: item.repo_owner,
-      repo: item.repo_name,
-      status: item.status,
-      state: item.status === 'approved' || item.status === 'rejected' ? 'open' : 'open',
-      merged: item.status === 'merged',
-      approvals: item.status === 'approved' ? 1 : 0,
-      requiredApprovals: 1,
-      approvalRate: item.status === 'approved' ? 100 : (item.status === 'rejected' ? 0 : 0),
-      author: item.applicant_username,
-      createdAt: item.created_at,
-      bffApprovalId: item.approval_id,
-      approvalRecords: [],
-      additions: 0,
-      deletions: 0,
-      fileChanges: 0,
-      files: [],
-    }));
-
-    res.json({
-      code: 200,
-      data: {
-        list: formatted,
-        total: parseInt(total.count),
-        page: parseInt(page),
-        pageSize: parseInt(pageSize),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // 获取合并请求列表（供 merge.vue 使用，带部门密级过滤）
 router.get('/merge-requests', authenticate, async (req, res, next) => {
@@ -272,9 +214,8 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     const { deptFilter, secretFilter } = await getDeptFilter(req.user);
 
-    let query = db('approvals').where('operation_type', 'merge');
+    let query = db('approvals').where('operation_type', 'merge').select('approvals.*');
     if (status) query = query.where('status', status);
-    // 按仓库所属部门过滤（repo_metadata 表），而非申请人部门
     query = applyRepoFilter(query, deptFilter, secretFilter);
 
     let countQuery = db('approvals').where('operation_type', 'merge');
