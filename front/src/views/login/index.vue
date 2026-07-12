@@ -1,133 +1,70 @@
 <template>
   <div class="gov-login-page">
-    <!-- 顶部政务横幅 -->
-    <div class="gov-banner">
-      <div class="banner-content">
-        <div class="banner-left">
-          <el-icon :size="36" class="party-emblem"><Platform /></el-icon>
-          <span class="banner-title">党政软件版本管控平台</span>
-        </div>
-        <div class="banner-right">
-          <span class="hotline">服务热线：400-XXX-XXXX</span>
-        </div>
+    <!-- 全屏背景 -->
+    <div class="login-bg">
+      <img :src="loginImage" alt="" class="bg-image" />
+      <div class="bg-overlay" />
+    </div>
+
+    <!-- 左侧：党政软件版本管控平台 -->
+    <div class="left-panel">
+      <div class="left-emblem">
+        <el-icon :size="48"><Platform /></el-icon>
+      </div>
+      <h2 class="left-title">党政软件版本管控平台</h2>
+      <p class="left-desc">符合等保2.0三级要求，全流程审计溯源<br/>多级审批流程，版本管控规范化</p>
+      <div class="left-tags">
+        <span class="tag">安全可控</span>
+        <span class="tag">合规审批</span>
+        <span class="tag">全程溯源</span>
       </div>
     </div>
 
-    <!-- 登录主体 -->
-    <div class="login-main">
-      <!-- 左侧宣传区 -->
-      <div class="login-left">
-        <div class="gov-info">
-          <h2>党政软件版本管控平台</h2>
-          <div class="feature-list">
-            <div class="feature-item">
-              <el-icon class="feature-icon"><Lock /></el-icon>
-              <div class="feature-text">
-                <h4>安全可控</h4>
-                <p>符合等保2.0三级要求，全流程审计溯源</p>
-              </div>
-            </div>
-            <div class="feature-item">
-              <el-icon class="feature-icon"><DocumentChecked /></el-icon>
-              <div class="feature-text">
-                <h4>合规审批</h4>
-                <p>多级审批流程，版本管控规范化</p>
-              </div>
-            </div>
-            <div class="feature-item">
-              <el-icon class="feature-icon"><Checked /></el-icon>
-              <div class="feature-text">
-                <h4>信创适配</h4>
-                <p>国产化环境适配，麒麟鲲鹏兼容</p>
-              </div>
-            </div>
-            <div class="feature-item">
-              <el-icon class="feature-icon"><DataAnalysis /></el-icon>
-              <div class="feature-text">
-                <h4>全程溯源</h4>
-                <p>防篡改审计日志，操作永久留存</p>
-              </div>
-            </div>
-          </div>
+    <!-- 右侧：登录卡片 -->
+    <div class="login-card">
+      <div class="card-header">
+        <div class="card-emblem">
+          <el-icon :size="32"><Platform /></el-icon>
         </div>
+        <h3 class="card-title">用户登录</h3>
+        <p class="card-subtitle">请使用您的账号登录系统</p>
       </div>
 
-      <!-- 右侧登录表单 -->
-      <div class="login-right">
-        <div class="login-box">
-          <div class="login-header">
-            <div class="emblem-wrapper">
-              <el-icon :size="48" class="login-emblem"><Platform /></el-icon>
-            </div>
-            <h1>用户登录</h1>
-            <p class="login-subtitle">请使用您的账号登录系统</p>
+      <el-form
+        ref="loginFormRef"
+        :model="loginForm"
+        :rules="loginRules"
+        class="login-form"
+        @keyup.enter="handleLogin"
+      >
+        <el-form-item prop="username">
+          <div class="input-wrapper">
+            <el-icon class="input-icon"><User /></el-icon>
+            <el-input v-model="loginForm.username" placeholder="请输入用户名" size="large" clearable />
           </div>
+        </el-form-item>
 
-          <el-form
-            ref="loginFormRef"
-            :model="loginForm"
-            :rules="loginRules"
-            class="login-form"
-            @keyup.enter="handleLogin"
-          >
-            <el-form-item prop="username">
-              <div class="input-wrapper">
-                <el-icon class="input-icon"><User /></el-icon>
-                <el-input
-                  v-model="loginForm.username"
-                  placeholder="请输入用户名"
-                  size="large"
-                  clearable
-                />
-              </div>
-            </el-form-item>
-
-            <el-form-item prop="password">
-              <div class="input-wrapper">
-                <el-icon class="input-icon"><Lock /></el-icon>
-                <el-input
-                  v-model="loginForm.password"
-                  type="password"
-                  placeholder="请输入密码"
-                  size="large"
-                  show-password
-                  clearable
-                />
-              </div>
-            </el-form-item>
-
-            <el-form-item>
-              <el-checkbox v-model="loginForm.remember">记住登录状态</el-checkbox>
-            </el-form-item>
-
-            <el-form-item>
-              <el-button
-                type="danger"
-                size="large"
-                :loading="loading"
-                class="login-button"
-                @click="handleLogin"
-              >
-                {{ loading ? '登录中...' : '登 录' }}
-              </el-button>
-            </el-form-item>
-          </el-form>
-
-          <div class="login-footer">
-            <div class="security-notice">
-              <el-icon class="notice-icon"><WarningFilled /></el-icon>
-              <span>本系统处于安全监控下，请使用本人账号登录</span>
-            </div>
+        <el-form-item prop="password">
+          <div class="input-wrapper">
+            <el-icon class="input-icon"><Lock /></el-icon>
+            <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" size="large" show-password clearable />
           </div>
-        </div>
-      </div>
-    </div>
+        </el-form-item>
 
-    <!-- 底部版权信息 -->
-    <div class="gov-footer">
-      <div class="footer-content">
-        <p>党政软件版本管控平台 © 2026 版权所有</p>
-        <p>技术支持：电科院52组</p>
+        <el-form-item>
+          <el-checkbox v-model="loginForm.remember">记住登录状态</el-checkbox>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button size="large" :loading="loading" class="login-button" @click="handleLogin">
+            {{ loading ? '登录中...' : '登 录' }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <div class="security-notice">
+        <el-icon><WarningFilled /></el-icon>
+        <span>本系统处于安全监控下，请使用本人账号登录</span>
       </div>
     </div>
   </div>
@@ -138,7 +75,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { Lock, DocumentChecked, Checked, DataAnalysis, User, WarningFilled, Platform } from '@element-plus/icons-vue'
+import { Lock, User, WarningFilled, Platform } from '@element-plus/icons-vue'
+import loginImage from '@/assets/VCG211511234644.jpg'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -153,31 +91,25 @@ const loginForm = reactive({
 })
 
 const loginRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' }
-  ]
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
 onMounted(() => {
-  if (userStore.isAuthenticated) {
-    router.push('/dashboard')
-  }
+  if (userStore.isAuthenticated) router.push('/dashboard')
 })
 
 async function handleLogin() {
   if (!loginFormRef.value) return
-
   await loginFormRef.value.validate(async (valid) => {
     if (!valid) return
-
     loading.value = true
     try {
       await userStore.loginAction(loginForm.username, loginForm.password)
-      // 登录后强制刷新页面，使 App.vue 的 initUser() 从 /auth/me 获取数据库最新数据
-      window.location.reload()
+      // 重新加载用户信息，避免使用登录响应的缓存数据
+      await userStore.initUser()
+      ElMessage.success('登录成功')
+      router.push('/dashboard')
     } catch (error) {
       ElMessage.error('账号或密码错误，请重新输入')
     } finally {
@@ -192,185 +124,204 @@ async function handleLogin() {
   width: 100vw;
   height: 100vh;
   display: flex;
-  flex-direction: column;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  background: #1a1a2e;
 }
 
-/* 顶部横幅 */
-.gov-banner {
-  background: linear-gradient(90deg, #c41230 0%, #8b0000 50%, #c41230 100%);
+/* 全屏背景 */
+.login-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  .bg-image { width: 100%; height: 100%; object-fit: cover; }
+  .bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg,
+      rgba(196, 18, 48, 0.8) 0%,
+      rgba(139, 0, 0, 0.5) 40%,
+      rgba(26, 26, 46, 0.4) 70%,
+      rgba(26, 26, 46, 0.85) 100%);
+  }
+}
+
+/* 左侧面板 */
+.left-panel {
+  position: relative;
+  z-index: 1;
+  margin-left: 12vw;
+  max-width: 440px;
   color: #fff;
-  padding: 10px 0;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  text-align: center;
 
-  .banner-content {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 20px;
-  }
-
-  .banner-left {
+  .left-emblem {
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 32px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 15px;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
   }
 
-  .party-emblem {
-    width: 40px;
-    height: 40px;
+  .left-title {
+    font-size: 46px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: 4px;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    font-family: 'MaoTi', 'STLiti', 'FZXiaoZhuanTi', cursive;
   }
 
-  .banner-title {
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 2px;
+  .left-desc {
+    font-size: 16px;
+    line-height: 1.8;
+    opacity: 0.7;
+    margin-bottom: 32px;
   }
 
-  .hotline {
-    font-size: 14px;
-    opacity: 0.9;
-  }
-}
+  .left-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
 
-/* 登录主体 */
-.login-main {
-  flex: 1;
-  display: flex;
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 40px 20px;
-  gap: 60px;
-}
-
-/* 左侧宣传区 */
-.login-left {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  .gov-info {
-    h2 {
-      font-size: 32px;
-      color: #c41230;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }
-
-    .subtitle {
-      font-size: 16px;
-      color: #666;
-      margin-bottom: 40px;
-    }
-
-    .feature-list {
-      .feature-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 20px;
-        margin-bottom: 30px;
-        padding: 20px;
-        background: #fff;
-        border-radius: 10px;
-        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
-        transition: transform 0.3s, box-shadow 0.3s;
-
-        &:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 5px 25px rgba(0, 0, 0, 0.12);
-        }
-
-        .feature-icon {
-          font-size: 36px;
-        }
-
-        .feature-text {
-          h4 {
-            font-size: 18px;
-            color: #333;
-            margin-bottom: 5px;
-          }
-
-          p {
-            font-size: 14px;
-            color: #666;
-          }
-        }
-      }
+    .tag {
+      padding: 8px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      font-size: 14px;
+      backdrop-filter: blur(4px);
     }
   }
 }
 
-/* 右侧登录框 */
-.login-right {
-  flex: 0 0 420px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+/* 右侧登录卡片 */
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 400px;
+  max-width: 88vw;
+  margin-right: calc(2vw + 10px);
+  padding: 40px 36px 32px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 20px;
+  backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
 
-.login-box {
-  width: 100%;
-  background: #fff;
-  border-radius: 12px;
-  padding: 40px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-
-  .login-header {
+  .card-header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 36px;
 
-    .emblem-wrapper {
-      margin-bottom: 20px;
-    }
-
-    .login-emblem {
+    .card-emblem {
       width: 60px;
       height: 60px;
+      margin: 0 auto 14px;
+      background: linear-gradient(135deg, #c41230 0%, #8b0000 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 6px 20px rgba(196, 18, 48, 0.35);
+      border: 2px solid rgba(255, 255, 255, 0.15);
     }
 
-    h1 {
+    .card-title {
       font-size: 24px;
-      color: #333;
-      margin-bottom: 8px;
+      color: #fff;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: 2px;
     }
 
-    .login-subtitle {
-      color: #999;
+    .card-subtitle {
       font-size: 14px;
+      color: rgba(255, 255, 255, 0.45);
     }
   }
 
   .login-form {
+    :deep(.el-form-item) {
+      margin-bottom: 20px;
+    }
+
     .input-wrapper {
       display: flex;
       align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 48px;
       width: 100%;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 0 15px;
-      transition: border-color 0.3s;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+
+      &:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+      }
 
       &:focus-within {
         border-color: #c41230;
+        background: rgba(196, 18, 48, 0.06);
+        box-shadow: 0 0 0 3px rgba(196, 18, 48, 0.1);
       }
 
       .input-icon {
         font-size: 18px;
-        margin-right: 10px;
+        color: rgba(255, 255, 255, 0.4);
+        flex-shrink: 0;
+        transition: color 0.3s;
+      }
+
+      &:focus-within .input-icon {
+        color: #c41230;
+      }
+
+      :deep(.el-input) {
+        background: transparent !important;
       }
 
       :deep(.el-input__wrapper) {
-        box-shadow: none;
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        padding: 0;
         flex: 1;
       }
 
       :deep(.el-input__inner) {
+        color: #fff;
+        background: transparent !important;
         border: none;
+        height: 48px;
+        font-size: 15px;
+
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.3);
+        }
+      }
+    }
+
+    :deep(.el-checkbox) {
+      .el-checkbox__label {
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 13px;
+      }
+      .el-checkbox__input.is-checked .el-checkbox__inner {
+        background: #c41230;
+        border-color: #c41230;
       }
     }
 
@@ -378,50 +329,59 @@ async function handleLogin() {
       width: 100%;
       height: 48px;
       font-size: 16px;
-      background: linear-gradient(90deg, #c41230 0%, #8b0000 100%);
+      font-weight: 600;
+      background: linear-gradient(135deg, #c41230 0%, #a01020 50%, #8b0000 100%);
       border: none;
-      border-radius: 6px;
+      border-radius: 12px;
+      color: #fff;
+      letter-spacing: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+        pointer-events: none;
+      }
 
       &:hover {
-        background: linear-gradient(90deg, #d4213f 0%, #9b1010 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(196, 18, 48, 0.4);
+      }
+
+      &:active {
+        transform: translateY(0);
+        box-shadow: none;
       }
     }
   }
 
-  .login-footer {
-    margin-top: 20px;
+  .security-notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 28px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 12px;
 
-    .security-notice {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px;
-      background: #fff8e6;
-      border-radius: 6px;
-      color: #856404;
-      font-size: 13px;
-
-      .notice-icon {
-        font-size: 16px;
-      }
+    .el-icon {
+      font-size: 14px;
+      color: rgba(255, 215, 0, 0.4);
     }
   }
 }
 
-/* 底部版权 */
-.gov-footer {
-  background: #fff;
-  color: #666;
-  padding: 20px 0;
-  text-align: center;
-  border-top: 1px solid #e4e7ed;
-
-  .footer-content {
-    p {
-      margin: 5px 0;
-      font-size: 13px;
-    }
-  }
+@media (max-width: 820px) {
+  .left-panel { display: none; }
+  .gov-login-page { justify-content: center; }
+  .login-card { margin-right: 0; }
 }
 </style>
