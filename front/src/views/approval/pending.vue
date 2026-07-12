@@ -59,8 +59,9 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
+          <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
           <el-button type="success" size="small" @click="handleApprove(row)">通过</el-button>
           <el-button type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
         </template>
@@ -202,14 +203,14 @@ async function viewDetail(row) {
 }
 
 function handleApprove(row) {
-  currentApproval.value = row
+  if (row && row.approval_id) currentApproval.value = row
   approvalForm.result = 'approved'
   approvalForm.comment = ''
   approvalDialogVisible.value = true
 }
 
 function handleReject(row) {
-  currentApproval.value = row
+  if (row && row.approval_id) currentApproval.value = row
   approvalForm.result = 'rejected'
   approvalForm.comment = ''
   approvalDialogVisible.value = true

@@ -76,8 +76,7 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="viewDetail(row)">查看</el-button>
-          <el-button type="success" link @click="handleApprove(row)" v-if="canApprove && row.status === 'pending'">审批</el-button>
-          <el-button type="danger" link @click="handleClose(row)" v-if="row.status === 'pending'">关闭</el-button>
+          <el-button type="warning" link @click="handleWithdraw(row)" v-if="row.status === 'pending' && (row.author === userStore.username || row.applicant_username === userStore.username)">撤回请求</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -211,7 +210,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, getPullRequestReviews, submitPullRequestReview } from '@/api/gitea'
-import { getApprovalFlows, createApproval, processApproval } from '@/api/bff'
+import { getApprovalFlows, createApproval, processApproval, withdrawApproval } from '@/api/bff'
 import { getMergeApprovals } from '@/api/approval'
 import { getUserList } from '@/api/user'
 import { useUserStore } from '@/stores/user'
@@ -396,8 +395,11 @@ async function loadData() {
       }
     }
 
-    mergeRequestList.value = list
-    pagination.total = list.length
+    // 只显示当前用户发起的合并请求
+    const currentUser = userStore.username || userStore.userInfo?.username || ''
+    const filtered = list.filter(item => item.author === currentUser || item.applicant_username === currentUser)
+    mergeRequestList.value = filtered
+    pagination.total = filtered.length
   } catch (error) {
     console.error('加载合并请求列表失败:', error)
     ElMessage.warning('加载合并请求列表失败：' + (error.message || '网络错误'))
@@ -620,6 +622,26 @@ async function submitApproval() {
 function handleApprove(row) {
   currentMR.value = row
   showApprovalDialog()
+}
+
+async function handleWithdraw(row) {
+  try {
+    if (row.bffApprovalId) {
+      await withdrawApproval(row.bffApprovalId)
+    }
+    // 关闭 Gitea PR（如果有关联）
+    const owner = row.owner
+    const repo = row.repo
+    if (owner && repo && (row.id || row.number)) {
+      try {
+        await closePullRequest(owner, repo, row.id || row.number)
+      } catch { /* 忽略 */ }
+    }
+    ElMessage.success('合并请求已撤回')
+    loadData()
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.message || '撤回失败')
+  }
 }
 
 async function handleClose(row) {

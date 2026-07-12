@@ -96,7 +96,7 @@
             <el-menu-item index="/approval/history">审批历史</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="audit" v-show="userStore.role !== 'developer'">
+          <el-sub-menu index="audit" v-show="userStore.role === 'admin' || userStore.role === 'auditor'">
             <template #title>
               <el-icon class="menu-icon"><Search /></el-icon>
               <span>审计管理</span>
