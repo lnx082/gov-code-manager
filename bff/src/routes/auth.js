@@ -414,62 +414,85 @@ async function createGiteaToken(username, password) {
 }
 
 /**
- * 后台同步密码到 Gitea（自愈机制）
- * 当用户通过本地密码兜底登录成功时，尝试把密码同步到 Gitea
- * 这样下次登录就能直接走 Gitea，不再走兜底
+ * 后台同步密码到 Gitea（自愈机制 / 密码修改 / 密码重置）
+ * @param {string} username - Gitea 用户名
+ * @param {string} password - 新密码
+ * @param {string} roleCode - 用户角色代码
+ * @param {string|null} oldPassword - 旧密码（修改密码场景传入，用于自服务认证）
+ *
+ * 策略优先级：
+ *   1. 有 oldPassword → 用旧密码 Basic Auth 调 PATCH /api/v1/user 自改密码（最可靠）
+ *   2. 有 adminToken → 用管理员权限调 PATCH /api/v1/admin/users/{username}
+ *   3. 都没有 → 无法同步
  */
-async function syncPasswordToGitea(username, password, roleCode) {
+async function syncPasswordToGitea(username, password, roleCode, oldPassword = null) {
   try {
-    // 优先用配置的管理员 Token，其次用用户自身的凭据
     const giteaAdminToken = config.gitea?.token;
-    let authHeader = '';
-
-    if (giteaAdminToken) {
-      authHeader = giteaAdminToken.startsWith('Basic ') || giteaAdminToken.startsWith('Bearer ')
-        ? giteaAdminToken
-        : `Bearer ${giteaAdminToken}`;
-    } else if (roleCode === 'admin') {
-      // 没有配置管理员 Token，但当前用户是管理员 → 用他自己的凭据
-      const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-      authHeader = `Basic ${credentials}`;
-    } else {
-      // 没有管理员 Token 且当前用户不是管理员 → 尝试用用户自己的凭据直接修改自己密码
-      // 部分 Gitea 版本支持用户通过 PATCH /api/v1/user 改自己的密码
-      const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-      authHeader = `Basic ${credentials}`;
-      const res = await fetch(`${config.gitea.url}/api/v1/user`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
-        body: JSON.stringify({ password })
-      });
-      if (res.ok) return true;
-      // 用户自己改密码失败 → 降级尝试用管理员 Token 方式
-      // 但如果这里都没 token 了，那就没法了
-      return false;
-    }
-
     const giteaUrl = config.gitea.url;
-    const res = await fetch(`${giteaUrl}/api/v1/admin/users/${encodeURIComponent(username)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
-      body: JSON.stringify({ password, send_notify: false })
-    });
 
-    if (res.ok) return true;
-
-    // 如果返回 403（权限不足），尝试用用户自身的 Basic Auth 改自己密码
-    if (res.status === 403) {
-      const selfCredentials = Buffer.from(`${username}:${password}`).toString('base64');
-      const selfRes = await fetch(`${config.gitea.url}/api/v1/user`, {
+    // ★ 策略1：有旧密码时，优先用用户自己的凭据自改密码（无需管理员权限）
+    if (oldPassword) {
+      const selfCredentials = Buffer.from(`${username}:${oldPassword}`).toString('base64');
+      const selfRes = await fetch(`${giteaUrl}/api/v1/user`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${selfCredentials}` },
         body: JSON.stringify({ password })
       });
-      return selfRes.ok;
+      if (selfRes.ok) {
+        console.log(`[Auth] Gitea 密码同步成功（自服务）: ${username}`);
+        return true;
+      }
+      // 自服务失败不退出，继续尝试管理员 API
+      console.warn(`[Auth] 自服务改密失败 (${selfRes.status})，尝试管理员 API: ${username}`);
     }
 
-    const errBody = await res.text();
-    console.warn(`[Auth] Gitea 密码同步失败: ${res.status} ${errBody}`);
+    // 策略2：用管理员 Token 通过 Admin API 修改
+    let authHeader = '';
+    if (giteaAdminToken) {
+      authHeader = giteaAdminToken.startsWith('Basic ') || giteaAdminToken.startsWith('Bearer ')
+        ? giteaAdminToken
+        : `Bearer ${giteaAdminToken}`;
+    } else if (roleCode === 'admin' && oldPassword) {
+      // 没有配置管理员 Token，但当前用户是管理员 → 用他的旧凭据
+      // 注意：必须用 oldPassword，因为新密码还没生效
+      const credentials = Buffer.from(`${username}:${oldPassword}`).toString('base64');
+      authHeader = `Basic ${credentials}`;
+    } else {
+      // 没有管理员 Token 也没有旧密码 → 无法同步
+      console.warn(`[Auth] Gitea 密码同步跳过（无 admin token 且无旧密码）: ${username}`);
+      return false;
+    }
+
+    if (authHeader) {
+      const res = await fetch(`${giteaUrl}/api/v1/admin/users/${encodeURIComponent(username)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+        body: JSON.stringify({ login_name: username, password, send_notify: false })
+      });
+
+      if (res.ok) {
+        console.log(`[Auth] Gitea 密码同步成功（管理员 API）: ${username}`);
+        return true;
+      }
+
+      // 403 降级：如果还有旧密码，尝试自服务
+      if (res.status === 403 && oldPassword) {
+        const selfCredentials = Buffer.from(`${username}:${oldPassword}`).toString('base64');
+        const selfRes = await fetch(`${giteaUrl}/api/v1/user`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${selfCredentials}` },
+          body: JSON.stringify({ password })
+        });
+        if (selfRes.ok) {
+          console.log(`[Auth] Gitea 密码同步成功（403降级自服务）: ${username}`);
+          return true;
+        }
+      }
+
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[Auth] Gitea 密码同步失败: ${res.status} ${errBody.substring(0, 200)}`);
+    }
+
     return false;
   } catch (err) {
     console.warn(`[Auth] Gitea 密码同步异常: ${err.message}`);

@@ -472,11 +472,7 @@ async function handleResetPasswordSubmit() {
       const res = await resetUserPassword(userId, {
         newPassword: resetPasswordForm.newPassword
       })
-      if (res.data?.giteaSynced) {
-        ElMessage.success('密码重置成功，已同步 Gitea')
-      } else {
-        ElMessage.success('密码重置成功（用户可立即登录，密码将自动同步到 Gitea）')
-      }
+      ElMessage.success(res.message || '密码重置成功')
       showResetPasswordDialog.value = false
     } catch (error) {
       ElMessage.error((error?.response?.data?.message) || error?.message || '密码重置失败')
