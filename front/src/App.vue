@@ -229,15 +229,29 @@ onMounted(async () => {
   loadNoticeCount()
   // 每 15 秒轮询一次通知数
   noticeTimer = setInterval(loadNoticeCount, 15000)
+  // 折叠弹出菜单的鼠标追踪悬停动画
+  document.addEventListener('mousemove', onPopupMousemove, { passive: true })
 })
 
 onUnmounted(() => {
   if (noticeTimer) clearInterval(noticeTimer)
+  document.removeEventListener('mousemove', onPopupMousemove)
 })
 
 // 菜单项悬停动画 — 鼠标位置追踪，浅红色从鼠标中心向四周辐射渐变
 function onMenuMousemove(e) {
   const item = e.target.closest('.el-menu-item, .el-sub-menu__title')
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const x = ((e.clientX - rect.left) / rect.width) * 100
+  const y = ((e.clientY - rect.top) / rect.height) * 100
+  item.style.setProperty('--mx', `${x}%`)
+  item.style.setProperty('--my', `${y}%`)
+}
+
+// 折叠状态下弹出子菜单的悬停动画（popup 渲染在组件外部，需全局监听）
+function onPopupMousemove(e) {
+  const item = e.target.closest('.el-menu--popup .el-menu-item, .el-menu--popup .el-sub-menu__title')
   if (!item) return
   const rect = item.getBoundingClientRect()
   const x = ((e.clientX - rect.left) / rect.width) * 100
@@ -511,10 +525,25 @@ function handleApprovalNotice(notice) {
     }
 
     .menu-icon {
-      margin-right: 10px;
       font-size: 16px;
       width: 20px;
       text-align: center;
+    }
+
+    // 非折叠状态下图标与文字间距
+    &:not(.el-menu--collapse) .menu-icon {
+      margin-right: 10px;
+    }
+
+    // 折叠状态下菜单项图标居中
+    &.el-menu--collapse :deep(.el-menu-item),
+    &.el-menu--collapse :deep(.el-sub-menu__title) {
+      justify-content: center;
+      padding: 0 !important;
+
+      .menu-icon {
+        margin-right: 0;
+      }
     }
 
     // 菜单项悬停动画：浅红色从鼠标中心向四周辐射渐变，边缘保留最浅的浅红色
@@ -738,5 +767,55 @@ function handleApprovalNotice(notice) {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<!-- 折叠弹出子菜单的悬停动画（全局样式，popup 渲染在组件外部） -->
+<style lang="scss">
+.el-menu--popup {
+  .el-menu-item,
+  .el-sub-menu__title {
+    position: relative;
+    --mx: 50%;
+    --my: 50%;
+
+    // 去掉 Element Plus 默认灰色背景
+    &:hover {
+      background: transparent !important;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle at var(--mx) var(--my),
+        rgba(198, 40, 40, 0.12) 0%,
+        rgba(198, 40, 40, 0.06) 35%,
+        rgba(198, 40, 40, 0.02) 70%,
+        rgba(198, 40, 40, 0.008) 100%
+      );
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    &:hover::before {
+      opacity: 1;
+    }
+
+    // 确保文字在伪元素之上
+    > :not(.el-sub-menu__icon-arrow) {
+      position: relative;
+      z-index: 1;
+    }
+  }
+
+  // 弹出菜单中当前激活项：深红文字 + 浅红背景，避免白字看不见
+  .el-menu-item.is-active {
+    color: #c62828 !important;
+    background: #ffebee !important;
+  }
 }
 </style>
