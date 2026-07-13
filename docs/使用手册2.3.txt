@@ -6,6 +6,16 @@ xvhaoyang_wxb        Gov@123456 新：12345678
 数据库  用户名omm  密码Omm@312312
 数据库超级用户密码openGauss@123
 
+配置系统时，应当注意修改front/.env中的：
+
+# API 配置 — 前后端在哪台机器就配哪台机器的地址，这里我的机器是192.168.10.228
+VITE_API_BASE_URL=http://192.168.10.228:8080/api/bff
+
+后端bff/.env中的：
+
+# CORS 白名单（前端地址，逗号分隔），前端在哪里就加上
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://192.168.10.228:3000
+
 ./sysinfo.sh     root桌面下运行这个指令可以看服务器全局信息概览
 # SSH 连接服务器
 ssh root@123.60.219.19
