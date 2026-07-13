@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <h2 class="page-title">归档管理</h2>
-      <el-button type="primary" @click="showCreateDialog" v-if="isPM">
+      <el-button type="primary" @click="showCreateDialog" v-if="isPM || isAdmin">
         <el-icon><Plus /></el-icon> 添加归档
       </el-button>
     </div>

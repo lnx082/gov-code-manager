@@ -24,7 +24,7 @@
         </el-form-item>
         <el-form-item label="仓库">
           <el-select v-model="filterForm.repoId" placeholder="选择仓库" clearable style="width: 200px">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.full_name || repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -99,19 +99,14 @@
         <el-form-item label="描述" prop="description">
           <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="详细描述此次合并的变更内容" />
         </el-form-item>
-        <el-form-item label="源仓库" prop="sourceRepoId" class="form-required">
-          <el-select v-model="createForm.sourceRepoId" placeholder="选择源仓库" @change="loadSourceBranches">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
+        <el-form-item label="仓库" prop="sourceRepoId" class="form-required">
+          <el-select v-model="createForm.sourceRepoId" placeholder="选择仓库" @change="onSourceRepoChange">
+            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.full_name || repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="源分支" prop="sourceBranch" class="form-required">
           <el-select v-model="createForm.sourceBranch" placeholder="选择源分支">
             <el-option v-for="branch in sourceBranches" :key="branch" :label="branch" :value="branch" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="目标仓库" prop="targetRepoId" class="form-required">
-          <el-select v-model="createForm.targetRepoId" placeholder="选择目标仓库" @change="loadTargetBranches">
-            <el-option v-for="repo in repoList" :key="repo.id" :label="repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="目标分支" prop="targetBranch" class="form-required">
@@ -423,6 +418,15 @@ function handleFilter() {
 
 function showCreateDialog() {
   createDialogVisible.value = true
+}
+
+async function onSourceRepoChange() {
+  // 目标仓库锁定为源仓库（只支持同仓库合并）
+  createForm.targetRepoId = createForm.sourceRepoId
+  createForm.sourceBranch = ''
+  createForm.targetBranch = ''
+  await loadSourceBranches()
+  await loadTargetBranches()
 }
 
 async function loadSourceBranches() {

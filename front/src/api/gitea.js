@@ -30,7 +30,8 @@ export function getRepo(owner, repo) {
 }
 
 export function createRepo(data) {
-  return giteaService.post('/user/repos', data)
+  // 走 BFF 专用端点，自动创建 repo_metadata（部门+密级+中文名）
+  return giteaService.post('/repos', data)
 }
 
 export function updateRepo(owner, repo, data) {
