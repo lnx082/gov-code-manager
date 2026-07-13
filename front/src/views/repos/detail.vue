@@ -93,14 +93,30 @@
       </el-tab-pane>
 
       <el-tab-pane name="settings"><template #label><el-icon><Setting /></el-icon> 设置</template>
-        <div class="settings-container"><el-card><template #header>仓库设置</template>
-          <el-form :model="settingsForm" label-width="100px">
-            <el-form-item label="名称"><el-input v-model="settingsForm.name" /></el-form-item>
-            <el-form-item label="描述"><el-input v-model="settingsForm.description" type="textarea" :rows="3" /></el-form-item>
-            <el-form-item label="私有"><el-switch v-model="settingsForm.private" /></el-form-item>
-            <el-form-item><el-button type="primary" @click="saveSettings" :loading="savingSettings">保存</el-button></el-form-item>
-          </el-form>
-        </el-card></div>
+        <div class="settings-container">
+          <el-card><template #header>仓库设置</template>
+            <el-form :model="settingsForm" label-width="100px">
+              <el-form-item label="名称"><el-input v-model="settingsForm.name" /></el-form-item>
+              <el-form-item label="描述"><el-input v-model="settingsForm.description" type="textarea" :rows="3" /></el-form-item>
+              <el-form-item label="私有"><el-switch v-model="settingsForm.private" /></el-form-item>
+              <el-form-item><el-button type="primary" @click="saveSettings" :loading="savingSettings">保存</el-button></el-form-item>
+            </el-form>
+          </el-card>
+          <el-card style="margin-top:16px"><template #header>分支保护</template>
+            <el-table :data="branchList" stripe>
+              <el-table-column prop="name" label="分支名称" width="200" />
+              <el-table-column label="保护状态" width="120">
+                <template #default="{ row }"><el-tag :type="row.isProtected?'danger':'info'" size="small">{{ row.isProtected?'已保护':'未保护' }}</el-tag></template>
+              </el-table-column>
+              <el-table-column label="操作" width="200">
+                <template #default="{ row }">
+                  <el-button v-if="!row.isProtected" type="primary" size="small" @click="toggleBranchProtect(row, true)">启用保护</el-button>
+                  <el-button v-else type="warning" size="small" @click="toggleBranchProtect(row, false)">取消保护</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </div>
       </el-tab-pane>
     </el-tabs>
 
@@ -149,7 +165,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Connection, Link, Right, Avatar, Plus, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo } from '@/api/gitea'
+import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection } from '@/api/gitea'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -301,6 +317,23 @@ function viewTag(t) { window.open(`http://123.60.219.19:3000/${route.params.owne
 function viewCommitDetail(c) { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/commit/${c.sha}`, '_blank') }
 function openPullUrl(p) { if(p.url) window.open(p.url, '_blank') }
 function showCloneDialog() { cloneDialogVisible.value = true }
+async function toggleBranchProtect(branch, enable) {
+  const { owner, name } = route.params
+  try {
+    if (enable) {
+      await updateBranchProtection(owner, name, branch.name, { enable_push: false, enable_status_check: false })
+      ElMessage.success(`分支 ${branch.name} 保护已启用`)
+    } else {
+      // Gitea 取消保护：删除保护规则
+      await fetch(`/api/bff/gitea/repos/${owner}/${name}/branch_protections/${branch.name}`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${sessionStorage.getItem('gitea_token')}` }
+      })
+      ElMessage.success(`分支 ${branch.name} 保护已取消`)
+    }
+    loadBranches()
+  } catch { ElMessage.error('操作失败') }
+}
+
 function downloadZip() { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
 
 async function saveSettings() {

@@ -380,6 +380,33 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
       }
     }
 
+    // 清理部门仓库协作者权限（跳过用户是管理员的仓库）
+    let collabRemoved = 0;
+    if (profile.gitea_username && profile.department_id) {
+      const giteaToken2 = config.gitea?.token || req.user?.giteaToken;
+      if (giteaToken2) {
+        const authHdr2 = giteaToken2.startsWith('Basic ') || giteaToken2.startsWith('Bearer ') ? giteaToken2 : `Bearer ${giteaToken2}`;
+        const deptRepos = await db('repo_metadata').where('department_id', profile.department_id).select('repo_owner', 'repo_name');
+        for (const repo of deptRepos) {
+          try {
+            // 检查用户权限，skip 管理员
+            const permRes = await fetch(`${config.gitea.url}/api/v1/repos/${repo.repo_owner}/${repo.repo_name}/collaborators/${profile.gitea_username}`, {
+              headers: { 'Authorization': authHdr2 }
+            });
+            if (permRes.status === 204) {
+              // 用户是协作者——检查权限后再决定是否删除
+              // Gitea 1.21 的 GET collaborators/{username} 不返回具体权限，仅 204 表示存在
+              // 对非管理员仓库，安全移除该协作者
+              await fetch(`${config.gitea.url}/api/v1/repos/${repo.repo_owner}/${repo.repo_name}/collaborators/${profile.gitea_username}`, {
+                method: 'DELETE', headers: { 'Authorization': authHdr2 }
+              });
+              collabRemoved++;
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+
     // 本地软删除
     await db('user_profiles')
       .where('user_id', id)
@@ -392,7 +419,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
 
     res.json({
       code: 200,
-      message: '用户已注销（含 Gitea 账号同步删除）',
+      message: `用户已注销（已清理 ${collabRemoved} 个仓库协作者权限）`,
     });
   } catch (error) {
     next(error);
