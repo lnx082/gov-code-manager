@@ -5,6 +5,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 // 加载 .env 文件
 dotenv.config();
@@ -108,7 +109,13 @@ validateConfig();
 
 // 开发环境特殊配置
 if (config.nodeEnv === 'development') {
-  config.jwt.secret = 'dev_jwt_secret_do_not_use_in_production';
+  // 优先使用环境变量，未设置时生成随机临时密钥（每次重启不同，需重新登录）
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'gov_code_manager_jwt_secret_key_2024_secure') {
+    config.jwt.secret = crypto.randomBytes(32).toString('hex');
+    console.log('⚠️  开发环境未设置 JWT_SECRET，已生成随机临时密钥（每次重启变化）');
+  } else {
+    config.jwt.secret = process.env.JWT_SECRET;
+  }
   console.log('🔧 开发环境配置已加载');
   console.log(`   数据库: ${config.database.host}:${config.database.port}/${config.database.database}`);
 }

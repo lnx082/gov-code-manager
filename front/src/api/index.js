@@ -140,4 +140,4 @@ export { giteaService }
 export const bffService = service
 
 // 暴露 token 工具给 store 使用
-export { getToken, setToken, removeToken, getApiToken, setApiToken, removeApiToken }
+export { getToken, setToken, removeToken }

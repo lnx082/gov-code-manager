@@ -3,17 +3,13 @@
  */
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import config from '../config/index.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import { authenticate } from '../middleware/auth.js';
 import db from '../database/connection.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_FILE = path.join(__dirname, '..', '..', '.env');
+import { setCredential, removeCredential } from '../services/credentialStore.js';
+import { setCachedAdminToken } from '../services/adminTokenCache.js';
 
 const router = Router();
 
@@ -235,24 +231,19 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     // 为 BFF 代理请求创建 Gitea API Token
     const giteaToken = await createGiteaToken(username, password);
-    // 管理员首次登录时将其 Gitea 凭据写入 .env（Basic Auth 格式）供仓库/BFF 接口使用
-    if (isAdmin && !config.gitea?.token) {
-      try {
-        let envContent = fs.readFileSync(ENV_FILE, 'utf8');
-        if (envContent.includes('GITEA_ADMIN_TOKEN=')) {
-          envContent = envContent.replace(/GITEA_ADMIN_TOKEN=.*/, `GITEA_ADMIN_TOKEN=${giteaToken}`);
-        } else {
-          envContent += `\nGITEA_ADMIN_TOKEN=${giteaToken}\n`;
-        }
-        fs.writeFileSync(ENV_FILE, envContent, 'utf8');
+    // C-03 修复：凭据保留在服务端内存，不放入 JWT
+    setCredential(giteaUser.id, giteaToken);
+
+    // 管理员凭据同步到内存缓存 + 运行时 config（不写 .env 文件）
+    if (isAdmin) {
+      if (!config.gitea?.token) {
         config.gitea.token = giteaToken;
-        console.log('[Auth] 管理员 Gitea 凭据已写入 .env');
-      } catch (e) {
-        console.warn('[Auth] 写入 .env 失败:', e.message);
       }
+      // 同步到 adminTokenCache（纯内存，不落盘）
+      setCachedAdminToken(giteaToken);
     }
 
-    // 生成 JWT（包含 Gitea 用户信息和 Gitea Token）
+    // 生成 JWT（不再包含 Gitea 凭据，auth 中间件自动注入）
     const token = jwt.sign(
       {
         userId: giteaUser.id,
@@ -263,7 +254,6 @@ router.post('/login', authLimiter, async (req, res, next) => {
         roleCode: role,
         isAdmin: isAdmin,
         permissions: permissions,
-        giteaToken: giteaToken || '',
       },
       config.jwt.secret,
       { expiresIn: config.jwt.expiresIn }
@@ -296,10 +286,11 @@ router.post('/login', authLimiter, async (req, res, next) => {
   }
 });
 
-// 登出 — 删除会话记录
+// 登出 — 删除会话记录 + 清除服务端凭据
 router.post('/logout', authenticate, async (req, res) => {
   try {
     await db('sessions').where('user_id', req.user.userId).delete();
+    removeCredential(req.user.userId);
   } catch { /* ignore */ }
   res.json({
     code: 200,
