@@ -151,12 +151,32 @@
         </div>
 
         <el-divider content-position="left">变更内容</el-divider>
-        <div style="text-align:center;padding:20px">
-          <p style="color:#909399;margin-bottom:12px">Gitea 1.21 API 不支持返回 PR 差异详情</p>
-          <el-button type="primary" @click="openGiteaPR(currentMR)">
-            <el-icon><Link /></el-icon> 在 Gitea 中查看完整差异
-          </el-button>
+        <div v-if="prDiffLoading" style="text-align:center;padding:20px;color:#909399">加载差异中...</div>
+        <div v-else-if="currentMR?.files?.length">
+          <div class="diff-stats-bar">
+            <span class="stat added">+ {{ currentMR.additions }} 行</span>
+            <span class="stat removed">- {{ currentMR.deletions }} 行</span>
+            <span class="stat files">{{ currentMR.fileChanges }} 个文件</span>
+          </div>
+          <div class="diff-file-table">
+            <div class="diff-table-header">
+              <span class="col-status">状态</span>
+              <span class="col-path">文件路径</span>
+              <span class="col-stats">变更</span>
+            </div>
+            <div v-for="f in currentMR.files" :key="f.path" class="diff-table-row">
+              <span class="col-status">
+                <el-tag :type="f.status==='added'?'success':f.status==='removed'?'danger':'warning'" size="small">{{ f.status==='added'?'新增':f.status==='removed'?'删除':f.status==='renamed'?'重命名':'修改' }}</el-tag>
+              </span>
+              <span class="col-path">{{ f.path }}</span>
+              <span class="col-stats">
+                <span style="color:#67c23a">+ {{ f.additions||0 }}</span>
+                <span style="color:#f56c6c;margin-left:8px">- {{ f.deletions||0 }}</span>
+              </span>
+            </div>
+          </div>
         </div>
+        <div v-else style="text-align:center;padding:20px;color:#909399">暂无文件变更</div>
 
         <el-divider content-position="left">审批记录</el-divider>
         <div class="approval-records">
@@ -219,6 +239,7 @@ const canApprove = computed(() => {
 
 const loading = ref(false)
 const submittingApproval = ref(false)
+const prDiffLoading = ref(false)
 const createDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const approvalDialogVisible = ref(false)
@@ -546,7 +567,7 @@ async function handleCreate() {
 async function viewDetail(row) {
   currentMR.value = { ...row }
   detailDialogVisible.value = true
-  // 使用 MR 自身的 owner/repo，不依赖 repoId 查找
+  prDiffLoading.value = true
   const owner = row.owner
   const repo = row.repo
   if (owner && repo && (row.id || row.number)) {
@@ -555,17 +576,16 @@ async function viewDetail(row) {
       const files = res.data || res
       if (Array.isArray(files)) {
         currentMR.value.files = files.map(f => ({
-          path: f.filename || f.path,
-          status: f.status || 'modified'
+          path: f.filename || f.path, status: f.status || 'modified',
+          additions: f.additions || 0, deletions: f.deletions || 0
         }))
         currentMR.value.additions = files.reduce((sum, f) => sum + (f.additions || 0), 0)
         currentMR.value.deletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0)
         currentMR.value.fileChanges = files.length
       }
-    } catch {
-      // Fallback to existing data
-    }
+    } catch { /* fallback */ }
   }
+  prDiffLoading.value = false
 }
 
 function openGiteaPR(mr) {
@@ -663,8 +683,9 @@ async function submitApproval() {
           ElMessage.success('审批通过，已自动合并')
         }
       } catch (mergeErr) {
-        console.warn('自动合并失败，请手动合并:', mergeErr.message)
-        ElMessage.warning('审批通过，但自动合并失败，请手动点击合并按钮')
+        console.warn('自动合并失败:', mergeErr)
+        const errMsg = mergeErr?.response?.data?.message || mergeErr?.message || '未知错误'
+        ElMessage.warning('审批通过，自动合并失败: ' + errMsg + '，请手动点击合并按钮')
       }
     }
   } catch (error) {
@@ -758,6 +779,13 @@ function formatTime(time) {
 </script>
 
 <style lang="scss" scoped>
+.diff-stats-bar { padding:8px 12px;background:#f5f7fa;border-radius:4px;margin-bottom:12px;display:flex;gap:16px;font-weight:bold;.added{color:#67c23a}.removed{color:#f56c6c}.files{color:#909399} }
+.diff-file-table { border:1px solid #ebeef5;border-radius:4px;overflow:hidden; }
+.diff-table-header { display:flex;padding:8px 12px;background:#f5f7fa;font-weight:bold;font-size:13px;color:#606266; }
+.diff-table-row { display:flex;padding:8px 12px;border-top:1px solid #ebeef5;font-size:13px;align-items:center;&:hover{background:#f5f7fa} }
+.col-status { width:80px;flex-shrink:0; }
+.col-path { flex:1;word-break:break-all; }
+.col-stats { width:100px;flex-shrink:0;text-align:right;white-space:nowrap; }
 .filter-card {
   margin-bottom: 20px;
 }
