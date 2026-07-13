@@ -126,7 +126,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
     // 角色名映射
     function getRoleName(roleCode) {
-      const map = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员' };
+      const map = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员', security_auditor: '审计人员' };
       return map[roleCode] || '开发人员';
     }
 
@@ -331,9 +331,21 @@ router.get('/me', async (req, res, next) => {
       .where('user_id', decoded.userId)
       .first();
 
-    const roleNameMap = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员' };
+    const roleNameMap = { admin: '系统管理员', project_manager: '项目管理员', developer: '开发人员', auditor: '审计人员', security_auditor: '审计人员' };
     const roleCode = profile?.role_code || decoded.roleCode || 'developer';
     const roleName = roleNameMap[roleCode] || profile?.role_name || '开发人员';
+
+    console.log(`[Auth] /me 用户=${decoded.username} roleCode=${roleCode} profile_role=${profile?.role_code} jwt_role=${decoded.roleCode}`);
+
+    // 权限也要从数据库重读（与角色一致），避免 JWT 中保留旧角色的权限
+    let permissions = decoded.permissions || [];
+    try {
+      const dbPerms = await loadRolePermissions(roleCode);
+      console.log(`[Auth] /me dbPerms for ${roleCode}:`, dbPerms);
+      if (dbPerms.length > 0) {
+        permissions = dbPerms;
+      }
+    } catch { /* 读权限失败则用 JWT 中的兜底 */ }
 
     res.json({
       code: 200,
@@ -349,7 +361,7 @@ router.get('/me', async (req, res, next) => {
         departmentId: profile?.department_id || null,
         secretLevel: profile?.secret_level || 'secret',
         lastLoginTime: profile?.last_login_time || null,
-        permissions: decoded.permissions || [],
+        permissions,
       },
     });
   } catch (error) {

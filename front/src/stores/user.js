@@ -21,9 +21,16 @@ export const useUserStore = defineStore('user', () => {
       'admin': '系统管理员',
       'project_manager': '项目管理员',
       'developer': '开发人员',
-      'auditor': '审计人员'
+      'auditor': '审计人员',
+      'security_auditor': '审计人员'
     }
     return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '开发人员'
+  })
+
+  // 审计角色判断（数据库可能为 auditor 或 security_auditor）
+  const isAuditor = computed(() => {
+    const r = userInfo.value?.role || ''
+    return r === 'auditor' || r === 'security_auditor'
   })
 
   async function initUser() {
@@ -32,6 +39,7 @@ export const useUserStore = defineStore('user', () => {
         const res = await getUserInfoApi()
         userInfo.value = res.data
         permissions.value = res.data.permissions || []
+        console.log('[UserStore] initUser 完成 — role:', userInfo.value?.role, 'permissions:', permissions.value)
       } catch (error) {
         console.error('获取用户信息失败', error)
         logout()
@@ -82,6 +90,7 @@ export const useUserStore = defineStore('user', () => {
     username,
     role,
     roleName,
+    isAuditor,
     initUser,
     loginAction,
     logout,

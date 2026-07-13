@@ -122,7 +122,7 @@
           </template>
           <div class="quick-links">
             <!-- 非审计人员：业务快捷入口 -->
-            <template v-if="userStore.role !== 'auditor'">
+            <template v-if="!userStore.isAuditor">
             <div class="quick-link-item" @click="$router.push('/repos')">
               <div class="link-icon blue"><el-icon><Folder /></el-icon></div>
               <span>仓库管理</span>
@@ -137,7 +137,7 @@
             </div>
             </template>
             <!-- 审计人员：审计快捷入口 -->
-            <template v-if="userStore.role === 'auditor'">
+            <template v-if="userStore.isAuditor">
             <div class="quick-link-item" @click="$router.push('/audit/logs')">
               <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>操作日志</span>
@@ -152,7 +152,7 @@
             </div>
             </template>
             <!-- 管理员通用 -->
-            <div class="quick-link-item" @click="$router.push('/audit/logs')" v-if="isAdmin && userStore.role !== 'auditor'">
+            <div class="quick-link-item" @click="$router.push('/audit/logs')" v-if="isAdmin && !userStore.isAuditor">
               <div class="link-icon red"><el-icon><Search /></el-icon></div>
               <span>审计日志</span>
             </div>
@@ -259,7 +259,7 @@ const isAdmin = computed(() => userStore.hasPermission('admin:manage') || userSt
 
 // 三重兜底判断审计人员，绕过 computed 可能不正确的问题
 const isAuditor = computed(() => {
-  return userStore.userInfo?.role === 'auditor' || userStore.role === 'auditor' || userStore.roleName === '审计人员'
+  return userStore.isAuditor || userStore.roleName === '审计人员'
 })
 
 const currentDate = computed(() => {

@@ -17,6 +17,7 @@ export const useUserStore = defineStore('user', () => {
       'project_manager': '项目管理员',
       'developer': '开发人员',
       'auditor': '审计人员',
+      'security_auditor': '审计人员',
       'user': '普通用户'
     }
     return roleMap[userInfo.value?.role] || userInfo.value?.roleName || '普通用户'

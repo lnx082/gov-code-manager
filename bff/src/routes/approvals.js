@@ -154,7 +154,14 @@ router.get('/pending', authenticate, async (req, res, next) => {
       const currentStepName = steps[currentStepIdx] || '';
       const requiredRole = getRoleForStep(currentStepName);
 
-      if (requiredRole && requiredRole === userRole) { filtered.push(approval); }
+      // auditor 和 security_auditor 视为等价角色
+      const auditRoles = ['auditor', 'security_auditor'];
+      const roleMatch = requiredRole && (
+        requiredRole === userRole ||
+        (auditRoles.includes(requiredRole) && auditRoles.includes(userRole))
+      );
+
+      if (roleMatch) { filtered.push(approval); }
       else if (!approval.approval_flow_id && isAdmin) { filtered.push(approval); }
     }
 

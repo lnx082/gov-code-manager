@@ -354,6 +354,7 @@ async function loadRoles() {
       { code: 'project_manager', name: '项目管理员' },
       { code: 'developer', name: '开发人员' },
       { code: 'auditor', name: '审计人员' },
+      { code: 'security_auditor', name: '审计人员' },
     ]
   }
 }
@@ -554,7 +555,8 @@ const roleNameMap = {
   'admin': '系统管理员',
   'project_manager': '项目管理员',
   'developer': '开发人员',
-  'auditor': '审计人员'
+  'auditor': '审计人员',
+  'security_auditor': '审计人员'
 }
 
 function getRoleName(row) {
