@@ -402,3 +402,8 @@ export function getDistribution() {
 export function getFilteredRepos(params) {
   return bffService.get('/repos', { params })
 }
+
+// 批量获取文件最后提交信息
+export function getLastCommits(owner, repo, data) {
+  return bffService.post(`/repos/${owner}/${repo}/last-commits`, data)
+}

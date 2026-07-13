@@ -273,4 +273,62 @@ router.get('/:owner/:repo/commits', authenticate, async (req, res, next) => {
   }
 });
 
+// 批量获取目录下所有文件的最后提交信息
+// POST /api/bff/repos/:owner/:repo/last-commits
+// Body: { paths: ["file1.js", "dir/file2.js"], ref: "main" }
+router.post('/:owner/:repo/last-commits', authenticate, async (req, res, next) => {
+  try {
+    const { owner, repo } = req.params;
+    const { paths = [], ref = 'main' } = req.body;
+
+    if (!Array.isArray(paths) || paths.length === 0) {
+      return res.json({ code: 200, data: {} });
+    }
+
+    const giteaToken = req.user?.giteaToken || config.gitea.token || '';
+    const authHeader = giteaToken.startsWith('Basic ') ? giteaToken : `token ${giteaToken}`;
+
+    const result = {};
+
+    // 控制并发批次（每次最多 8 个，避免 Gitea 服务端过载）
+    const batchSize = 8;
+    for (let i = 0; i < paths.length; i += batchSize) {
+      const batch = paths.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(async (filePath) => {
+          try {
+            const commitRes = await fetch(
+              `${config.gitea.url}/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?sha=${encodeURIComponent(ref)}&path=${encodeURIComponent(filePath)}&limit=1`,
+              { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
+            );
+            if (!commitRes.ok) return { path: filePath, data: null };
+            const commits = await commitRes.json();
+            const lastCommit = Array.isArray(commits) ? commits[0] : null;
+            return {
+              path: filePath,
+              data: lastCommit ? {
+                message: lastCommit.commit?.message || lastCommit.message || '',
+                date: lastCommit.commit?.committer?.date || lastCommit.commit?.author?.date || lastCommit.created_at || '',
+                sha: (lastCommit.sha || '').substring(0, 8),
+                author: lastCommit.commit?.author?.name || lastCommit.author?.login || '',
+              } : null,
+            };
+          } catch {
+            return { path: filePath, data: null };
+          }
+        })
+      );
+      for (const r of batchResults) {
+        if (r.status === 'fulfilled' && r.value?.data) {
+          result[r.value.path] = r.value.data;
+        }
+      }
+    }
+
+    res.json({ code: 200, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

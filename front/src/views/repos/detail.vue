@@ -32,8 +32,14 @@
             <div class="file-item header"><span class="file-name-col">文件名</span><span class="file-message-col">提交信息</span><span class="file-time-col">提交时间</span></div>
             <div v-for="f in fileList" :key="f.path" class="file-item" :class="{'is-dir':f.type==='dir'}" @click="handleFileClick(f)">
               <span class="file-name-col"><el-icon v-if="f.type==='dir'"><Folder /></el-icon><el-icon v-else><Document /></el-icon><span>{{ f.name }}</span></span>
-              <span class="file-message-col">{{ f.lastCommitMessage }}</span>
-              <span class="file-time-col">{{ formatTime(f.lastCommitTime) }}</span>
+              <span class="file-message-col">
+                <span v-if="f._commitLoading" class="skeleton-line skeleton-short"></span>
+                <span v-else>{{ f.lastCommitMessage }}</span>
+              </span>
+              <span class="file-time-col">
+                <span v-if="f._commitLoading" class="skeleton-line"></span>
+                <span v-else>{{ formatTime(f.lastCommitTime) }}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -207,6 +213,7 @@ import { ElMessage } from 'element-plus'
 import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Connection, Link, Right, Avatar, Plus, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
+import { getLastCommits } from '@/api/bff'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -249,7 +256,7 @@ const cleanDescription = computed(() => {
 const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
 const sshCloneUrl = computed(() => `git@123.60.219.19:${repoInfo.owner}/${repoInfo.name}.git`)
 
-onMounted(() => { loadRepoDetail(); loadBranches(); loadTags(); loadCommits(); loadPulls(); loadMembers() })
+onMounted(() => { loadRepoDetail(); loadFiles(); loadBranches(); loadTags(); loadCommits(); loadPulls(); loadMembers() })
 
 async function loadRepoDetail() {
   loading.value = true
@@ -272,23 +279,72 @@ async function loadFiles() {
     const data = contents.data || contents
     const items = Array.isArray(data) ? data : [data]
 
-    // 并行查询每个文件的最新提交
-    const withCommits = await Promise.all(items.map(async f => {
+    // 阶段 1：立即渲染文件列表，提交信息列显示骨架屏占位
+    fileList.value = items.map(f => ({
+      name: f.name,
+      path: f.path || f.name,
+      type: f.type,
+      lastCommitMessage: '',
+      lastCommitTime: '',
+      _commitLoading: true
+    }))
+
+    // 阶段 2：通过 BFF 批量接口获取最后提交信息（单次请求）
+    if (items.length > 0) {
+      const filePaths = items.map(f => f.path || f.name)
       try {
-        const path = f.path || f.name
+        const bffRes = await getLastCommits(owner, name, { paths: filePaths, ref })
+        const commitMap = (bffRes.data?.data || bffRes.data || bffRes)
+
+        fileList.value = items.map(f => {
+          const path = f.path || f.name
+          const commit = commitMap[path]
+          return {
+            name: f.name, path, type: f.type,
+            lastCommitMessage: commit?.message || '',
+            lastCommitTime: commit?.date || '',
+            _commitLoading: false
+          }
+        })
+      } catch {
+        // BFF 失败时降级为受控并发 Gitea 请求
+        await loadCommitsFallback(items, owner, name, ref)
+      }
+    }
+  } catch { fileList.value = [] }
+}
+
+// 降级方案：受控并发（每次 6 个）直接请求 Gitea，避免 Promise.all 风暴
+async function loadCommitsFallback(items, owner, name, ref) {
+  const batchSize = 6
+  const updated = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const batchResults = await Promise.allSettled(batch.map(async f => {
+      const path = f.path || f.name
+      try {
         const commitsRes = await getCommits(owner, name, { sha: ref, limit: 1, path })
         const lastCommit = (commitsRes.data || commitsRes)?.[0]
         return {
           name: f.name, path, type: f.type,
           lastCommitMessage: lastCommit?.commit?.message || lastCommit?.message || '',
-          lastCommitTime: lastCommit?.commit?.committer?.date || lastCommit?.commit?.author?.date || lastCommit?.created_at || ''
+          lastCommitTime: lastCommit?.commit?.committer?.date || lastCommit?.commit?.author?.date || lastCommit?.created_at || '',
+          _commitLoading: false
         }
       } catch {
-        return { name: f.name, path: f.path || f.name, type: f.type, lastCommitMessage: '', lastCommitTime: '' }
+        return { name: f.name, path, type: f.type, lastCommitMessage: '', lastCommitTime: '', _commitLoading: false }
       }
     }))
-    fileList.value = withCommits
-  } catch { fileList.value = [] }
+    updated.push(...batchResults.filter(r => r.status === 'fulfilled').map(r => r.value))
+    // 每批完成后立即更新 UI（渐进式渲染）
+    fileList.value = [
+      ...updated,
+      ...items.slice(i + batchSize).map(f => ({
+        name: f.name, path: f.path || f.name, type: f.type,
+        lastCommitMessage: '', lastCommitTime: '', _commitLoading: true
+      }))
+    ]
+  }
 }
 
 async function loadBranches() {
@@ -521,4 +577,21 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
 .asset-item { display:flex; align-items:center; gap:8px; padding:4px 0; }
 .asset-size { color:#909399; font-size:12px; }
 .tag-detail { min-height:100px; }
+
+// 骨架屏加载动画
+.skeleton-line {
+  display: inline-block;
+  height: 14px;
+  width: 100%;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+  &.skeleton-short { width: 60%; }
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 </style>
