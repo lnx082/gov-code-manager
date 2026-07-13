@@ -618,6 +618,25 @@ async function submitApproval() {
     }
     approvalDialogVisible.value = false
     detailDialogVisible.value = false
+
+    // 审批通过后自动合并
+    if (newStatus === 'approved' && currentMR.value) {
+      try {
+        const owner = currentMR.value.owner
+        const repo = currentMR.value.repo
+        const prId = currentMR.value.id || currentMR.value.number
+        if (owner && repo && prId) {
+          await mergePullRequest(owner, repo, prId)
+          currentMR.value.status = 'merged'
+          const mi = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
+          if (mi !== -1) mergeRequestList.value[mi].status = 'merged'
+          ElMessage.success('审批通过，已自动合并')
+        }
+      } catch (mergeErr) {
+        console.warn('自动合并失败，请手动合并:', mergeErr.message)
+        ElMessage.warning('审批通过，但自动合并失败，请手动点击合并按钮')
+      }
+    }
   } catch (error) {
     console.error('审批失败:', error)
     const detail = error?.response?.data
@@ -668,16 +687,21 @@ async function handleClose(row) {
 
 async function handleMerge() {
   if (!currentMR.value) return
+  const owner = currentMR.value.owner
+  const repo = currentMR.value.repo
+  const prId = currentMR.value.id || currentMR.value.number
+  if (!owner || !repo || !prId) { ElMessage.warning('仓库信息不完整'); return }
   try {
-    const repo = repoList.value.find(r => r.id === currentMR.value.repoId)
-    if (repo) {
-      await mergePullRequest(repo.owner, repo.repo, currentMR.value.id || currentMR.value.number)
-    }
+    await mergePullRequest(owner, repo, prId)
     ElMessage.success('合并成功')
+    // 更新本地状态
+    currentMR.value.status = 'merged'
+    const idx = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
+    if (idx !== -1) mergeRequestList.value[idx].status = 'merged'
     detailDialogVisible.value = false
     loadData()
   } catch (error) {
-    ElMessage.warning('合并失败')
+    ElMessage.warning('合并失败: ' + (error?.response?.data?.message || error?.message || '未知错误'))
   }
 }
 
