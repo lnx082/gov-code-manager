@@ -141,24 +141,40 @@
     </footer>
 
     <!-- 通知弹窗 -->
-    <el-dialog v-model="showNoticeDialog" title="系统通知" width="600px">
+    <el-dialog v-model="showNoticeDialog" title="系统通知" width="650px">
       <div class="notice-list">
         <el-empty v-if="notices.length === 0" description="暂无通知" />
-        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item">
-          <div class="notice-header">
-            <div class="notice-title">{{ notice.title }}</div>
-            <el-tag v-if="notice.isSys" size="small" type="info">系统通知</el-tag>
-            <el-tag v-else size="small" type="warning">审批通知</el-tag>
+        <template v-else>
+          <div v-for="notice in pagedNotices" :key="notice.id" class="notice-item" :class="{ 'notice-unread': !notice.read }">
+            <div class="notice-header">
+              <div class="notice-title">
+                <span v-if="!notice.read" class="unread-dot"></span>
+                {{ notice.title }}
+              </div>
+              <el-tag v-if="notice.isSys" size="small" type="info">系统通知</el-tag>
+              <el-tag v-else size="small" type="warning">审批通知</el-tag>
+            </div>
+            <div class="notice-content">{{ notice.content }}</div>
+            <div class="notice-footer">
+              <span class="notice-time">{{ notice.createTime }}</span>
+              <el-button type="primary" link size="small" @click="viewNoticeDetail(notice)">查看详情</el-button>
+              <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
+              <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
+              <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
+            </div>
           </div>
-          <div class="notice-content">{{ notice.content }}</div>
-          <div class="notice-footer">
-            <span class="notice-time">{{ notice.createTime }}</span>
-            <el-button type="primary" link size="small" @click="viewNoticeDetail(notice)">查看详情</el-button>
-            <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
-            <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
-            <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
+          <!-- 分页 -->
+          <div class="notice-pagination" v-if="notices.length > noticePageSize">
+            <el-pagination
+              v-model:current-page="noticePage"
+              :page-size="noticePageSize"
+              :total="notices.length"
+              layout="prev, pager, next"
+              size="small"
+              background
+            />
           </div>
-        </div>
+        </template>
       </div>
     </el-dialog>
 
@@ -183,7 +199,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
@@ -201,6 +217,8 @@ const showDetailDialog = ref(false)
 const noticeCount = ref(0)
 const notices = ref([])
 const detailNotice = ref(null)
+const noticePage = ref(1)
+const noticePageSize = 10
 let noticeTimer = null
 
 onMounted(async () => {
@@ -225,7 +243,7 @@ async function loadNotices() {
   const all = []
   // 加载全部通知（含已读，便于展示历史）
   try {
-    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 50 } })
+    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 200 } })
     const sysList = (sysRes.data || sysRes)?.list || []
     for (const item of sysList) {
       all.push({
@@ -233,15 +251,16 @@ async function loadNotices() {
         title: item.title || '系统通知',
         content: item.content || '',
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
+        _ts: item.created_at ? new Date(item.created_at).getTime() : 0,  // 排序用时间戳
         isSys: true,
         notiId: item.notification_id,
         read: item.is_read === true || item.is_read === 'true'
       })
     }
   } catch (_) { /* ignore */ }
-  // 审批通知
+  // 审批通知（待我审批）
   try {
-    const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
+    const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 100 } })
     const pendList = (pendRes.data || pendRes)?.list || []
     const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
     const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
@@ -249,14 +268,26 @@ async function loadNotices() {
       all.push({
         id: 'pend_' + item.approval_id,
         title: item.title,
-        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + stepNames[item.current_step] + ' | 申请人: ' + item.applicant_username,
+        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + (stepNames[item.current_step] || '待审批') + ' | 申请人: ' + item.applicant_username,
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
-        isSys: false
+        _ts: item.created_at ? new Date(item.created_at).getTime() : 0,
+        isSys: false,
+        approvalId: item.approval_id,
+        read: false  // 审批通知始终显示为未读状态
       })
     }
   } catch (_) { /* ignore */ }
+  // ★ 按时间倒序排列（最新在最前面）
+  all.sort((a, b) => b._ts - a._ts)
   notices.value = all
+  noticePage.value = 1  // 重置到第一页
 }
+
+// 当前分页显示的通知
+const pagedNotices = computed(() => {
+  const start = (noticePage.value - 1) * noticePageSize
+  return notices.value.slice(start, start + noticePageSize)
+})
 
 function handleUserCommand(command) {
   switch (command) {
@@ -305,9 +336,13 @@ async function handleSysNotice(notice) {
   loadNoticeCount()
 }
 
-function handleApprovalNotice() {
+function handleApprovalNotice(notice) {
   showNoticeDialog.value = false
-  router.push('/approval/pending')
+  if (notice?.approvalId) {
+    router.push({ path: '/approval/pending', query: { highlight: notice.approvalId } })
+  } else {
+    router.push('/approval/pending')
+  }
 }
 </script>
 
@@ -571,6 +606,26 @@ function handleApprovalNotice() {
         font-size: 12px;
       }
     }
+  }
+  // 未读通知高亮
+  .notice-unread {
+    background: #f0f7ff;
+  }
+  // 未读标记点
+  .unread-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #409eff;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  // 分页
+  .notice-pagination {
+    padding: 12px 0;
+    display: flex;
+    justify-content: center;
   }
 }
 

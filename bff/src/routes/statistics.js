@@ -13,18 +13,45 @@ const router = Router();
 // 获取仪表盘统计
 router.get('/dashboard', authenticate, async (req, res, next) => {
   try {
-    // 按用户角色过滤待审批数
+    // 按用户角色过滤待审批数（与 /approvals/pending、/notifications/count 保持一致）
     const userRole = req.user.roleCode || 'user';
     const isAdmin = userRole === 'admin';
+
+    // 获取部门密级过滤条件
+    const profile = await db('user_profiles')
+      .select('department_id', 'secret_level')
+      .where('user_id', req.user.userId)
+      .first();
+    const deptId = profile?.department_id || null;
+    const userSecretLevel = (profile?.secret_level || 'secret').toLowerCase();
+    const SECRET_HIERARCHY = { 'public': 1, 'internal': 2, 'secret': 3, 'confidential': 4, 'top-secret': 5 };
+    const userLevel = SECRET_HIERARCHY[userSecretLevel] || 1;
+
     function getRoleForStep(name) {
       if (!name) return null;
-      if (name.includes('系统管理员')) return 'admin';
-      if (name.includes('项目管理员')) return 'project_manager';
+      const s = name.trim();
+      if (s.includes('系统管理员')) return 'admin';
+      if (s.includes('项目管理员')) return 'project_manager';
+      if (s.includes('开发人员')) return 'developer';
+      if (s.includes('审计')) return 'auditor';
       return null;
     }
+    const auditRoles = ['auditor', 'security_auditor'];
+
     const allPending = await db('approvals').where('status', 'pending');
     let pendingApprovals = 0;
     for (const a of allPending) {
+      // 部门隔离（与 /approvals/pending 一致）
+      if (!isAdmin && deptId) {
+        const applicant = await db('user_profiles').where('user_id', a.applicant_user_id).first();
+        if (!applicant || applicant.department_id !== deptId) continue;
+      }
+      // 密级管控（与 /approvals/pending 一致）
+      if (!isAdmin) {
+        const rl = SECRET_HIERARCHY[(a.secret_level || 'secret').toLowerCase()] || 0;
+        if (rl > userLevel) continue;
+      }
+
       let steps = [];
       if (a.approval_flow_id) {
         const flow = await db('approval_flows').where('flow_id', a.approval_flow_id).first();
@@ -32,7 +59,13 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
       }
       const stepIdx = (a.current_step||1)-1;
       const requiredRole = getRoleForStep(steps[stepIdx]||'');
-      if (requiredRole && requiredRole === userRole) pendingApprovals++;
+
+      // auditor 和 security_auditor 视为等价角色
+      const roleMatch = requiredRole && (
+        requiredRole === userRole ||
+        (auditRoles.includes(requiredRole) && auditRoles.includes(userRole))
+      );
+      if (roleMatch) pendingApprovals++;
       else if (!a.approval_flow_id && isAdmin) pendingApprovals++;
     }
 

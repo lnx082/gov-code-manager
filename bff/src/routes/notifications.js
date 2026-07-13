@@ -7,6 +7,17 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+// 步骤名 → 角色码映射（与 approvals.js 保持一致）
+function getRoleForStep(stepName) {
+  if (!stepName) return null;
+  const s = stepName.trim();
+  if (s.includes('系统管理员')) return 'admin';
+  if (s.includes('项目管理员')) return 'project_manager';
+  if (s.includes('开发人员')) return 'developer';
+  if (s.includes('审计')) return 'auditor';
+  return null;
+}
+
 // 获取通知列表
 router.get('/', authenticate, async (req, res, next) => {
   try {
@@ -68,7 +79,7 @@ router.post('/read-all', authenticate, async (req, res, next) => {
   }
 });
 
-// 获取未读通知总数（系统通知 + 待我审批）
+// 获取未读通知总数（系统通知 + 待我审批，带部门密级过滤）
 router.get('/count', authenticate, async (req, res, next) => {
   try {
     const userRole = req.user.roleCode || 'user';
@@ -81,18 +92,35 @@ router.get('/count', authenticate, async (req, res, next) => {
       sysUnread = parseInt(r?.c || 0);
     } catch { /* ignore */ }
 
-    // 2. 待我审批数
-    function getRoleForStep(name) {
-      if (!name) return null;
-      if (name.includes('系统管理员')) return 'admin';
-      if (name.includes('项目管理员')) return 'project_manager';
-      return null;
-    }
+    // 2. 待我审批数（与 /approvals/pending 保持一致的过滤逻辑）
+    //    部门密级过滤
+    const profile = await db('user_profiles')
+      .select('department_id', 'secret_level')
+      .where('user_id', req.user.userId)
+      .first();
+    const deptId = profile?.department_id || null;
+    const userSecretLevel = (profile?.secret_level || 'secret').toLowerCase();
+
+    // 密级层级
+    const SECRET_HIERARCHY = { 'public': 1, 'internal': 2, 'secret': 3, 'confidential': 4, 'top-secret': 5 };
+    const userLevel = SECRET_HIERARCHY[userSecretLevel] || 1;
 
     let pendingCount = 0;
     try {
       const allPending = await db('approvals').where('status', 'pending');
       for (const approval of allPending) {
+        // 部门隔离（与 /approvals/pending 一致）
+        if (!isAdmin && deptId) {
+          const applicant = await db('user_profiles').where('user_id', approval.applicant_user_id).first();
+          if (!applicant || applicant.department_id !== deptId) continue;
+        }
+        // 密级管控（与 /approvals/pending 一致）
+        if (!isAdmin) {
+          const rl = SECRET_HIERARCHY[(approval.secret_level || 'secret').toLowerCase()] || 0;
+          if (rl > userLevel) continue;
+        }
+
+        // 步骤角色匹配
         let steps = [];
         if (approval.approval_flow_id) {
           const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
@@ -102,7 +130,15 @@ router.get('/count', authenticate, async (req, res, next) => {
         }
         const stepIdx = (approval.current_step || 1) - 1;
         const requiredRole = getRoleForStep(steps[stepIdx] || '');
-        if (requiredRole && requiredRole === userRole) pendingCount++;
+
+        // auditor 和 security_auditor 视为等价角色
+        const auditRoles = ['auditor', 'security_auditor'];
+        const roleMatch = requiredRole && (
+          requiredRole === userRole ||
+          (auditRoles.includes(requiredRole) && auditRoles.includes(userRole))
+        );
+
+        if (roleMatch) pendingCount++;
         else if (!approval.approval_flow_id && isAdmin) pendingCount++;
       }
     } catch { /* ignore */ }
