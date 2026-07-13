@@ -39,6 +39,7 @@ import baselineRoutes from './routes/baselines.js';
 import archiveRoutes from './routes/archives.js';
 import branchRoutes from './routes/branches.js';
 import giteaRoutes from './routes/gitea.js';
+import downloadTokenRoutes from './routes/downloadToken.js';
 
 // 创建 Express 应用
 const app = express();
@@ -88,6 +89,9 @@ const API_PREFIX = config.api.prefix;
 
 // 认证路由
 app.use(`${API_PREFIX}/auth`, authRoutes);
+
+// 下载令牌路由（Gitea 访问令牌，用于 ZIP 下载免登录）
+app.use(`${API_PREFIX}/user/download-token`, downloadTokenRoutes);
 
 // 仓库路由
 app.use(`${API_PREFIX}/repos`, repoRoutes);
@@ -214,7 +218,7 @@ async function startServer() {
     console.log(`🗄️  数据库: openGauss @ ${config.database.host}:${config.database.port}`);
     console.log('──────────────────────────────────────────────────────────');
     console.log('');
-    console.log('已挂载路由模块 (25个):');
+    console.log('已挂载路由模块 (26个):');
     console.log(`  POST ${API_PREFIX}/auth/login             - 用户登录`);
     console.log(`  GET  ${API_PREFIX}/auth/me                - 获取当前用户`);
     console.log(`  GET  ${API_PREFIX}/repos                  - 仓库管理`);

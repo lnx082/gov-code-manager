@@ -56,31 +56,94 @@ router.get('/', authenticate, async (req, res, next) => {
       .where('user_id', req.user.userId)
       .first();
 
+    // ★ 管理员使用 admin token 调用 Gitea 管理 API，查看全部仓库
+    //    普通用户使用自己的 token，只能看到自己拥有/协作的仓库
+    let repos = [];
+    let authHeader = '';
     const isAdmin = req.user.roleCode === 'admin' || req.user.isAdmin === true;
     const userDeptId = profile?.department_id;
     const userDeptName = profile?.department_name || '';
     const userSecretLevel = profile?.secret_level || 'secret';
 
-    // 使用用户自己的 Gitea token（同部门成员已加为协作者，自然能看到对应仓库）
-    const giteaToken = req.user?.giteaToken || '';
-    const authHeader = giteaToken.startsWith('Basic ') ? giteaToken : `token ${giteaToken}`;
+    if (isAdmin) {
+      const adminToken = config.gitea?.token;
+      const adminAuth = adminToken
+        ? (adminToken.startsWith('Basic ') || adminToken.startsWith('Bearer ') ? adminToken : `Bearer ${adminToken}`)
+        : '';
+      let adminSucceeded = false;
 
-    // 从 Gitea 获取仓库列表
-    const response = await fetch(
-      `${config.gitea.url}/api/v1/user/repos?page=${page}&limit=${pageSize}${search ? `&q=${search}` : ''}`,
-      {
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json',
-        },
+      if (adminAuth) {
+        // 策略1：尝试管理员专用 API（Gitea 较新版本支持）
+        try {
+          const adminRes = await fetch(
+            `${config.gitea.url}/api/v1/admin/repos?page=${page}&limit=${pageSize}`,
+            { headers: { 'Authorization': adminAuth, 'Content-Type': 'application/json' } }
+          );
+          if (adminRes.ok) {
+            repos = await adminRes.json();
+            authHeader = adminAuth;
+            adminSucceeded = true;
+            console.log(`[Repos] 通过 admin/repos API 获取 ${repos.length} 个仓库`);
+          } else if (adminRes.status === 404) {
+            // 策略2：Gitea 版本较老不支持 admin/repos，改用 repos/search + admin token
+            console.log(`[Repos] admin/repos 返回 404，改用 repos/search API`);
+            const searchRes = await fetch(
+              `${config.gitea.url}/api/v1/repos/search?page=${page}&limit=${pageSize}`,
+              { headers: { 'Authorization': adminAuth, 'Content-Type': 'application/json' } }
+            );
+            if (searchRes.ok) {
+              const result = await searchRes.json();
+              repos = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+              authHeader = adminAuth;
+              adminSucceeded = true;
+              console.log(`[Repos] 通过 repos/search API 获取 ${repos.length} 个仓库`);
+            } else {
+              console.warn(`[Repos] repos/search API 也失败 (${searchRes.status})`);
+            }
+          } else {
+            console.warn(`[Repos] admin/repos API 返回 ${adminRes.status}`);
+          }
+        } catch (err) {
+          console.warn(`[Repos] 管理员 API 请求异常: ${err.message}`);
+        }
       }
-    );
 
-    if (!response.ok) {
-      throw new Error('获取仓库列表失败');
+      // 降级：管理员 API 全部不可用 → 使用用户自己的 token（原行为）
+      if (!adminSucceeded) {
+        console.log(`[Repos] 管理员 API 路径全部失败，降级使用用户 token`);
+        const userToken = req.user?.giteaToken || '';
+        authHeader = userToken.startsWith('Basic ') ? userToken : `token ${userToken}`;
+        const response = await fetch(
+          `${config.gitea.url}/api/v1/user/repos?page=${page}&limit=${pageSize}${search ? `&q=${search}` : ''}`,
+          { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
+        );
+        if (response.ok) {
+          repos = await response.json();
+        } else {
+          console.warn(`[Repos] 用户 API 也失败 (${response.status})，返回空列表`);
+        }
+      }
+
+      // 管理员搜索：BFF 侧简单过滤（admin API 可能不支持 q 参数）
+      if (search && repos.length > 0) {
+        const q = search.toLowerCase();
+        repos = repos.filter(r =>
+          (r.name || '').toLowerCase().includes(q) ||
+          (r.full_name || '').toLowerCase().includes(q) ||
+          (r.description || '').toLowerCase().includes(q)
+        );
+      }
+    } else {
+      // 普通用户：使用自己的 token
+      const userToken = req.user?.giteaToken || '';
+      authHeader = userToken.startsWith('Basic ') ? userToken : `token ${userToken}`;
+      const response = await fetch(
+        `${config.gitea.url}/api/v1/user/repos?page=${page}&limit=${pageSize}${search ? `&q=${search}` : ''}`,
+        { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
+      );
+      if (!response.ok) throw new Error('获取仓库列表失败');
+      repos = await response.json();
     }
-
-    const repos = await response.json();
 
     // 获取 repo_metadata 映射 + 部门名称映射
     const allMeta = await db('repo_metadata').select('*');

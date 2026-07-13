@@ -407,3 +407,9 @@ export function getFilteredRepos(params) {
 export function getLastCommits(owner, repo, data) {
   return bffService.post(`/repos/${owner}/${repo}/last-commits`, data)
 }
+
+// ============ 下载令牌 ============
+
+export function getDownloadToken() {
+  return bffService.get('/user/download-token')
+}

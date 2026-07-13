@@ -44,28 +44,68 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
       .count('* as count').first();
 
     // 从 Gitea 获取仓库数和真实版本（tag）数
+    // 管理员：尝试 admin API 获取全部仓库；普通用户：用自己 token 查 /user/repos
     let repoCount = 0;
     let giteaVersionCount = 0;
     const adminToken = config.gitea?.token || '';
-    if (adminToken) {
+    const userToken = req.user?.giteaToken || '';
+
+    // 选择最佳 token 和 API 路径
+    let repos = [];
+    let repoAuthHeader = '';
+
+    if (isAdmin && adminToken) {
+      // 管理员：尝试 admin/repos → repos/search → user/repos
+      const adminAuth = adminToken.startsWith('Basic ') || adminToken.startsWith('Bearer ')
+        ? adminToken : `Bearer ${adminToken}`;
+
       try {
-        const reposRes = await fetch(`${config.gitea.url}/api/v1/user/repos?limit=200`, {
-          headers: { 'Authorization': adminToken }
+        const adminRes = await fetch(`${config.gitea.url}/api/v1/admin/repos?limit=200`, {
+          headers: { 'Authorization': adminAuth }
         });
-        const repos = await reposRes.json();
-        if (Array.isArray(repos)) {
-          repoCount = repos.length;
-          for (const repo of repos) {
-            try {
-              const tagsRes = await fetch(`${config.gitea.url}/api/v1/repos/${repo.owner.login}/${repo.name}/tags?limit=100`, {
-                headers: { 'Authorization': adminToken }
-              });
-              const tags = await tagsRes.json();
-              if (Array.isArray(tags)) giteaVersionCount += tags.length;
-            } catch { /* skip */ }
+        if (adminRes.ok) {
+          repos = await adminRes.json();
+          repoAuthHeader = adminAuth;
+        } else if (adminRes.status === 404) {
+          const searchRes = await fetch(`${config.gitea.url}/api/v1/repos/search?limit=200`, {
+            headers: { 'Authorization': adminAuth }
+          });
+          if (searchRes.ok) {
+            const result = await searchRes.json();
+            repos = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+            repoAuthHeader = adminAuth;
           }
         }
       } catch { /* skip */ }
+    }
+
+    // 降级：使用用户自己的 token
+    if (repos.length === 0 && userToken) {
+      const userAuth = userToken.startsWith('Basic ') ? userToken : `token ${userToken}`;
+      try {
+        const userRes = await fetch(`${config.gitea.url}/api/v1/user/repos?limit=200`, {
+          headers: { 'Authorization': userAuth }
+        });
+        if (userRes.ok) {
+          repos = await userRes.json();
+          repoAuthHeader = userAuth;
+        }
+      } catch { /* skip */ }
+    }
+
+    if (Array.isArray(repos) && repos.length > 0) {
+      repoCount = repos.length;
+      repoAuthHeader = repoAuthHeader || (adminToken.startsWith('Basic ') || adminToken.startsWith('Bearer ')
+        ? adminToken : `Bearer ${adminToken}`);
+      for (const repo of repos) {
+        try {
+          const tagsRes = await fetch(`${config.gitea.url}/api/v1/repos/${repo.owner.login}/${repo.name}/tags?limit=100`, {
+            headers: { 'Authorization': repoAuthHeader }
+          });
+          const tags = await tagsRes.json();
+          if (Array.isArray(tags)) giteaVersionCount += tags.length;
+        } catch { /* skip */ }
+      }
     }
 
     res.json({

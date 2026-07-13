@@ -304,6 +304,25 @@ router.all('/*', authenticate, async (req, res, next) => {
     }
 
     const response = await fetch(giteaUrl, fetchOptions);
+
+    // 删除仓库成功时，同步清理 repo_metadata 表
+    if (req.method === 'DELETE' && response.ok) {
+      const repoMatch = giteaPath.match(/^\/repos\/([^/]+)\/([^/]+)$/);
+      if (repoMatch) {
+        const [, owner, repoName] = repoMatch;
+        try {
+          const deleted = await db('repo_metadata')
+            .where({ repo_owner: owner, repo_name: repoName })
+            .delete();
+          if (deleted > 0) {
+            console.log(`[Gitea代理] 已同步删除 repo_metadata: ${owner}/${repoName}`);
+          }
+        } catch (err) {
+          console.warn(`[Gitea代理] 删除 repo_metadata 失败: ${owner}/${repoName}`, err.message);
+        }
+      }
+    }
+
     // 禁止缓存，防止浏览器返回 304 空数据
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');

@@ -42,6 +42,7 @@ async function fixDatabaseSchema(database) {
       { name: 'password_hash', def: 'VARCHAR(255)' },
       { name: 'secret_level', def: 'VARCHAR(20) DEFAULT \'internal\'' },
       { name: 'permissions', def: 'TEXT' },
+      { name: 'gitea_download_token', def: 'VARCHAR(255)' },
     ],
     roles: [
       { name: 'sort_order', def: 'INTEGER DEFAULT 0' },

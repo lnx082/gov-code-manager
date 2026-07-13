@@ -215,6 +215,7 @@ import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
 import { getLastCommits } from '@/api/bff'
 import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
+import { downloadRepoArchive } from '@/utils/download'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -482,16 +483,15 @@ async function toggleBranchProtect(branch, enable) {
   } catch { ElMessage.error('操作失败') }
 }
 
-function downloadZip() { window.open(`${GITEA_URL}/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
+function downloadZip() {
+  downloadRepoArchive(route.params.owner, route.params.name, repoInfo.defaultBranch || 'main')
+}
 
 function downloadTagZip() {
   if (tagDetail.name) {
-    const a = document.createElement('a')
-    a.href = `${GITEA_URL}/${route.params.owner}/${route.params.name}/archive/${tagDetail.name}.zip`
-    a.download = `${route.params.name}-${tagDetail.name}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadRepoArchive(route.params.owner, route.params.name, tagDetail.name, {
+      filename: `${route.params.name}-${tagDetail.name}.zip`
+    })
   }
 }
 

@@ -168,7 +168,7 @@ import { getTags, getBranches, getReleases, getTag } from '@/api/gitea'
 import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
-import { GITEA_URL } from '@/config'
+import { downloadRepoArchive } from '@/utils/download'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -397,12 +397,9 @@ async function viewVersionDetail(row) {
 }
 function downloadVersion(row) {
   if (row.repoOwner && row.repoName) {
-    const a = document.createElement('a')
-    a.href = `${GITEA_URL}/${row.repoOwner}/${row.repoName}/archive/${row.name}.zip`
-    a.download = `${row.repoName}-${row.name}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadRepoArchive(row.repoOwner, row.repoName, row.name, {
+      filename: `${row.repoName}-${row.name}.zip`
+    })
   } else {
     ElMessage.warning('无法获取仓库信息')
   }
