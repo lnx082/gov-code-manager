@@ -31,7 +31,7 @@
     </el-card>
 
     <el-table :data="userList" v-loading="loading" stripe border>
-      <el-table-column prop="gitea_username" label="用户名" width="150">
+      <el-table-column prop="gitea_username" label="用户名" min-width="150">
         <template #default="{ row }">
           <div class="user-cell">
             <el-avatar :size="32" :icon="UserFilled" />

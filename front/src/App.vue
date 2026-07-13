@@ -41,9 +41,9 @@
     </header>
 
     <!-- 主体区域 -->
-    <div class="app-body">
+    <div class="app-body" :style="{ paddingLeft: sidebarWidth }">
       <!-- 侧边栏 -->
-      <aside class="gov-sidebar" :style="{ width: sidebarCollapsed ? '64px' : '220px' }">
+      <aside class="gov-sidebar" :style="{ width: sidebarWidth }">
         <el-menu
           :default-active="$route.path"
           :collapse="sidebarCollapsed"
@@ -52,6 +52,7 @@
           background-color="#ffffff"
           text-color="#303133"
           active-text-color="#ffffff"
+          @mousemove="onMenuMousemove"
         >
           <el-menu-item index="/dashboard">
             <el-icon class="menu-icon"><HomeFilled /></el-icon>
@@ -118,27 +119,28 @@
           </el-sub-menu>
         </el-menu>
 
+        <!-- 侧边栏折叠按钮（固定在功能栏底部，菜单滚动时不随之移动） -->
+        <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
+          <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
+        </div>
       </aside>
-
-      <!-- 侧边栏折叠按钮（固定屏幕左下角） -->
-      <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed" :style="{ left: sidebarCollapsed ? '64px' : '220px' }">
-        <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
-      </div>
 
       <!-- 主内容区 -->
       <main class="app-main">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <div class="main-content">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
+
+        <!-- 底部版权（属于右侧主体内容） -->
+        <footer class="gov-footer">
+          <p>党政软件版本管控平台 © 2026 版权所有 | 技术支持：电科院52组</p>
+        </footer>
       </main>
     </div>
-
-    <!-- 底部版权 -->
-    <footer class="gov-footer">
-      <p>党政软件版本管控平台 © 2026 版权所有 | 技术支持：电科院52组</p>
-    </footer>
 
     <!-- 通知弹窗 -->
     <el-dialog v-model="showNoticeDialog" title="系统通知" width="650px">
@@ -212,6 +214,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const sidebarCollapsed = ref(false)
+const sidebarWidth = computed(() => sidebarCollapsed.value ? '64px' : '220px')
 const showNoticeDialog = ref(false)
 const showDetailDialog = ref(false)
 const noticeCount = ref(0)
@@ -231,6 +234,17 @@ onMounted(async () => {
 onUnmounted(() => {
   if (noticeTimer) clearInterval(noticeTimer)
 })
+
+// 菜单项悬停动画 — 鼠标位置追踪，浅红色从鼠标中心向四周辐射渐变
+function onMenuMousemove(e) {
+  const item = e.target.closest('.el-menu-item, .el-sub-menu__title')
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const x = ((e.clientX - rect.left) / rect.width) * 100
+  const y = ((e.clientY - rect.top) / rect.height) * 100
+  item.style.setProperty('--mx', `${x}%`)
+  item.style.setProperty('--my', `${y}%`)
+}
 
 async function loadNoticeCount() {
   try {
@@ -467,25 +481,30 @@ function handleApprovalNotice(notice) {
   flex: 1;
   display: flex;
   overflow: hidden;
+  transition: padding-left 0.3s ease;
 }
 
-/* 侧边栏 */
+/* 侧边栏 — 固定在屏幕左侧，不随页面滚动 */
 .gov-sidebar {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  height: calc(100vh - 64px);
   background: #ffffff;
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
-  overflow: hidden;
+  overflow: visible;
   border-right: 1px solid #e4e7ed;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  z-index: 99;
 
   .sidebar-menu {
     flex: 1;
     border-right: none;
     overflow-y: auto;
     overflow-x: hidden;
+    // 底部留出空间给固定的折叠按钮，避免最后一项被完全遮挡
+    padding-bottom: 44px;
 
     &:not(.el-menu--collapse) {
       width: 100%;
@@ -498,10 +517,46 @@ function handleApprovalNotice(notice) {
       text-align: center;
     }
 
+    // 菜单项悬停动画：浅红色从鼠标中心向四周辐射渐变，边缘保留最浅的浅红色
+    :deep(.el-sub-menu__title),
+    :deep(.el-menu-item) {
+      position: relative;
+      // 默认鼠标位置在中心
+      --mx: 50%;
+      --my: 50%;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at var(--mx) var(--my),
+          rgba(198, 40, 40, 0.12) 0%,
+          rgba(198, 40, 40, 0.06) 35%,
+          rgba(198, 40, 40, 0.02) 70%,
+          rgba(198, 40, 40, 0.008) 100%
+        );
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      &:hover::before {
+        opacity: 1;
+      }
+
+      // 确保文字在伪元素之上，同时保留子菜单箭头的绝对定位
+      > :not(.el-sub-menu__icon-arrow) {
+        position: relative;
+        z-index: 1;
+      }
+    }
+
     :deep(.el-sub-menu__title) {
       color: #303133;
       &:hover {
-        background: #ffebee !important;
+        background: transparent !important;
         color: #c62828 !important;
       }
     }
@@ -513,7 +568,7 @@ function handleApprovalNotice(notice) {
     :deep(.el-menu-item) {
       color: #303133;
       &:hover {
-        background: #ffebee !important;
+        background: transparent !important;
         color: #c62828 !important;
       }
 
@@ -524,40 +579,67 @@ function handleApprovalNotice(notice) {
     }
   }
 
-.sidebar-toggle {
-  position: fixed;
-  bottom: 0;
-  z-index: 101;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #909399;
-  cursor: pointer;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 0 6px 0 0;
-  transition: left 0.3s ease;
-  font-size: 14px;
+  // 折叠按钮 — 固定在功能栏底部，菜单在其下方滚动
+  .sidebar-toggle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #909399;
+    cursor: pointer;
+    background: #fff;
+    border-top: 1px solid #ebeef5;
+    transition: color 0.3s ease, background 0.3s ease;
+    font-size: 14px;
+    z-index: 10;
+    flex-shrink: 0;
 
-  &:hover {
-    background: #ffebee;
-    color: #c62828;
+    // 渐变遮罩层：菜单项向下滚动时从按钮底部逐渐浮现
+    &::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      height: 28px;
+      background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.7) 40%, #ffffff 100%);
+      pointer-events: none;
+    }
+
+    &:hover {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .el-icon {
+      transition: transform 0.3s ease;
+    }
   }
 }
-}
 
-/* 主内容区 */
+/* 主内容区 — 右侧独立滚动，包含版权栏 */
 .app-main {
   flex: 1;
-  padding: 20px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  min-width: 0;
   background: #f5f5f5;
+
+  .main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+  }
 }
 
-/* 底部版权 */
+/* 底部版权 — 属于右侧主体内容底部 */
 .gov-footer {
+  flex-shrink: 0;
   background: #fff;
   color: #666;
   padding: 16px 20px;

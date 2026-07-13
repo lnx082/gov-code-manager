@@ -12,8 +12,8 @@
     </el-alert>
 
     <el-table :data="archiveList" v-loading="loading" stripe border>
-      <el-table-column prop="tag_name" label="版本号" width="120" />
-      <el-table-column label="所属仓库" width="200">
+      <el-table-column prop="tag_name" label="版本号" min-width="120" />
+      <el-table-column label="所属仓库" min-width="200">
         <template #default="{ row }">{{ getRepoDisplay(row.repo_owner, row.repo_name) }}</template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="80">
