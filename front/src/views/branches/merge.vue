@@ -36,7 +36,7 @@
     <el-table :data="mergeRequestList" v-loading="loading" stripe border>
       <el-table-column label="编号" width="80">
         <template #default="{ row }">
-          <span class="mr-id">#{{ row.id }}</span>
+          <span class="mr-id">#{{ row.bffApprovalId || row.id }}</span>
         </template>
       </el-table-column>
       <el-table-column label="标题" min-width="250">

@@ -264,8 +264,8 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
       const approvals = item.status === 'approved' ? totalSteps : Math.max(0, currentStep - 1);
 
       return {
-        id: item.gitea_pr_number || item.approval_id,
-        number: item.gitea_pr_number || item.approval_id,
+        id: item.approval_id,
+        number: item.approval_id,
         giteaPrNumber: item.gitea_pr_number || null,
         title: item.title,
         description: item.description,
