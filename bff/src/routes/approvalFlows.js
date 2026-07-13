@@ -3,13 +3,17 @@
  */
 import { Router } from 'express';
 import { getDb } from '../database/connection.js';
+import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
+
+// 审批流程写操作允许的角色：系统管理员、项目管理员、开发人员、审计人员
+const WRITE_ROLES = ['admin', 'project_manager', 'developer', 'auditor'];
 
 /**
  * 获取审批流程模板列表
  */
-router.get('/', async (req, res, next) => {
+router.get('/', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 10, isActive } = req.query;
     const db = getDb();
@@ -62,7 +66,7 @@ router.get('/', async (req, res, next) => {
 /**
  * 获取单个审批流程模板
  */
-router.get('/:flowId', async (req, res, next) => {
+router.get('/:flowId', authenticate, async (req, res, next) => {
   try {
     const { flowId } = req.params;
     const db = getDb();
@@ -96,7 +100,7 @@ router.get('/:flowId', async (req, res, next) => {
 /**
  * 创建审批流程模板
  */
-router.post('/', async (req, res, next) => {
+router.post('/', authenticate, requireRole(...WRITE_ROLES), async (req, res, next) => {
   try {
     const { name, code, description, applicableSecretLevels, applicableOperations, steps, isDefault } = req.body;
 
@@ -137,7 +141,7 @@ router.post('/', async (req, res, next) => {
 /**
  * 更新审批流程模板
  */
-router.put('/:flowId', async (req, res, next) => {
+router.put('/:flowId', authenticate, requireRole(...WRITE_ROLES), async (req, res, next) => {
   try {
     const { flowId } = req.params;
     const { name, description, applicableSecretLevels, applicableOperations, steps, isDefault, isActive } = req.body;
@@ -172,7 +176,7 @@ router.put('/:flowId', async (req, res, next) => {
 /**
  * 删除审批流程模板
  */
-router.delete('/:flowId', async (req, res, next) => {
+router.delete('/:flowId', authenticate, requireRole(...WRITE_ROLES), async (req, res, next) => {
   try {
     const { flowId } = req.params;
     const db = getDb();
@@ -192,7 +196,7 @@ router.delete('/:flowId', async (req, res, next) => {
 /**
  * 获取适用的审批流程
  */
-router.get('/suggest/list', async (req, res, next) => {
+router.get('/suggest/list', authenticate, async (req, res, next) => {
   try {
     const { secretLevel, operationType } = req.query;
     const db = getDb();

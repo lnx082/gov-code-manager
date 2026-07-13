@@ -84,6 +84,33 @@ export function requirePermission(...permissions) {
   };
 }
 
+// 角色检查中间件（允许指定角色列表访问）
+// auditor 和 security_auditor 视为等价
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ code: 401, message: '未登录' });
+    }
+
+    const userRole = req.user.roleCode || 'user';
+    const auditRoles = ['auditor', 'security_auditor'];
+
+    // 检查用户角色是否在允许列表中（auditor 双向等价匹配）
+    const matched = roles.some(r =>
+      r === userRole ||
+      (auditRoles.includes(r) && auditRoles.includes(userRole))
+    );
+
+    if (req.user.permissions?.includes('*')) return next();
+    if (userRole === 'admin') return next(); // 管理员始终放行
+
+    if (!matched) {
+      return res.status(403).json({ code: 403, message: '没有权限执行此操作' });
+    }
+    next();
+  };
+}
+
 // 管理员权限检查中间件
 export function requireAdmin(req, res, next) {
   if (!req.user) {

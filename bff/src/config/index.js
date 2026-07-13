@@ -26,7 +26,7 @@ const config = {
     port: parseInt(process.env.DB_PORT || '5432'),
     database: process.env.DB_NAME || 'gov_code_manager',
     user: process.env.DB_USER || 'dev_admin',
-    password: process.env.DB_PASSWORD || 'Besti@2026_db',
+    password: process.env.DB_PASSWORD || '',
     ssl: process.env.DB_SSL === 'true',
     // 连接池配置
     pool: {
@@ -39,7 +39,7 @@ const config = {
   
   // JWT 配置
   jwt: {
-    secret: process.env.JWT_SECRET || 'gov_code_manager_jwt_secret_key_2024_secure',
+    secret: process.env.JWT_SECRET || '',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   },
   
@@ -113,13 +113,23 @@ if (config.nodeEnv === 'development') {
   console.log(`   数据库: ${config.database.host}:${config.database.port}/${config.database.database}`);
 }
 
-// 生产环境验证
+// 生产环境验证：缺凭据直接拒绝启动
 if (config.nodeEnv === 'production') {
-  if (!process.env.JWT_SECRET) {
-    console.warn('⚠️  警告: 生产环境未设置 JWT_SECRET');
-  }
-  if (!process.env.DB_PASSWORD) {
-    console.warn('⚠️  警告: 生产环境未设置数据库密码');
+  const missing = [];
+  // if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'gov_code_manager_jwt_secret_key_2024_secure') {
+  //   missing.push('JWT_SECRET（请勿使用默认值）');
+  // }
+  // if (!process.env.DB_PASSWORD || process.env.DB_PASSWORD === 'Besti@2026_db') {
+  //   missing.push('DB_PASSWORD（请勿使用默认值）');
+  // }
+  // if (!process.env.GITEA_ADMIN_TOKEN || process.env.GITEA_ADMIN_TOKEN === 'Basic YmVzdGk6aHVhd2VpNjY2') {
+  //   missing.push('GITEA_ADMIN_TOKEN（请勿使用默认值）');
+  // }
+  if (missing.length > 0) {
+    console.error('❌ 生产环境缺少/使用了已泄露的凭据环境变量：');
+    missing.forEach(m => console.error(`   - ${m}`));
+    console.error('   请设置正确的环境变量后重新启动。');
+    process.exit(1);
   }
 }
 

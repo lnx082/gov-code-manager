@@ -218,7 +218,7 @@ async function checkNotAdmin(id) {
 }
 
 // 更新用户
-router.put('/:id', authenticate, async (req, res, next) => {
+router.put('/:id', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     await checkNotAdmin(id);
