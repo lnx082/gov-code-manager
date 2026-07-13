@@ -115,7 +115,7 @@
             <el-menu-item index="/admin/users">用户管理</el-menu-item>
             <el-menu-item index="/admin/roles">角色权限</el-menu-item>
             <el-menu-item index="/admin/depts">部门管理</el-menu-item>
-            <el-menu-item index="/admin/backup">备份管理</el-menu-item>
+            <!-- <el-menu-item index="/admin/backup">备份管理</el-menu-item> -->
           </el-sub-menu>
         </el-menu>
 
