@@ -38,3 +38,7 @@ pnpm-debug.log*
 *.tmp
 *.temp
 .cache/
+
+# ============ 安全 ============
+.admin_token_cache
+
