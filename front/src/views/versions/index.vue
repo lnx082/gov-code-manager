@@ -140,7 +140,7 @@
           <el-divider v-if="activeVersion.release" content-position="left">Release 信息</el-divider>
           <el-descriptions v-if="activeVersion.release" :column="2" border>
             <el-descriptions-item label="发布名称">{{ activeVersion.release.name || activeVersion.name }}</el-descriptions-item>
-            <el-descriptions-item label="发布者">{{ activeVersion.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ getAuthorName(activeVersion.release.author) }}</el-descriptions-item>
             <el-descriptions-item label="是否预发布">
               <el-tag :type="activeVersion.release.prerelease ? 'warning' : 'success'" size="small">
                 {{ activeVersion.release.prerelease ? '是' : '否' }}
@@ -403,6 +403,26 @@ function downloadVersion(row) {
   } else {
     ElMessage.warning('无法获取仓库信息')
   }
+}
+
+function getAuthorName(author) {
+  if (!author) return '-'
+  
+  if (typeof author === 'string') {
+    try { 
+      const p = JSON.parse(author);
+      // 增加一行判断：确保解析出来的 p 真的是个对象
+      if (typeof p === 'object' && p !== null) {
+        return p.login || p.username || '-';
+      }
+      // 如果解析出来还是个纯字符串（比如 "besti"），直接返回
+      return p;
+    } catch { 
+      return author; 
+    }
+  }
+  
+  return author.login || author.username || '-'
 }
 
 function formatTime(time) {

@@ -170,7 +170,7 @@
           <el-divider v-if="tagDetail.release" content-position="left">Release 信息</el-divider>
           <el-descriptions v-if="tagDetail.release" :column="2" border>
             <el-descriptions-item label="发布名称">{{ tagDetail.release.name || tagDetail.name }}</el-descriptions-item>
-            <el-descriptions-item label="发布者">{{ tagDetail.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ getAuthorName(tagDetail.release.author) }}</el-descriptions-item>
             <el-descriptions-item label="是否预发布">
               <el-tag :type="tagDetail.release.prerelease ? 'warning' : 'success'" size="small">
                 {{ tagDetail.release.prerelease ? '是' : '否' }}
@@ -524,6 +524,7 @@ async function handleAddMember() {
   finally{addMemberLoading.value=false}
 }
 
+function getAuthorName(author) { if(!author)return'-'; if(typeof author==='string'){ try{ const p=JSON.parse(author); return p.login||p.username||'-' }catch{ return author } } return author.login||author.username||'-' }
 function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-CN') }
 </script>
 
