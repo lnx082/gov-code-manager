@@ -237,34 +237,27 @@ async function loadVersions() {
       ? repoList.value.filter(r => r.id === filterForm.repoId)
       : repoList.value
 
-    const allTags = []
-    for (const repo of reposToLoad) {
+    // 并发请求所有仓库的 tags+releases，提升加载速度
+    const results = await Promise.allSettled(reposToLoad.map(async (repo) => {
       try {
-        if (!repo.owner || !repo.repo) continue
+        if (!repo.owner || !repo.repo) return []
         const [tagRes, releaseRes] = await Promise.all([
           getTags(repo.owner, repo.repo),
           getReleases(repo.owner, repo.repo, { limit: 100 }).catch(() => ({ data: [] }))
         ])
         const tags = tagRes.data || tagRes
         const tagArray = Array.isArray(tags) ? tags : []
-        // 用 Release 数据确定 tag 类型
         const releases = (releaseRes.data || releaseRes || [])
         const releaseMap = {}
-        ;(Array.isArray(releases) ? releases : []).forEach(r => {
-          releaseMap[r.tag_name] = r.prerelease ? 'beta' : 'release'
-        })
-        tagArray.forEach(t => allTags.push({
-          ...t,
-          repoOwner: repo.owner,
-          repoName: repo.repo,
-          displayName: repo.displayName,
-          name: t.name,
-          message: t.message || '',
-          sha: t.commit?.sha || '',
+        ;(Array.isArray(releases) ? releases : []).forEach(r => { releaseMap[r.tag_name] = r.prerelease ? 'beta' : 'release' })
+        return tagArray.map(t => ({
+          ...t, repoOwner: repo.owner, repoName: repo.repo, displayName: repo.displayName,
+          name: t.name, message: t.message || '', sha: t.commit?.sha || '',
           type: releaseMap[t.name] || (t.name?.includes('beta') || t.name?.includes('rc') ? 'beta' : 'release'),
         }))
-      } catch { /* skip failed repos */ }
-    }
+      } catch { return [] }
+    }))
+    const allTags = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     // 批量查询基线状态
     if (allTags.length > 0) {
       try {

@@ -373,19 +373,19 @@ async function loadData() {
       fileChanges: item.fileChanges || 0,
     })) : []
 
-    // ===== 辅助：异步从 Gitea 补充 PR 详情（不影响主数据显示） =====
-    for (const item of list) {
-      if (!item.owner || !item.repo || !item.number) continue
+    // ===== 并发从 Gitea 补充 PR 详情（不影响主数据显示） =====
+    await Promise.allSettled(list.map(async (item) => {
+      if (!item.owner || !item.repo || !item.number) return
       try {
-        // 补充 Gitea Reviews 审批记录
-        const reviewRes = await getPullRequestReviews(item.owner, item.repo, item.number)
+        const [reviewRes, prRes] = await Promise.all([
+          getPullRequestReviews(item.owner, item.repo, item.number),
+          getPullRequests(item.owner, item.repo, { state: 'all', page: 1, limit: 1 })
+        ])
         const reviews = reviewRes.data || reviewRes || []
         const approvals = Array.isArray(reviews) ? reviews : []
         item.approvalRecords = approvals
         item.approvals = approvals.filter(r => r.state === 'APPROVED').length
 
-        // 补充 PR 元数据
-        const prRes = await getPullRequests(item.owner, item.repo, { state: 'all', page: 1, limit: 1 })
         const prs = prRes.data || prRes
         const pr = Array.isArray(prs) ? prs.find(p => (p.number || p.id) === item.number) : null
         if (pr) {
@@ -394,10 +394,8 @@ async function loadData() {
           item.state = pr.state || item.state
           item.merged = pr.merged || item.merged
         }
-      } catch (e) {
-        // Gitea 补充失败不影响主数据（BFF 已有完整状态）
-      }
-    }
+      } catch (e) { /* Gitea 补充失败不影响主数据 */ }
+    }))
 
     // 只显示当前用户发起的合并请求
     const currentUser = userStore.username || userStore.userInfo?.username || ''

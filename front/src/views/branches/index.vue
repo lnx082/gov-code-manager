@@ -182,30 +182,26 @@ async function loadBranches() {
     })
 
     // Load branches from each repo
-    const branches = []
     const reposToLoad = filterForm.repoId
       ? repoList.value.filter(r => r.id === filterForm.repoId)
       : repoList.value
-    for (const repo of reposToLoad) {
+    // 并发请求所有仓库的分支，提升加载速度
+    const results = await Promise.allSettled(reposToLoad.map(async (repo) => {
       try {
         const res = await getGiteaBranches(repo.owner, repo.repo)
         const repoBranches = res.data || res
         const branchArray = Array.isArray(repoBranches) ? repoBranches : []
-        branchArray.forEach(b => branches.push({
-          ...b,
-          repoId: repo.id,
-          repoOwner: repo.owner,
-          repoName: repo.repo,
-          displayName: repo.displayName,
-          sha: b.commit?.sha || b.sha || '',
+        return branchArray.map(b => ({
+          ...b, repoId: repo.id, repoOwner: repo.owner, repoName: repo.repo,
+          displayName: repo.displayName, sha: b.commit?.sha || b.sha || '',
           commitMessage: b.commit?.message || b.commitMessage || '',
           author: b.commit?.author?.name || b.commit?.committer?.name || b.author || '',
           updatedAt: b.commit?.author?.date || b.commit?.committer?.date || b.updatedAt || '',
-          isDefault: b.name === repo.defaultBranch,
-          isProtected: b.protected || false
+          isDefault: b.name === repo.defaultBranch, isProtected: b.protected || false
         }))
-      } catch { /* skip failed repos */ }
-    }
+      } catch { return [] }
+    }))
+    const branches = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     pagination.total = branches.length
     stats.total = branches.length
     stats.protected = branches.filter(b => b.protected).length
