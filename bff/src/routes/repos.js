@@ -92,6 +92,37 @@ router.get('/', authenticate, async (req, res, next) => {
     const deptNameMap = {};
     for (const d of allDepts) { deptNameMap[d.dept_id] = d.name; }
 
+    // 并行获取各仓库的分支数（最多10个并发请求，避免 Gitea 过载）
+    const branchCounts = {};
+    const batchSize = 10;
+    for (let i = 0; i < repos.length; i += batchSize) {
+      const batch = repos.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (repo) => {
+          const ownerName = repo.owner?.login || '';
+          const repoKey = `${ownerName}/${repo.name}`.toLowerCase();
+          try {
+            const branchRes = await fetch(
+              `${config.gitea.url}/api/v1/repos/${ownerName}/${repo.name}/branches?page=1&limit=1`,
+              { headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' } }
+            );
+            if (!branchRes.ok) return;
+            // 从响应头中获取总数（Gitea 在 X-Total-Count 头中返回）
+            const totalCount = branchRes.headers.get('X-Total-Count') || branchRes.headers.get('x-total-count');
+            if (totalCount !== null) {
+              branchCounts[repoKey] = parseInt(totalCount);
+            } else {
+              // 降级方案：直接获取全部 branches 来计数（小型仓库一般分支不多）
+              const branches = await branchRes.json();
+              branchCounts[repoKey] = Array.isArray(branches) ? branches.length : 0;
+            }
+          } catch {
+            branchCounts[repoKey] = 0;
+          }
+        })
+      );
+    }
+
     // 格式化 + 权限过滤
     const formattedRepos = repos
       .map(repo => {
@@ -107,7 +138,7 @@ router.get('/', authenticate, async (req, res, next) => {
           description: desc,
           private: repo.private,
           owner: ownerName,
-          branches_count: repo.default_branch ? '1' : '0',
+          branches_count: branchCounts[repoKey] ?? 0,
           stars_count: repo.stars_count,
           forks_count: repo.forks_count,
           updated_at: repo.updated_at,

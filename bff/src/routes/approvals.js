@@ -226,29 +226,69 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
     const rawList = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize)).offset(offset);
 
+    // 批量加载审批流程，用于计算正确的审批进度
+    const flowIds = [...new Set(rawList.map(item => item.approval_flow_id).filter(Boolean))];
+    const flowMap = {};
+    if (flowIds.length > 0) {
+      const flows = await db('approval_flows').whereIn('flow_id', flowIds).select('flow_id', 'steps');
+      for (const f of flows) {
+        try {
+          const steps = typeof f.steps === 'string' ? JSON.parse(f.steps) : (f.steps || []);
+          flowMap[f.flow_id] = steps.length || 1;
+        } catch { flowMap[f.flow_id] = 1; }
+      }
+    }
+
     // 格式化为前端期望的字段名（id/number 使用 Gitea PR 编号，approval_id 另存）
-    const list = rawList.map(item => ({
-      id: item.gitea_pr_number || item.approval_id,
-      number: item.gitea_pr_number || item.approval_id,
-      title: item.title,
-      description: item.description,
-      sourceBranch: item.source_branch,
-      targetBranch: item.target_branch,
-      repoName: item.repo_name,
-      repo: item.repo_name,
-      owner: item.repo_owner,
-      status: item.status,
-      approvalRecords: [],
-      approvals: item.status === 'approved' ? 1 : 0,
-      requiredApprovals: 1,
-      approvalRate: item.status === 'approved' ? 100 : (item.status === 'rejected' ? 100 : 0),
-      additions: 0, deletions: 0, fileChanges: 0, files: [],
-      author: item.applicant_username || '',
-      createdAt: item.created_at,
-      bffApprovalId: item.approval_id,
-      secretLevel: item.secret_level || 'secret',
-      urgency: item.urgency || 'normal',
-    }));
+    const list = rawList.map(item => {
+      // 获取该审批的总步骤数
+      const totalSteps = (item.approval_flow_id && flowMap[item.approval_flow_id]) || 1;
+      const currentStep = item.current_step || 0;
+
+      // 计算审批进度
+      let approvalRate;
+      if (item.status === 'rejected') {
+        approvalRate = 0; // 被拒绝：0%
+      } else if (item.status === 'approved') {
+        approvalRate = 100; // 全部通过：100%
+      } else {
+        // pending 状态：根据当前步骤计算，步骤1还未审批时为0%
+        // 每完成一步 = (stepIndex / totalSteps) * 100
+        // current_step 表示当前等待审批的步骤序号
+        // 已完成步骤数 = current_step - 1（上一步审批通过后才进入下一步）
+        const completedSteps = Math.max(0, currentStep - 1);
+        approvalRate = Math.round((completedSteps / totalSteps) * 100);
+      }
+
+      // 审批人数
+      const approvals = item.status === 'approved' ? totalSteps : Math.max(0, currentStep - 1);
+
+      return {
+        id: item.gitea_pr_number || item.approval_id,
+        number: item.gitea_pr_number || item.approval_id,
+        giteaPrNumber: item.gitea_pr_number || null,
+        title: item.title,
+        description: item.description,
+        sourceBranch: item.source_branch,
+        targetBranch: item.target_branch,
+        repoName: item.repo_name,
+        repo: item.repo_name,
+        owner: item.repo_owner,
+        status: item.status,
+        approvalRecords: [],
+        approvals,
+        requiredApprovals: totalSteps,
+        approvalRate,
+        additions: 0, deletions: 0, fileChanges: 0, files: [],
+        author: item.applicant_username || '',
+        createdAt: item.created_at,
+        bffApprovalId: item.approval_id,
+        approvalFlowId: item.approval_flow_id || null,
+        currentStep: item.current_step || 0,
+        secretLevel: item.secret_level || 'secret',
+        urgency: item.urgency || 'normal',
+      };
+    });
 
     res.json({ code: 200, data: { list, total: parseInt(total.count), page: parseInt(page), pageSize: parseInt(pageSize) } });
   } catch (error) { next(error); }
@@ -577,6 +617,30 @@ async function executePostApprovalAction(approval) {
         });
         console.log(`[PostApproval] 仓库 ${repoOwner}/${repoName} 已冻结归档`);
       } catch (e) { console.warn('[PostApproval] Gitea 冻结失败:', e.message); }
+    }
+  } else if (approval.operation_type === 'merge') {
+    // 合并请求审批通过后自动合并 Gitea PR
+    const repoOwner = approval.repo_owner;
+    const repoName = approval.repo_name;
+    const prNumber = approval.gitea_pr_number;
+    if (!repoOwner || !repoName || !prNumber) {
+      console.error('[PostApproval] 缺少合并参数:', { repoOwner, repoName, prNumber });
+      return;
+    }
+    try {
+      const mergeRes = await fetch(`${giteaUrl}/api/v1/repos/${repoOwner}/${repoName}/pulls/${prNumber}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+        body: JSON.stringify({ Do: 'merge' }),
+      });
+      if (mergeRes.ok) {
+        console.log(`[PostApproval] PR #${prNumber} (${repoOwner}/${repoName}) 自动合并成功`);
+      } else {
+        const errText = await mergeRes.text();
+        console.error(`[PostApproval] PR #${prNumber} 自动合并失败: ${mergeRes.status} ${errText}`);
+      }
+    } catch (e) {
+      console.error('[PostApproval] 自动合并异常:', e.message);
     }
   }
 }

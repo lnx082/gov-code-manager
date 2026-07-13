@@ -193,7 +193,7 @@
       <template #footer>
         <el-button @click="detailDialogVisible = false">关闭</el-button>
         <el-button @click="showApprovalDialog" type="primary" v-if="canApprove && (currentMR?.status === 'pending' || currentMR?.status === 'open')">审批</el-button>
-        <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved'">合并</el-button>
+        <el-button type="success" @click="handleMerge" v-if="currentMR?.status === 'approved' && !currentMR?._giteaMerged">合并</el-button>
       </template>
     </el-dialog>
 
@@ -294,14 +294,21 @@ onMounted(async () => {
     createForm.sourceBranch = route.query.source
     // 等待仓库列表加载后自动填入源仓库
     await loadRepos()
-    if (route.query.repoId) {
-      createForm.sourceRepoId = route.query.repoId
-      loadSourceBranches()
-    } else if (route.query.repoOwner && route.query.repoName) {
+    // 优先通过 owner+name 匹配仓库（更可靠），repoId 仅作备选且需转换为数字
+    let repoFound = false
+    if (route.query.repoOwner && route.query.repoName) {
       const repo = repoList.value.find(r => r.owner === route.query.repoOwner && r.repo === route.query.repoName)
+      if (repo) { createForm.sourceRepoId = repo.id; repoFound = true; loadSourceBranches() }
+    }
+    if (!repoFound && route.query.repoId) {
+      const repo = repoList.value.find(r => r.id === Number(route.query.repoId))
       if (repo) { createForm.sourceRepoId = repo.id; loadSourceBranches() }
     }
-    if (route.query.targetRepoId) createForm.targetRepoId = route.query.targetRepoId
+    // 目标仓库锁定为源仓库（只支持同仓库合并），加载目标分支
+    if (repoFound || route.query.repoId) {
+      createForm.targetRepoId = createForm.sourceRepoId
+      loadTargetBranches()
+    }
     createDialogVisible.value = true
   }
   // 主数据加载
@@ -386,7 +393,10 @@ async function loadData() {
     const bffList = res.data?.list || res.data || []
     const list = Array.isArray(bffList) ? bffList.map(item => ({
       ...item,
-      userApproval: null,
+      userApproval: item.userApproval || null,
+      approvals: item.approvals || 0,
+      requiredApprovals: item.requiredApprovals || 1,
+      approvalRate: item.approvalRate || 0,
       approvalRecords: item.approvalRecords || [],
       files: item.files || [],
       additions: item.additions || 0,
@@ -396,24 +406,30 @@ async function loadData() {
 
     // ===== 并发从 Gitea 补充 PR 详情（不影响主数据显示） =====
     await Promise.allSettled(list.map(async (item) => {
-      if (!item.owner || !item.repo || !item.number) return
+      const prNumber = item.giteaPrNumber
+      if (!item.owner || !item.repo || !prNumber) return
       try {
         const [reviewRes, prRes] = await Promise.all([
-          getPullRequestReviews(item.owner, item.repo, item.number),
+          getPullRequestReviews(item.owner, item.repo, prNumber),
           getPullRequests(item.owner, item.repo, { state: 'all', page: 1, limit: 1 })
         ])
         const reviews = reviewRes.data || reviewRes || []
         const approvals = Array.isArray(reviews) ? reviews : []
         item.approvalRecords = approvals
-        item.approvals = approvals.filter(r => r.state === 'APPROVED').length
+        item.approvals_ = approvals.filter(r => r.state === 'APPROVED').length
 
         const prs = prRes.data || prRes
-        const pr = Array.isArray(prs) ? prs.find(p => (p.number || p.id) === item.number) : null
+        const pr = Array.isArray(prs) ? prs.find(p => (p.number || p.id) === prNumber) : null
         if (pr) {
           item.sourceBranch = pr.head?.label || pr.head?.ref || item.sourceBranch
           item.targetBranch = pr.base?.label || pr.base?.ref || item.targetBranch
           item.state = pr.state || item.state
           item.merged = pr.merged || item.merged
+          // 如果 Gitea PR 已合并，同步状态为 merged（覆盖 BFF 'approved' 状态）
+          if (pr.merged && item.status === 'approved') {
+            item.status = 'merged'
+            item._giteaMerged = true
+          }
         }
       } catch (e) { /* Gitea 补充失败不影响主数据 */ }
     }))
@@ -518,6 +534,7 @@ async function handleCreate() {
       mergeRequestList.value.unshift({
         id: prRes.data?.number || prNumber,
         number: prRes.data?.number || prNumber,
+        giteaPrNumber: prNumber,
         title: createForm.title,
         sourceBranch: createForm.sourceBranch,
         targetBranch: createForm.targetBranch,
@@ -570,31 +587,40 @@ async function viewDetail(row) {
   prDiffLoading.value = true
   const owner = row.owner
   const repo = row.repo
-  if (owner && repo && (row.id || row.number)) {
+  const prNumber = row.giteaPrNumber
+  if (owner && repo && prNumber) {
     try {
-      const res = await getPullRequestFiles(owner, repo, row.id || row.number)
-      const files = res.data || res
-      if (Array.isArray(files)) {
-        currentMR.value.files = files.map(f => ({
-          path: f.filename || f.path, status: f.status || 'modified',
-          additions: f.additions || 0, deletions: f.deletions || 0
-        }))
-        currentMR.value.additions = files.reduce((sum, f) => sum + (f.additions || 0), 0)
-        currentMR.value.deletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0)
-        currentMR.value.fileChanges = files.length
+      // 并发获取 PR 文件变更和 PR 详情（含合并状态）
+      const [filesRes, prDetailRes] = await Promise.allSettled([
+        getPullRequestFiles(owner, repo, prNumber),
+        getPullRequests(owner, repo, { state: 'all', page: 1, limit: 1 })
+      ])
+      if (filesRes.status === 'fulfilled') {
+        const files = filesRes.value.data || filesRes.value
+        if (Array.isArray(files)) {
+          currentMR.value.files = files.map(f => ({
+            path: f.filename || f.path, status: f.status || 'modified',
+            additions: f.additions || 0, deletions: f.deletions || 0
+          }))
+          currentMR.value.additions = files.reduce((sum, f) => sum + (f.additions || 0), 0)
+          currentMR.value.deletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0)
+          currentMR.value.fileChanges = files.length
+        }
+      }
+      // 检查 Gitea PR 是否已合并
+      if (prDetailRes.status === 'fulfilled') {
+        const prs = prDetailRes.value.data || prDetailRes.value || []
+        const pr = Array.isArray(prs) ? prs.find(p => (p.number || p.id) === prNumber) : null
+        if (pr) {
+          currentMR.value._giteaMerged = pr.merged || pr.state === 'merged' || false
+          if (pr.merged && currentMR.value.status === 'approved') {
+            currentMR.value.status = 'merged'
+          }
+        }
       }
     } catch { /* fallback */ }
   }
   prDiffLoading.value = false
-}
-
-function openGiteaPR(mr) {
-  const owner = mr.owner || ''
-  const repoName = mr.repo || ''
-  const prId = mr.id || mr.number
-  if (owner && repoName && prId) {
-    window.open(`http://123.60.219.19:3000/${owner}/${repoName}/pulls/${prId}`, '_blank')
-  }
 }
 
 function showApprovalDialog() {
@@ -609,9 +635,6 @@ async function submitApproval() {
     ElMessage.warning('请先选择一个合并请求')
     return
   }
-  
-  const prId = currentMR.value.id || currentMR.value.number
-  if (!prId) { ElMessage.warning('无法确定合并请求编号'); return }
 
   // 使用 MR 自身存储的 owner/repo，更可靠
   const owner = currentMR.value.owner
@@ -620,31 +643,60 @@ async function submitApproval() {
 
   if (!approvalForm.comment || approvalForm.comment.trim() === '') { ElMessage.warning('请填写审批意见'); return }
 
+  // 有效的 Gitea PR 编号（整数 > 0），用于 Gitea API 调用
+  const giteaPrNumber = currentMR.value.giteaPrNumber
+  const isValidGiteaPr = Number.isInteger(giteaPrNumber) && giteaPrNumber > 0
+
   submittingApproval.value = true
   try {
-    const event = approvalForm.status === 'approved' ? 'APPROVE' : 'REJECT'
-
-    await submitPullRequestReview(owner, repo, prId, {
-      event,
-      body: approvalForm.comment.trim()
-    })
-    
-    // 审批成功后，同步更新 BFF 数据库中的审批记录（如果有关联）
+    // ===== 第1步：先更新 BFF 审批状态（权威数据源） =====
+    let bffResult = null
     if (currentMR.value.bffApprovalId) {
+      const bffAction = approvalForm.status === 'approved' ? 'approved' : 'rejected'
+      const bffRes = await processApproval(currentMR.value.bffApprovalId, {
+        action: bffAction,
+        body: approvalForm.comment.trim()
+      })
+      bffResult = bffRes.data || bffRes
+    }
+
+    // ===== 第2步：同步 Gitea 审批（非致命，失败不影响 BFF 状态） =====
+    if (isValidGiteaPr) {
       try {
-        const bffAction = approvalForm.status === 'approved' ? 'approved' : 'rejected'
-        await processApproval(currentMR.value.bffApprovalId, {
-          action: bffAction,
+        const event = approvalForm.status === 'approved' ? 'APPROVE' : 'REJECT'
+        await submitPullRequestReview(owner, repo, giteaPrNumber, {
+          event,
           body: approvalForm.comment.trim()
         })
-      } catch (bffError) {
-        console.warn('同步更新 BFF 审批状态失败:', bffError)
+      } catch (giteaErr) {
+        console.warn('Gitea 审批同步失败（BFF 已更新，不影响审批流程）:', giteaErr?.response?.status, giteaErr?.message)
       }
     }
-    
-    ElMessage.success(approvalForm.status === 'approved' ? '审批已通过' : '审批已拒绝')
-    // 更新本地状态（当前详情和列表项）
-    const newStatus = approvalForm.status === 'approved' ? 'approved' : 'rejected'
+
+    // ===== 第3步：判断审批是否全部完成 =====
+    // BFF 响应格式:
+    //   中间步骤: { code, message, data: { nextStep, totalSteps } }
+    //   最后步骤: { code, message }（无 data 字段）
+    const bffData = bffResult?.data || bffResult || {}
+    const isFullyApproved = approvalForm.status === 'approved' && (
+      !bffResult ||                                   // 无 BFF 关联，按单步处理
+      !bffData.nextStep ||                            // 无下一步，表示已完成全部步骤
+      (bffData.nextStep > bffData.totalSteps)         // 下一步超出总步数
+    )
+
+    if (approvalForm.status === 'rejected') {
+      ElMessage.success('审批已拒绝')
+    } else if (isFullyApproved) {
+      ElMessage.success('审批已全部通过')
+    } else {
+      const stepName = bffData.nextStep ? `第 ${bffData.nextStep - 1} 步` : ''
+      ElMessage.success(`审批${stepName}通过，等待下一步审批`)
+    }
+
+    // ===== 第4步：更新本地状态 =====
+    const newStatus = approvalForm.status === 'rejected' ? 'rejected'
+                    : isFullyApproved ? 'approved'
+                    : 'pending'
     if (currentMR.value) {
       currentMR.value.status = newStatus
       currentMR.value.userApproval = newStatus
@@ -654,40 +706,47 @@ async function submitApproval() {
     if (idx !== -1) {
       mergeRequestList.value[idx].status = newStatus
       mergeRequestList.value[idx].userApproval = newStatus
+      // 更新审批进度
+      if (bffData.totalSteps) {
+        mergeRequestList.value[idx].requiredApprovals = bffData.totalSteps
+        if (newStatus === 'pending' && bffData.nextStep) {
+          mergeRequestList.value[idx].approvals = bffData.nextStep - 1
+          mergeRequestList.value[idx].approvalRate = Math.round(((bffData.nextStep - 1) / bffData.totalSteps) * 100)
+        } else if (newStatus === 'approved') {
+          mergeRequestList.value[idx].approvals = bffData.totalSteps
+          mergeRequestList.value[idx].approvalRate = 100
+        }
+      }
     }
     approvalDialogVisible.value = false
-    detailDialogVisible.value = false
 
-    // 审批拒绝后自动关闭 Gitea PR
-    if (newStatus === 'rejected' && currentMR.value) {
+    // ===== 第5步：审批拒绝 → 关闭 Gitea PR =====
+    if (newStatus === 'rejected' && currentMR.value && isValidGiteaPr) {
       try {
-        const o1 = currentMR.value.owner, r1 = currentMR.value.repo, p1 = currentMR.value.id || currentMR.value.number
-        if (o1 && r1 && p1) await closePullRequest(o1, r1, p1)
+        await closePullRequest(owner, repo, giteaPrNumber)
         currentMR.value.status = 'closed'
         const mi = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
         if (mi !== -1) mergeRequestList.value[mi].status = 'closed'
       } catch { /* ignore */ }
     }
 
-    // 审批通过后自动合并
-    if (newStatus === 'approved' && currentMR.value) {
+    // ===== 第6步：审批全部通过 → 自动合并 Gitea PR =====
+    if (isFullyApproved && currentMR.value && isValidGiteaPr) {
       try {
-        const owner = currentMR.value.owner
-        const repo = currentMR.value.repo
-        const prId = currentMR.value.id || currentMR.value.number
-        if (owner && repo && prId) {
-          await mergePullRequest(owner, repo, prId)
-          currentMR.value.status = 'merged'
-          const mi = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
-          if (mi !== -1) mergeRequestList.value[mi].status = 'merged'
-          ElMessage.success('审批通过，已自动合并')
-        }
+        await mergePullRequest(owner, repo, giteaPrNumber)
+        currentMR.value.status = 'merged'
+        currentMR.value._giteaMerged = true
+        const mi = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
+        if (mi !== -1) mergeRequestList.value[mi].status = 'merged'
+        ElMessage.success('审批全部通过，已自动合并')
       } catch (mergeErr) {
         console.warn('自动合并失败:', mergeErr)
         const errMsg = mergeErr?.response?.data?.message || mergeErr?.message || '未知错误'
-        ElMessage.warning('审批通过，自动合并失败: ' + errMsg + '，请手动点击合并按钮')
+        ElMessage.warning('审批通过，但自动合并失败: ' + errMsg + '，请手动点击合并按钮')
       }
     }
+
+    detailDialogVisible.value = false
   } catch (error) {
     console.error('审批失败:', error)
     const detail = error?.response?.data
@@ -711,9 +770,10 @@ async function handleWithdraw(row) {
     // 关闭 Gitea PR（如果有关联）
     const owner = row.owner
     const repo = row.repo
-    if (owner && repo && (row.id || row.number)) {
+    const prNumber = row.giteaPrNumber
+    if (owner && repo && prNumber) {
       try {
-        await closePullRequest(owner, repo, row.id || row.number)
+        await closePullRequest(owner, repo, prNumber)
       } catch { /* 忽略 */ }
     }
     ElMessage.success('合并请求已撤回')
@@ -725,9 +785,11 @@ async function handleWithdraw(row) {
 
 async function handleClose(row) {
   try {
-    const repo = repoList.value.find(r => r.id === row.repoId)
-    if (repo) {
-      await closePullRequest(repo.owner, repo.repo, row.id || row.number)
+    const owner = row.owner
+    const repo = row.repo
+    const prNumber = row.giteaPrNumber
+    if (owner && repo && prNumber) {
+      await closePullRequest(owner, repo, prNumber)
     }
     ElMessage.success('合并请求已关闭')
     loadData()
@@ -740,13 +802,14 @@ async function handleMerge() {
   if (!currentMR.value) return
   const owner = currentMR.value.owner
   const repo = currentMR.value.repo
-  const prId = currentMR.value.id || currentMR.value.number
-  if (!owner || !repo || !prId) { ElMessage.warning('仓库信息不完整'); return }
+  const prNumber = currentMR.value.giteaPrNumber
+  if (!owner || !repo || !prNumber) { ElMessage.warning('仓库信息不完整或缺少 Gitea PR 编号'); return }
   try {
-    await mergePullRequest(owner, repo, prId)
+    await mergePullRequest(owner, repo, prNumber)
     ElMessage.success('合并成功')
     // 更新本地状态
     currentMR.value.status = 'merged'
+    currentMR.value._giteaMerged = true
     const idx = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
     if (idx !== -1) mergeRequestList.value[idx].status = 'merged'
     detailDialogVisible.value = false

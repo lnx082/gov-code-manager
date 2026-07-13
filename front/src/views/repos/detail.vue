@@ -149,6 +149,47 @@
       </div>
     </el-dialog>
 
+    <!-- 版本详情 -->
+    <el-dialog v-model="tagDetailDialogVisible" :title="'版本 ' + (tagDetail.name || '')" width="700px">
+      <div v-loading="tagDetailLoading">
+        <div v-if="!tagDetailLoading && tagDetail.name" class="tag-detail">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="版本号" :span="2">{{ tagDetail.name }}</el-descriptions-item>
+            <el-descriptions-item label="提交 SHA">{{ (tagDetail.sha || '').substring(0, 8) }}</el-descriptions-item>
+            <el-descriptions-item label="提交者">{{ tagDetail.committer || tagDetail.tagger || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatTime(tagDetail.created) }}</el-descriptions-item>
+            <el-descriptions-item label="版本说明" :span="2">{{ tagDetail.message || '无' }}</el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider v-if="tagDetail.release" content-position="left">Release 信息</el-divider>
+          <el-descriptions v-if="tagDetail.release" :column="2" border>
+            <el-descriptions-item label="发布名称">{{ tagDetail.release.name || tagDetail.name }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ tagDetail.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="是否预发布">
+              <el-tag :type="tagDetail.release.prerelease ? 'warning' : 'success'" size="small">
+                {{ tagDetail.release.prerelease ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="发布时间">{{ formatTime(tagDetail.release.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="发布说明" :span="2">
+              <div class="release-body" v-html="tagDetail.release.body_html || tagDetail.release.body || '无'"></div>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="tagDetail.release.assets && tagDetail.release.assets.length" label="附件" :span="2">
+              <div v-for="a in tagDetail.release.assets" :key="a.id" class="asset-item">
+                <span>{{ a.name }}</span>
+                <span class="asset-size">({{ formatFileSize(a.size) }})</span>
+                <el-button size="small" type="primary" link @click="downloadAsset(a)">下载</el-button>
+              </div>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="tagDetailDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="downloadTagZip"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="addMemberDialogVisible" title="添加成员" width="450px">
       <el-form :model="addMemberForm" label-width="80px">
         <el-form-item label="用户名"><el-input v-model="addMemberForm.username" placeholder="Gitea 用户名" /></el-form-item>
@@ -165,7 +206,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Connection, Link, Right, Avatar, Plus, Setting } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection } from '@/api/gitea'
+import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -186,6 +227,11 @@ const savingSettings = ref(false)
 const addMemberDialogVisible = ref(false), addMemberLoading = ref(false)
 const addMemberForm = reactive({ username: '', permission: 'write' })
 const settingsForm = reactive({ name: '', description: '', private: true, defaultBranch: 'main' })
+
+// 版本详情弹窗
+const tagDetailDialogVisible = ref(false)
+const tagDetailLoading = ref(false)
+const tagDetail = reactive({ name: '', sha: '', message: '', committer: '', tagger: '', created: '', release: null })
 
 const repoType = computed(() => { const m = (repoInfo.description||'').match(/^\[(source|docs|config)\]/); return m ? m[1] : '' })
 const repoTypeTag = computed(() => repoType.value === 'source' ? '' : repoType.value === 'docs' ? 'success' : 'warning')
@@ -313,9 +359,54 @@ function renderDiffLines(lines) {
 }
 
 function viewBranch(b) { currentBranch.value=b.name; currentPath.value=''; breadcrumb.value=[{name:repoInfo.name||'root',path:''}]; activeTab.value='files'; loadFiles() }
-function viewTag(t) { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/releases/tag/${t.name}`, '_blank') }
-function viewCommitDetail(c) { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/commit/${c.sha}`, '_blank') }
-function openPullUrl(p) { if(p.url) window.open(p.url, '_blank') }
+async function viewTag(t) {
+  // 在系统内显示版本详情弹窗，通过 API 获取 tag 和 release 信息
+  tagDetailDialogVisible.value = true
+  tagDetailLoading.value = true
+  tagDetail.name = t.name || ''
+  tagDetail.sha = t.sha || ''
+  tagDetail.message = t.message || ''
+  tagDetail.committer = ''
+  tagDetail.tagger = ''
+  tagDetail.created = ''
+  tagDetail.release = null
+  const { owner, name } = route.params
+  try {
+    // 并发获取 tag 详情和 release 列表
+    const [tagRes, releaseRes] = await Promise.allSettled([
+      getTag(owner, name, t.name),
+      getReleases(owner, name, { limit: 100 })
+    ])
+    if (tagRes.status === 'fulfilled') {
+      const tagData = tagRes.value.data || tagRes.value
+      if (tagData) {
+        tagDetail.sha = tagData.commit?.sha || tagData.sha || t.sha
+        tagDetail.message = tagData.message || t.message || ''
+        tagDetail.committer = tagData.commit?.committer?.name || tagData.commit?.author?.name || ''
+        tagDetail.tagger = tagData.tagger?.name || ''
+        tagDetail.created = tagData.commit?.created || tagData.commit?.committer?.date || ''
+      }
+    }
+    if (releaseRes.status === 'fulfilled') {
+      const releases = releaseRes.value.data || releaseRes.value || []
+      if (Array.isArray(releases)) {
+        tagDetail.release = releases.find(r => r.tag_name === t.name) || null
+      }
+    }
+  } catch { /* fallback to basic info */ }
+  tagDetailLoading.value = false
+}
+function viewCommitDetail(c) {
+  // 使用系统内差异对比弹窗，通过 API 获取提交详情
+  viewCommitDiff(c)
+}
+function openPullUrl(p) {
+  // 跳转到系统内合并请求页面，通过 API 获取 PR 详情
+  const { owner, name } = route.params
+  if (p.id || p.number) {
+    router.push(`/branches/merge?repoOwner=${owner}&repoName=${name}&prId=${p.id || p.number}`)
+  }
+}
 function showCloneDialog() { cloneDialogVisible.value = true }
 async function toggleBranchProtect(branch, enable) {
   const { owner, name } = route.params
@@ -335,6 +426,31 @@ async function toggleBranchProtect(branch, enable) {
 }
 
 function downloadZip() { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
+
+function downloadTagZip() {
+  if (tagDetail.name) {
+    const a = document.createElement('a')
+    a.href = `http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${tagDetail.name}.zip`
+    a.download = `${route.params.name}-${tagDetail.name}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+}
+
+function downloadAsset(asset) {
+  if (asset && asset.browser_download_url) {
+    window.open(asset.browser_download_url, '_blank')
+  }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
 
 async function saveSettings() {
   savingSettings.value = true
@@ -400,4 +516,9 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
 .diff-del{background:#3a1b1b;display:block}
 .diff-ctx{display:block}
 .diff-stats{font-size:12px;margin-left:8px}
+.release-body { max-height:300px; overflow-y:auto; padding:8px; background:#fafafa; border-radius:4px; font-size:13px; line-height:1.6; word-break:break-word; }
+.release-body :deep(img) { max-width:100%; }
+.asset-item { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.asset-size { color:#909399; font-size:12px; }
+.tag-detail { min-height:100px; }
 </style>

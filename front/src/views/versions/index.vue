@@ -125,19 +125,38 @@
     </el-dialog>
 
     <!-- 版本详情对话框 -->
-    <el-dialog v-model="versionDialogVisible" :title="'版本 ' + (activeVersion?.name || '')" width="600px">
-      <div v-if="activeVersion" class="version-detail">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="版本号">{{ activeVersion.name }}</el-descriptions-item>
-          <el-descriptions-item label="所属仓库">{{ activeVersion.repoOwner }}/{{ activeVersion.repoName }}</el-descriptions-item>
-          <el-descriptions-item label="提交 SHA">{{ activeVersion.sha?.substring(0, 8) || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="版本说明">{{ activeVersion.message || '无' }}</el-descriptions-item>
-        </el-descriptions>
-        <div style="margin-top:16px;display:flex;gap:8px">
-          <el-button type="primary" @click="downloadVersion(activeVersion)"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
-          <el-button @click="openGiteaRelease(activeVersion)"><el-icon><Link /></el-icon> Gitea 页面</el-button>
+    <el-dialog v-model="versionDialogVisible" :title="'版本 ' + (activeVersion?.name || '')" width="700px">
+      <div v-loading="versionDetailLoading">
+        <div v-if="!versionDetailLoading && activeVersion" class="version-detail">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="版本号" :span="2">{{ activeVersion.name }}</el-descriptions-item>
+            <el-descriptions-item label="所属仓库">{{ activeVersion.repoOwner }}/{{ activeVersion.repoName }}</el-descriptions-item>
+            <el-descriptions-item label="提交 SHA">{{ (activeVersion.sha || '').substring(0, 8) || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="提交者">{{ activeVersion.committer || activeVersion.tagger || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatTime(activeVersion.created || activeVersion.createdAt) }}</el-descriptions-item>
+            <el-descriptions-item label="版本说明" :span="2">{{ activeVersion.message || '无' }}</el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider v-if="activeVersion.release" content-position="left">Release 信息</el-divider>
+          <el-descriptions v-if="activeVersion.release" :column="2" border>
+            <el-descriptions-item label="发布名称">{{ activeVersion.release.name || activeVersion.name }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ activeVersion.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="是否预发布">
+              <el-tag :type="activeVersion.release.prerelease ? 'warning' : 'success'" size="small">
+                {{ activeVersion.release.prerelease ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="发布时间">{{ formatTime(activeVersion.release.created_at) }}</el-descriptions-item>
+            <el-descriptions-item v-if="activeVersion.release.body" label="发布说明" :span="2">
+              <div class="release-body" v-html="activeVersion.release.body_html || activeVersion.release.body"></div>
+            </el-descriptions-item>
+          </el-descriptions>
         </div>
       </div>
+      <template #footer>
+        <el-button @click="versionDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="downloadVersion(activeVersion)"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -145,7 +164,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getTags, getBranches, getReleases } from '@/api/gitea'
+import { getTags, getBranches, getReleases, getTag } from '@/api/gitea'
 import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
@@ -155,6 +174,7 @@ const loading = ref(false)
 const createTagDialogVisible = ref(false)
 const createSubmitting = ref(false)
 const versionDialogVisible = ref(false)
+const versionDetailLoading = ref(false)
 const activeVersion = ref(null)
 
 const filterForm = reactive({ repoId: '', type: '', secretLevel: '' })
@@ -341,17 +361,37 @@ async function handleCreateTag() {
   }
 }
 
-function viewVersionDetail(row) {
+async function viewVersionDetail(row) {
   if (row.repoOwner && row.repoName) {
-    activeVersion.value = row
+    activeVersion.value = { ...row }
     versionDialogVisible.value = true
+    versionDetailLoading.value = true
+    try {
+      // 并发获取 tag 详情和 release 列表
+      const [tagRes, releaseRes] = await Promise.allSettled([
+        getTag(row.repoOwner, row.repoName, row.name),
+        getReleases(row.repoOwner, row.repoName, { limit: 100 })
+      ])
+      if (tagRes.status === 'fulfilled') {
+        const tagData = tagRes.value.data || tagRes.value
+        if (tagData) {
+          activeVersion.value.sha = tagData.commit?.sha || row.sha
+          activeVersion.value.message = tagData.message || row.message || ''
+          activeVersion.value.committer = tagData.commit?.committer?.name || tagData.commit?.author?.name || ''
+          activeVersion.value.tagger = tagData.tagger?.name || ''
+          activeVersion.value.created = tagData.commit?.created || tagData.commit?.committer?.date || ''
+        }
+      }
+      if (releaseRes.status === 'fulfilled') {
+        const releases = releaseRes.value.data || releaseRes.value || []
+        if (Array.isArray(releases)) {
+          activeVersion.value.release = releases.find(r => r.tag_name === row.name) || null
+        }
+      }
+    } catch { /* fallback to basic info */ }
+    versionDetailLoading.value = false
   } else {
     ElMessage.info(`版本: ${row.name}`)
-  }
-}
-function openGiteaRelease(row) {
-  if (row.repoOwner && row.repoName) {
-    window.open(`http://123.60.219.19:3000/${row.repoOwner}/${row.repoName}/releases/tag/${row.name}`, '_blank')
   }
 }
 function downloadVersion(row) {
@@ -402,4 +442,8 @@ function formatTime(time) {
   color: #909399;
   font-size: 12px;
 }
+
+.release-body { max-height:300px; overflow-y:auto; padding:8px; background:#fafafa; border-radius:4px; font-size:13px; line-height:1.6; word-break:break-word; }
+.release-body :deep(img) { max-width:100%; }
+.version-detail { min-height:100px; }
 </style>
