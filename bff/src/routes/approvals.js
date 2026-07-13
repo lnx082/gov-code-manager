@@ -226,9 +226,9 @@ router.get('/merge-requests', authenticate, async (req, res, next) => {
     const rawList = await query.orderBy('created_at', 'desc')
       .limit(parseInt(pageSize)).offset(offset);
 
-    // 格式化为前端期望的字段名
+    // 格式化为前端期望的字段名（id/number 使用 Gitea PR 编号，approval_id 另存）
     const list = rawList.map(item => ({
-      id: item.approval_id,
+      id: item.gitea_pr_number || item.approval_id,
       number: item.gitea_pr_number || item.approval_id,
       title: item.title,
       description: item.description,
