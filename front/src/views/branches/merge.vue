@@ -276,12 +276,21 @@ const approvalForm = reactive({
 onMounted(async () => {
   if (route.query.source) {
     createForm.sourceBranch = route.query.source
+    // 等待仓库列表加载后自动填入源仓库
+    await loadRepos()
+    if (route.query.repoId) {
+      createForm.sourceRepoId = route.query.repoId
+      loadSourceBranches()
+    } else if (route.query.repoOwner && route.query.repoName) {
+      const repo = repoList.value.find(r => r.owner === route.query.repoOwner && r.repo === route.query.repoName)
+      if (repo) { createForm.sourceRepoId = repo.id; loadSourceBranches() }
+    }
+    if (route.query.targetRepoId) createForm.targetRepoId = route.query.targetRepoId
     createDialogVisible.value = true
   }
-  // 主数据加载（BFF，不依赖 Gitea）
+  // 主数据加载
   loadData()
-  // 仓库列表等辅助数据并行加载（失败不影响主列表）
-  loadRepos()
+  if (!route.query.source) loadRepos()
   loadApprovalFlows()
   loadReviewers()
 })
@@ -509,7 +518,7 @@ async function handleCreate() {
     console.error('创建合并请求失败:', error)
     const giteaMsg = error?.response?.data?.message || error?.response?.data?.error || ''
     const msg = error?.response?.status === 422 ? `请求无效: ${giteaMsg || '请检查分支是否存在且有差异'}`
-              : error?.response?.status === 409 ? '该分支对已存在合并请求'
+              : error?.response?.status === 409 ? '该源分支和目标分支之间已存在合并请求，不能重复创建'
               : (error?.message || '未知错误')
     ElMessage.warning('创建合并请求失败: ' + msg)
   }

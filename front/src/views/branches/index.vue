@@ -289,7 +289,7 @@ async function handleCreateBranch() {
 }
 
 function viewBranch(row) { router.push(`/repos/${row.repoOwner}/${row.repoName}?branch=${row.name}`) }
-function createMerge(row) { router.push(`/branches/merge?source=${row.name}`) }
+function createMerge(row) { router.push(`/branches/merge?source=${row.name}&repoOwner=${row.repoOwner}&repoName=${row.repoName}&repoId=${row.repoId}`) }
 
 function deleteBranch(row) {
   ElMessageBox.confirm(`确定要删除分支 "${row.name}" 吗？`, '删除确认', { type: 'warning' })

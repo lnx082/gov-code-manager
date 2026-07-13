@@ -132,6 +132,8 @@
         </el-descriptions-item>
         <el-descriptions-item label="标题" :span="2">{{ currentApproval.title }}</el-descriptions-item>
         <el-descriptions-item label="仓库">{{ currentApproval.repo_owner }}/{{ currentApproval.repo_name }}</el-descriptions-item>
+        <el-descriptions-item v-if="currentApproval.source_branch" label="源分支"><el-tag size="small">{{ currentApproval.source_branch }}</el-tag></el-descriptions-item>
+        <el-descriptions-item v-if="currentApproval.target_branch" label="目标分支"><el-tag size="small" type="primary">{{ currentApproval.target_branch }}</el-tag></el-descriptions-item>
         <el-descriptions-item label="申请人">{{ currentApproval.applicant_username }}</el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ formatTime(currentApproval.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="完成时间">{{ currentApproval.completed_at ? formatTime(currentApproval.completed_at) : '-' }}</el-descriptions-item>
