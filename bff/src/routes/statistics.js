@@ -158,7 +158,7 @@ router.get('/system', authenticate, async (req, res) => {
     // 远程服务连通性检查
     let giteaOk = false, dbOk = false;
     try {
-      const giteaUrl = config.gitea.url || 'http://123.60.219.19:3000';
+      const giteaUrl = config.gitea.url || 'http://localhost:3000';
       const adminToken = config.gitea.token || '';
       const headers = adminToken ? { 'Authorization': adminToken } : {};
       const gr = await fetch(`${giteaUrl}/api/v1/version`, { headers });
@@ -184,7 +184,7 @@ router.get('/system', authenticate, async (req, res) => {
         memory: { total: totalMem, used: usedMem, free: freeMem, usagePct: Math.round((usedMem / totalMem) * 100) },
         disk: { total: diskTotal, free: diskFree, usagePct: diskTotal > 0 ? Math.round(((diskTotal - diskFree) / diskTotal) * 100) : 0 },
         services: {
-          gitea: { url: config.gitea?.url || 'http://123.60.219.19:3000', online: giteaOk },
+          gitea: { url: config.gitea?.url || 'http://localhost:3000', online: giteaOk },
           database: { host: config.database?.host || '', online: dbOk },
         },
       },

@@ -168,6 +168,7 @@ import { getTags, getBranches, getReleases, getTag } from '@/api/gitea'
 import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
+import { GITEA_URL } from '@/config'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -397,7 +398,7 @@ async function viewVersionDetail(row) {
 function downloadVersion(row) {
   if (row.repoOwner && row.repoName) {
     const a = document.createElement('a')
-    a.href = `http://123.60.219.19:3000/${row.repoOwner}/${row.repoName}/archive/${row.name}.zip`
+    a.href = `${GITEA_URL}/${row.repoOwner}/${row.repoName}/archive/${row.name}.zip`
     a.download = `${row.repoName}-${row.name}.zip`
     document.body.appendChild(a)
     a.click()

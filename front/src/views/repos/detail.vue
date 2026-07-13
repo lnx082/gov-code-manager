@@ -214,6 +214,7 @@ import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collectio
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
 import { getLastCommits } from '@/api/bff'
+import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -253,8 +254,8 @@ const cleanDescription = computed(() => {
     .replace(/\[显示名=[^\]]+\]\s*/, '')
     .replace(/\[(公开|秘密|机密|绝密)\]\s*/, '')
 })
-const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
-const sshCloneUrl = computed(() => `git@123.60.219.19:${repoInfo.owner}/${repoInfo.name}.git`)
+const httpCloneUrl = computed(() => `${GITEA_URL}/${repoInfo.owner}/${repoInfo.name}.git`)
+const sshCloneUrl = computed(() => `git@${GITEA_SSH_HOST}:${repoInfo.owner}/${repoInfo.name}.git`)
 
 onMounted(() => { loadRepoDetail(); loadFiles(); loadBranches(); loadTags(); loadCommits(); loadPulls(); loadMembers() })
 
@@ -481,12 +482,12 @@ async function toggleBranchProtect(branch, enable) {
   } catch { ElMessage.error('操作失败') }
 }
 
-function downloadZip() { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
+function downloadZip() { window.open(`${GITEA_URL}/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
 
 function downloadTagZip() {
   if (tagDetail.name) {
     const a = document.createElement('a')
-    a.href = `http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${tagDetail.name}.zip`
+    a.href = `${GITEA_URL}/${route.params.owner}/${route.params.name}/archive/${tagDetail.name}.zip`
     a.download = `${route.params.name}-${tagDetail.name}.zip`
     document.body.appendChild(a)
     a.click()

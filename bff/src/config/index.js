@@ -22,7 +22,7 @@ const config = {
   // openGauss 数据库配置 (兼容 PostgreSQL 协议)
   database: {
     type: process.env.DB_TYPE || 'opengauss',
-    host: process.env.DB_HOST || '123.60.219.19',
+    host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
     database: process.env.DB_NAME || 'gov_code_manager',
     user: process.env.DB_USER || 'dev_admin',
@@ -45,7 +45,7 @@ const config = {
   
   // Gitea 配置
   gitea: {
-    url: process.env.GITEA_URL || 'http://123.60.219.19:3000',
+    url: process.env.GITEA_URL || 'http://localhost:3000',
     apiVersion: process.env.GITEA_API_VERSION || 'v1',
     apiPrefix: process.env.GITEA_API_PREFIX || '/api/v1',
     token: process.env.GITEA_ADMIN_TOKEN || ''

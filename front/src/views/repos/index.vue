@@ -130,6 +130,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getFilteredRepos } from '@/api/bff'
 import { deleteRepo } from '@/api/gitea'
+import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -240,8 +241,8 @@ function viewRepo(row) {
 
 function cloneRepo(row) {
   cloneInfo.name = row.name
-  cloneInfo.httpUrl = `http://123.60.219.19:3000/${row.owner || 'root'}/${row.name}.git`
-  cloneInfo.sshUrl = `git@123.60.219.19:${row.owner || 'root'}/${row.name}.git`
+  cloneInfo.httpUrl = `${GITEA_URL}/${row.owner || 'root'}/${row.name}.git`
+  cloneInfo.sshUrl = `git@${GITEA_SSH_HOST}:${row.owner || 'root'}/${row.name}.git`
   cloneDialogVisible.value = true
 }
 

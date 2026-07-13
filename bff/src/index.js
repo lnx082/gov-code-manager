@@ -181,7 +181,7 @@ async function startServer() {
   console.log('║                                                          ║');
   console.log('║     党政软件版本管控平台 BFF 层                           ║');
   console.log('║     GovCode Version Control Platform                     ║');
-  console.log('║     Database: openGauss @ 123.60.219.19                  ║');
+  console.log(`║     Database: openGauss @ ${config.database.host}:${config.database.port}                  ║`);
   console.log('║                                                          ║');
   console.log('╚══════════════════════════════════════════════════════════╝');
   console.log('');

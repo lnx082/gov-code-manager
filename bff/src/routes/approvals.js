@@ -521,7 +521,7 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
 
 // 审批通过后的后置操作
 async function executePostApprovalAction(approval) {
-  const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
+  const giteaUrl = config.gitea?.url || 'http://localhost:3000';
   const adminToken = config.gitea?.token || '';
   const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
 
