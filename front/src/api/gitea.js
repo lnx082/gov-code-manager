@@ -176,6 +176,8 @@ export function updatePullRequest(owner, repo, index, data) {
 }
 
 export function mergePullRequest(owner, repo, index, data = {}) {
+  // Gitea API 要求 do 参数: merge / rebase / squash / manually-merged
+  if (!data.do) data.do = 'merge'
   return giteaService.post(`/repos/${owner}/${repo}/pulls/${index}/merge`, data)
 }
 

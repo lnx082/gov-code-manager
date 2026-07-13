@@ -516,11 +516,28 @@ async function handleCreate() {
     loadData()
   } catch (error) {
     console.error('创建合并请求失败:', error)
-    const giteaMsg = error?.response?.data?.message || error?.response?.data?.error || ''
-    const msg = error?.response?.status === 422 ? `请求无效: ${giteaMsg || '请检查分支是否存在且有差异'}`
-              : error?.response?.status === 409 ? '该源分支和目标分支之间已存在合并请求，不能重复创建'
-              : (error?.message || '未知错误')
-    ElMessage.warning('创建合并请求失败: ' + msg)
+    if (error?.response?.status === 409) {
+      const giteaDetail = error?.response?.data?.message || ''
+      // 尝试从错误消息中提取已有 PR ID，直接跳转
+      const idMatch = giteaDetail.match(/\[id:\s*(\d+)/)
+      if (idMatch) {
+        const existingId = parseInt(idMatch[1])
+        // 刷新列表后查找并打开已有 PR
+        await loadData()
+        const existing = mergeRequestList.value.find(m => (m.id || m.number) === existingId)
+        if (existing) {
+          viewDetail(existing)
+          ElMessage.warning(`已存在合并请求 #${existingId}，已为你打开`)
+          return
+        }
+      }
+      ElMessage.warning('创建合并请求失败: ' + (giteaDetail || '已存在合并请求，请先关闭旧 PR'))
+    } else {
+      const giteaDetail = error?.response?.data?.message || error?.response?.data?.error || ''
+      const msg = error?.response?.status === 422 ? `请求无效: ${giteaDetail || '请检查分支是否存在且有差异'}`
+                : (error?.message || '未知错误')
+      ElMessage.warning('创建合并请求失败: ' + msg)
+    }
   }
 }
 
@@ -618,6 +635,17 @@ async function submitApproval() {
     }
     approvalDialogVisible.value = false
     detailDialogVisible.value = false
+
+    // 审批拒绝后自动关闭 Gitea PR
+    if (newStatus === 'rejected' && currentMR.value) {
+      try {
+        const o1 = currentMR.value.owner, r1 = currentMR.value.repo, p1 = currentMR.value.id || currentMR.value.number
+        if (o1 && r1 && p1) await closePullRequest(o1, r1, p1)
+        currentMR.value.status = 'closed'
+        const mi = mergeRequestList.value.findIndex(m => m.id === currentMR.value.id)
+        if (mi !== -1) mergeRequestList.value[mi].status = 'closed'
+      } catch { /* ignore */ }
+    }
 
     // 审批通过后自动合并
     if (newStatus === 'approved' && currentMR.value) {
