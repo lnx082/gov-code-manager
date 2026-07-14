@@ -1,11 +1,5 @@
 /**
  * 仓库列表查询（Gitea 代理 + 部门隔离 + 密级权限过滤）
- *
- * 【功能】获取仓库列表（调用 Gitea API）、仓库详情及分支/提交/版本/Tag 等扩展信息
- *        按部门隔离和密级权限过滤仓库（通过 repo_metadata 表）
- * 【数据】查询：repo_metadata（仓库→部门→密级映射）
- * 【来源】openGauss（通过 db() 查询 repo_metadata）
- *        Gitea API（通过 fetch() 获取仓库/分支/提交/Tag 数据）
  */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';

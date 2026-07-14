@@ -1,9 +1,5 @@
 /**
  * 在线会话管理（管理员查看全部会话）
- *
- * 【功能】会话列表查询（管理员可查看全部在线用户）、删除会话、刷新会话
- * 【数据】查询/写入：sessions（会话记录）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

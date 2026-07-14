@@ -1,10 +1,5 @@
 /**
  * 角色管理 CRUD + 权限定义列表
- *
- * 【功能】角色列表/详情/创建/编辑/删除（系统角色不可删除）、
- *        获取全部权限定义列表（25 种权限）、获取角色默认权限
- * 【数据】查询/写入：roles（角色信息及权限配置）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

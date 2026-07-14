@@ -1,9 +1,5 @@
 /**
  * 风险预警管理（列表/处理/统计）
- *
- * 【功能】风险预警列表查询（按级别/类型/状态筛选）、处理预警、处理统计
- * 【数据】查询/写入：risk_warnings（预警记录）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

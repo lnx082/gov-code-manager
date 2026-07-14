@@ -1,12 +1,5 @@
 /**
  * 审批流程 CRUD + 处理（创建/审批/统计/合并请求）
- *
- * 【功能】审批申请创建、多步审批处理（通过/拒绝）、审批历史、合并请求列表、审批统计
- *        审批通过后自动执行后置操作（创建 Gitea Tag/Release、归档仓库、变更基线等）
- * 【数据】查询/写入：approvals（审批主表）、approval_records（审批记录）、
- *        approval_flows（流程模板）、baselines（基线）、archives（归档）
- * 【来源】openGauss（通过 db() 操作审批相关表）
- *        Gitea API（通过 fetch() 创建 Tag/Release、归档仓库、合并 PR）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

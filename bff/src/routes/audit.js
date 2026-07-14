@@ -1,10 +1,5 @@
 /**
  * 审计日志查询 + 完整性验证
- *
- * 【功能】审计日志列表/详情查询（按日期/用户/类型/仓库筛选）、
- *        导出审计日志 CSV、操作统计
- * 【数据】查询：audit_logs（审计日志全部字段）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

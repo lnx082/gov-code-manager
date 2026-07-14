@@ -1,9 +1,5 @@
 /**
  * 审计报表管理（生成/下载/删除）
- *
- * 【功能】报表列表查询、生成新报表（可指定类型/日期范围）、下载报表文件、删除报表
- * 【数据】查询/写入：reports（报表记录）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';
