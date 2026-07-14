@@ -44,7 +44,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
     // Gitea 认证失败 → 尝试本地密码兜底
     if (!giteaUser) {
       const localUser = await db('user_profiles')
-        .where(db.raw('LOWER(gitea_username)'), username.toLowerCase())
+        .where('gitea_username', username.toLowerCase())
         .where('is_active', true)
         .first();
 
@@ -141,7 +141,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
       // ★ 如果按 user_id 找不到，尝试按 gitea_username 找（统一小写匹配，规避大小写不一致）
       if (!existingUser) {
         existingUser = await db('user_profiles')
-          .where(db.raw('LOWER(gitea_username)'), (giteaUser.login || username).toLowerCase())
+          .where('gitea_username', (giteaUser.login || username).toLowerCase())
           .where('is_active', true)
           .first();
         if (existingUser) {
