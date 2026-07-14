@@ -1,5 +1,11 @@
 /**
  * 部门管理 CRUD（树形结构）
+ *
+ * 【功能】部门列表（支持树形结构）、创建/编辑/删除部门
+ *        删除前检查是否还有活跃子部门或用户，防止误删
+ * 【数据】查询/写入：departments（部门信息）
+ *        查询：user_profiles（检查是否有活跃用户）
+ * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

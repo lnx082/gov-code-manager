@@ -1,5 +1,10 @@
 /**
  * 用户认证 API 封装（登录/登出/用户信息）
+ *
+ * 【功能】用户登录（POST /auth/login）、登出（POST /auth/logout）、
+ *        获取当前用户信息（GET /auth/me）、管理员操作用户列表/修改/删除/锁定
+ * 【数据】对接 BFF 的 /auth/* 和 /users/* 路由
+ * 【来源】通过 request（Axios 实例）发送 HTTP 请求到 BFF API
  */
 import request from './index'
 

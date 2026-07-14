@@ -71,6 +71,11 @@
 </template>
 
 <script setup>
+/**
+ * 登录页面
+ * 功能：Gitea 双通道认证，毛玻璃卡片 + 全屏背景图
+ * 流程：loginAction → token 存入 sessionStorage → initUser() 刷新数据
+ */
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

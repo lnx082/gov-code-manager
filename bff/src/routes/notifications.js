@@ -1,5 +1,9 @@
 /**
  * 系统通知管理
+ *
+ * 【功能】通知列表查询、发布通知（管理员）、标记已读、标记全部已读、删除通知
+ * 【数据】查询/写入：notifications（通知记录）
+ * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

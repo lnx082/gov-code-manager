@@ -1,5 +1,9 @@
 /**
  * 系统管理 API 封装（角色/部门/备份/系统配置/统计）
+ *
+ * 【功能】角色 CRUD、部门 CRUD、备份创建/恢复、系统配置读写、仪表盘统计数据
+ * 【数据】对接 BFF 的 /roles/*、/departments/*、/backups/*、/system/*、/statistics/* 路由
+ * 【来源】通过 request（Axios 实例）发送 HTTP 请求到 BFF API
  */
 import request from './index'
 

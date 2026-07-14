@@ -1,5 +1,10 @@
 /**
  * 权限检查中间件
+ *
+ * 【功能】检查用户是否拥有指定权限（支持通配符匹配），
+ *        定义了系统全部 25 种权限常量（repo:*/branch:*/audit:*/admin:* 等）
+ * 【数据】读取：req.user.roleCode、req.user.permissions
+ * 【来源】req.user（JWT 解码后的用户权限列表）
  */
 export function permissionMiddleware(requiredPermissions) {
   return async (req, res, next) => {

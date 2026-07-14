@@ -1,5 +1,11 @@
 /**
  * 用户管理 CRUD（锁定/重置密码/修改密码）
+ *
+ * 【功能】用户列表查询、创建用户（同步到 Gitea）、编辑用户、删除用户（软删除）、
+ *        锁定/解锁用户、重置密码（同步到 Gitea）、修改本人密码、同步仓库协作者
+ * 【数据】查询/写入：user_profiles（用户所有字段）
+ *        查询：departments（部门名称）、roles（角色名称）
+ * 【来源】openGauss（通过 db()）、Gitea API（通过 fetch() 创建/删除用户、管理仓库协作者）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

@@ -1,5 +1,9 @@
 /**
  * 审批相关 API 封装
+ *
+ * 【功能】待审批列表、我的审批申请、审批详情、审批处理、获取合并请求审批数据
+ * 【数据】对接 BFF 的 /approvals/* 路由
+ * 【来源】通过 request（Axios 实例）发送 HTTP 请求到 BFF API
  */
 import request from './index'
 

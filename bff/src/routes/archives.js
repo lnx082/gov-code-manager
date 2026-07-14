@@ -1,5 +1,10 @@
 /**
  * 归档管理 CRUD（归档/恢复）
+ *
+ * 【功能】归档列表/创建归档/恢复归档/删除归档
+ *        归档操作通常在审批通过后自动触发
+ * 【数据】查询/写入：archives（归档记录）
+ * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

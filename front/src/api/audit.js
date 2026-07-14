@@ -1,5 +1,10 @@
 /**
  * 审计相关 API 封装
+ *
+ * 【功能】审计日志列表/详情/导出、日志完整性验证、操作统计、用户统计、
+ *        风险预警列表/处理、审计报表生成/下载、合规检查
+ * 【数据】对接 BFF 的 /audit/*、/risk-warnings/*、/reports/*、/compliance/* 路由
+ * 【来源】通过 request（Axios 实例）发送 HTTP 请求到 BFF API
  */
 import request from './index'
 

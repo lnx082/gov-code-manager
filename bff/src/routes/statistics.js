@@ -1,5 +1,10 @@
 /**
  * 仪表盘统计数据 + 趋势数据
+ *
+ * 【功能】仪表盘关键指标统计（仓库数/版本数/待审批数/在线用户数）、
+ *        操作趋势数据、各维度分布统计、系统运行状态（CPU/内存/磁盘/运行时间）
+ * 【数据】多表聚合：approvals / sessions / user_profiles / audit_logs
+ * 【来源】openGauss（通过 db() 聚合查询）、Gitea API（调用获取仓库/版本统计数据）
  */
 import { Router } from 'express';
 import os from 'os';

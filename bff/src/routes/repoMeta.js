@@ -1,5 +1,9 @@
 /**
  * 仓库元数据管理（部门→密级映射 + 中文显示名）
+ *
+ * 【功能】仓库元数据 CRUD、批量同步、按用户权限返回可见仓库列表
+ * 【数据】查询/写入：repo_metadata（仓库→部门→密级映射）
+ * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

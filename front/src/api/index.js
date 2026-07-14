@@ -1,5 +1,10 @@
 /**
  * Axios 实例创建 + 请求/响应拦截器（BFF + Gitea 双通道）
+ *
+ * 【功能】创建 BFF 和 Gitea 两个 Axios 实例，配置请求拦截器（注入 JWT Token）、
+ *        响应拦截器（统一处理 401/403/404/500 错误、业务状态码校验）
+ * 【数据】所有前端 API 请求的入口，对接 BFF 全部接口
+ * 【来源】baseURL 取自 @/config（API_BASE_URL），Token 取自 sessionStorage
  */
 import axios from 'axios'
 import { ElMessage } from 'element-plus'

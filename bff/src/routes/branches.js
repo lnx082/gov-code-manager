@@ -1,5 +1,10 @@
 /**
  * 分支管理（Gitea 代理：分支/PR CRUD）
+ *
+ * 【功能】分支列表/创建/删除、Pull Request 创建/合并/关闭
+ *        所有操作通过 Gitea API 代理，不操作本地数据库
+ * 【数据】无（不操作本地数据库）
+ * 【来源】Gitea API（通过 fetch() 代理所有请求）
  */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';

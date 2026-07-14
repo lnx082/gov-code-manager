@@ -1,5 +1,11 @@
 /**
  * 版本管理 CRUD（版本创建/基线/审批联动）
+ *
+ * 【功能】版本列表查询、创建版本（提交审批）、通过/拒绝审批后自动执行版本发布
+ * 【数据】查询：approvals（审批状态）、repo_metadata（仓库信息）
+ *        写入/更新：approvals（审批记录）
+ * 【来源】openGauss（通过 db()）
+ *        Gitea API（通过 fetch() 创建 Tag 和 Release）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

@@ -69,6 +69,12 @@
 </template>
 
 <script setup>
+/**
+ * 个人中心
+ * 功能：展示用户信息（角色/部门/密级/登录时间）、修改密码、会话管理
+ * 数据来源：独立调用 /auth/me 获取数据库最新数据，不依赖 store 缓存
+ * 注：v-if="profileLoaded" 控制表单渲染，API 返回前不显示内容避免闪烁
+ */
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'

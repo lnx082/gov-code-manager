@@ -1,5 +1,11 @@
 /**
  * JWT 认证中间件 + 权限检查（authenticate/requirePermission/requireAdmin）
+ *
+ * 【功能】验证 JWT Token 有效性、检查用户状态（是否激活/锁定）、
+ *        提供角色检查（requireRole）、管理员检查（requireAdmin）、权限检查（requirePermission）
+ *        从服务端凭据存储（credentialStore）注入 giteaToken
+ * 【数据】查询：user_profiles（检查用户 is_active / account_locked 状态）
+ * 【来源】openGauss（通过 db() 查询 user_profiles）、JWT payload（req.user）
  */
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';

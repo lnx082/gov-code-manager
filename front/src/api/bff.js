@@ -1,3 +1,11 @@
+/**
+ * BFF 业务 API 封装
+ *
+ * 【功能】审批、基线、归档、审计、用户管理、角色管理、部门管理、通知、备份、合规、版本规则等
+ *        所有 API 通过 bffService 发送到 BFF 后端
+ * 【数据】对接 BFF 的 /approvals/*、/baselines/*、/archives/*、/audit/*、/users/*、/roles/* 等路由
+ * 【来源】通过 bffService（Axios 实例）发送 HTTP 请求到 BFF API
+ */
 import { bffService } from './index'
 
 /**

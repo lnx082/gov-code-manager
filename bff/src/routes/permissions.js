@@ -1,5 +1,9 @@
 /**
  * 权限定义列表
+ *
+ * 【功能】返回所有可用权限的列表（分类展示）
+ * 【数据】查询：permissions（权限定义表）
+ * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';

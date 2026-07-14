@@ -1,7 +1,11 @@
-import { giteaService } from './index'
-
 /**
  * Gitea API 封装
+ *
+ * 【功能】仓库 CRUD、分支管理、Pull Request 操作、文件浏览/差异对比、提交记录查询
+ * 【数据】直接调用 Gitea API（通过 BFF 代理 /api/bff/gitea/* 避免跨域）
+ * 【来源】通过 giteaService（Axios 实例）→ BFF 代理 → Gitea 云服务器
+ */
+import { giteaService } from './index'
  * 用于 Git 原生操作（仓库、分支、Tag、PR、提交、文件）
  */
 
