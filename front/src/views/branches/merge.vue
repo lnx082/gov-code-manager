@@ -93,24 +93,24 @@
 
     <el-dialog v-model="createDialogVisible" title="创建合并请求" width="700px">
       <el-form :model="createForm" :rules="createRules" label-width="120px">
-        <el-form-item label="标题" prop="title" class="form-required">
-          <el-input v-model="createForm.title" placeholder="请输入合并请求标题" />
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="createForm.title" placeholder="请输入合并请求标题" style="width: 100%" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="详细描述此次合并的变更内容" />
+          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="详细描述此次合并的变更内容" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="仓库" prop="sourceRepoId" class="form-required">
-          <el-select v-model="createForm.sourceRepoId" placeholder="选择仓库" @change="onSourceRepoChange">
+        <el-form-item label="仓库" prop="sourceRepoId">
+          <el-select v-model="createForm.sourceRepoId" placeholder="选择仓库" style="width: 100%" @change="onSourceRepoChange">
             <el-option v-for="repo in repoList" :key="repo.id" :label="repo.full_name || repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="源分支" prop="sourceBranch" class="form-required">
-          <el-select v-model="createForm.sourceBranch" placeholder="选择源分支">
+        <el-form-item label="源分支" prop="sourceBranch">
+          <el-select v-model="createForm.sourceBranch" placeholder="选择源分支" style="width: 100%">
             <el-option v-for="branch in sourceBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标分支" prop="targetBranch" class="form-required">
-          <el-select v-model="createForm.targetBranch" placeholder="选择目标分支">
+        <el-form-item label="目标分支" prop="targetBranch">
+          <el-select v-model="createForm.targetBranch" placeholder="选择目标分支" style="width: 100%">
             <el-option v-for="branch in targetBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>

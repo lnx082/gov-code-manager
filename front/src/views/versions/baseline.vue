@@ -57,8 +57,8 @@
 
     <el-dialog v-model="createDialogVisible" title="创建基线" width="700px">
       <el-form :model="createForm" :rules="createRules" label-width="120px">
-        <el-form-item label="基线名称" prop="name" class="form-required">
-          <el-input v-model="createForm.name" placeholder="请输入基线名称" />
+        <el-form-item label="基线名称" prop="name">
+          <el-input v-model="createForm.name" placeholder="请输入基线名称" style="width: 100%" />
         </el-form-item>
         <el-form-item label="筛选仓库">
           <el-select v-model="filterRepoId" placeholder="按仓库筛选版本" clearable style="width: 100%" @change="onFilterRepoChange">
@@ -66,9 +66,9 @@
           </el-select>
         </el-form-item>
         <el-form-item label="搜索版本">
-          <el-input v-model="versionSearch" placeholder="输入版本号搜索" clearable />
+          <el-input v-model="versionSearch" placeholder="输入版本号搜索" clearable style="width: 100%" />
         </el-form-item>
-        <el-form-item label="选择版本" prop="versionKey" class="form-required">
+        <el-form-item label="选择版本" prop="versionKey">
           <el-select v-model="createForm.versionKey" placeholder="选择版本" style="width: 100%" filterable @change="onVersionSelect">
             <el-option v-for="v in filteredVersionOptions" :key="v.key" :label="v.label" :value="v.key">
               <span>{{ v.name }}</span>
@@ -84,8 +84,8 @@
             </template>
           </el-alert>
         </el-form-item>
-        <el-form-item label="基线说明" prop="description" class="form-required">
-          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="说明基线的用途和适用范围" />
+        <el-form-item label="基线说明" prop="description">
+          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="说明基线的用途和适用范围" style="width: 100%" />
         </el-form-item>
         <div class="form-tip" style="margin-left:120px;margin-bottom:12px;color:#909399;font-size:12px">
           提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）

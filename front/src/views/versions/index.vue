@@ -86,26 +86,26 @@
     </div>
 
     <el-dialog v-model="createTagDialogVisible" title="创建版本" width="600px">
-      <el-form :model="createForm" :rules="createRules" label-width="100px">
-        <el-form-item label="所属仓库" prop="repoId" class="form-required">
+      <el-form :model="createForm" :rules="createRules" label-width="120px">
+        <el-form-item label="所属仓库" prop="repoId">
           <el-select v-model="createForm.repoId" placeholder="选择仓库" style="width: 100%" @change="onCreateRepoChange">
             <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="基于分支" prop="targetBranch" class="form-required">
+        <el-form-item label="基于分支" prop="targetBranch">
           <el-select v-model="createForm.targetBranch" placeholder="选择分支" style="width: 100%" :disabled="!createForm.repoId">
             <el-option v-for="b in createBranchList" :key="b" :label="b" :value="b" />
           </el-select>
         </el-form-item>
         <el-form-item label="发布标题" prop="title">
-          <el-input v-model="createForm.title" placeholder="如：用户模块 v1.0.0 正式发布" />
+          <el-input v-model="createForm.title" placeholder="如：用户模块 v1.0.0 正式发布" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="版本号" prop="name" class="form-required">
-          <el-input v-model="createForm.name" placeholder="v1.0.0" />
+        <el-form-item label="版本号" prop="name">
+          <el-input v-model="createForm.name" placeholder="v1.0.0" style="width: 100%" />
           <div class="form-tip">建议遵循语义化版本规范：主版本号.次版本号.修订号</div>
         </el-form-item>
-        <el-form-item label="版本说明" prop="message" class="form-required">
-          <el-input v-model="createForm.message" type="textarea" :rows="4" placeholder="描述本次版本的主要变更内容" />
+        <el-form-item label="版本说明" prop="message">
+          <el-input v-model="createForm.message" type="textarea" :rows="4" placeholder="描述本次版本的主要变更内容" style="width: 100%" />
         </el-form-item>
         <el-form-item label="版本类型">
           <el-radio-group v-model="createForm.type">
@@ -113,10 +113,9 @@
             <el-radio label="beta"><el-icon><VideoPlay /></el-icon> 测试版本</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="关联审批">
-          <el-switch v-model="createForm.requireApproval" />
-          <span class="switch-tip">提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）</span>
-        </el-form-item>
+        <div class="form-tip" style="margin-left:120px;margin-bottom:12px;color:#909399;font-size:12px">
+          提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="createTagDialogVisible = false">取消</el-button>
@@ -198,8 +197,7 @@ const createForm = reactive({
   title: '',
   name: '',
   message: '',
-  type: 'release',
-  requireApproval: true
+  type: 'release'
 })
 
 const createRules = {
@@ -316,7 +314,6 @@ async function showCreateTag() {
   createForm.name = ''
   createForm.message = ''
   createForm.type = 'release'
-  createForm.requireApproval = true
   createBranchList.value = []
   createTagDialogVisible.value = true
 }
@@ -453,12 +450,6 @@ function formatTime(time) {
   font-size: 12px;
   color: #909399;
   margin-top: 5px;
-}
-
-.switch-tip {
-  margin-left: 10px;
-  color: #909399;
-  font-size: 12px;
 }
 
 .release-body { max-height:300px; overflow-y:auto; padding:8px; background:#fafafa; border-radius:4px; font-size:13px; line-height:1.6; word-break:break-word; }
