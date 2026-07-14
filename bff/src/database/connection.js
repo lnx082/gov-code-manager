@@ -66,6 +66,43 @@ async function fixDatabaseSchema(database) {
       { name: 'user_agent', def: 'VARCHAR(500)' },
       { name: 'last_active_at', def: 'TIMESTAMP' },
     ],
+    approvals: [
+      { name: 'approval_flow_id', def: 'INTEGER' },
+      { name: 'urgency', def: 'VARCHAR(20) DEFAULT \'normal\'' },
+      { name: 'secret_level', def: 'VARCHAR(20) DEFAULT \'internal\'' },
+      { name: 'applicant_username', def: 'VARCHAR(100)' },
+      { name: 'completed_at', def: 'TIMESTAMP' },
+      { name: 'reviewers', def: 'TEXT' },
+      { name: 'attachments', def: 'TEXT' },
+      { name: 'compliance_checklist', def: 'TEXT' },
+    ],
+    approval_records: [
+      { name: 'step_name', def: 'VARCHAR(100)' },
+      { name: 'comment', def: 'TEXT' },
+    ],
+    baselines: [
+      { name: 'name', def: 'VARCHAR(100)' },
+      { name: 'version', def: 'VARCHAR(50)' },
+      { name: 'repo_owner', def: 'VARCHAR(100)' },
+      { name: 'repo_name', def: 'VARCHAR(100)' },
+      { name: 'tag_name', def: 'VARCHAR(100)' },
+      { name: 'created_username', def: 'VARCHAR(100)' },
+      { name: 'description', def: 'TEXT' },
+      { name: 'status', def: 'VARCHAR(20) DEFAULT \'active\'' },
+      { name: 'lock_status', def: 'VARCHAR(20) DEFAULT \'locked\'' },
+      { name: 'created_by', def: 'INTEGER' },
+      { name: 'locked_at', def: 'TIMESTAMP' },
+      { name: 'updated_at', def: 'TIMESTAMP' },
+      { name: 'approval_id', def: 'INTEGER' },
+    ],
+    archives: [
+      { name: 'archive_type', def: 'VARCHAR(50) DEFAULT \'archive\'' },
+      { name: 'archive_reason', def: 'TEXT' },
+      { name: 'archive_file_name', def: 'VARCHAR(255)' },
+      { name: 'archive_file_size', def: 'BIGINT' },
+      { name: 'storage_path', def: 'VARCHAR(500)' },
+      { name: 'approval_id', def: 'VARCHAR(100)' },
+    ],
   };
 
   for (const [tableName, columns] of Object.entries(tableColumns)) {

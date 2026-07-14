@@ -116,46 +116,56 @@ router.get('/pending', authenticate, async (req, res, next) => {
     const { page = 1, pageSize = 10, type } = req.query;
     const userRole = req.user.roleCode || 'user';
     const isAdmin = userRole === 'admin';
-    const isManager = userRole === 'project_manager';
 
     // 只查询 pending 状态
     let query = db('approvals').where('status', 'pending');
-
-    if (type) {
-      query = query.where('operation_type', type);
-    }
-
+    if (type) query = query.where('operation_type', type);
     const allPending = await query.orderBy('created_at', 'desc');
+
+    if (allPending.length === 0) {
+      return res.json({ code: 200, data: { list: [], total: 0, page: parseInt(page), pageSize: parseInt(pageSize) } });
+    }
 
     // 获取部门密级过滤条件
     const { deptFilter, secretFilter } = await getDeptFilter(req.user);
 
-    // 按用户角色过滤：只展示当前步骤需要当前用户审批的申请
+    // ─── 批量加载：消除 N+1 ──────────────────────────
+    // 1) 批量加载所有相关 user_profiles（一次查询）
+    const applicantIds = [...new Set(allPending.map(a => a.applicant_user_id).filter(Boolean))];
+    let applicantMap = new Map();
+    if (deptFilter && applicantIds.length > 0) {
+      const profiles = await db('user_profiles').whereIn('user_id', applicantIds).select('user_id', 'department_id');
+      for (const p of profiles) { applicantMap.set(p.user_id, p); }
+    }
+
+    // 2) 批量加载所有相关审批流程（一次查询）
+    const flowIds = [...new Set(allPending.map(a => a.approval_flow_id).filter(Boolean))];
+    let flowStepsMap = new Map();
+    if (flowIds.length > 0) {
+      const flows = await db('approval_flows').whereIn('flow_id', flowIds).select('flow_id', 'steps');
+      for (const f of flows) {
+        try { flowStepsMap.set(f.flow_id, typeof f.steps === 'string' ? JSON.parse(f.steps) : (f.steps || [])); }
+        catch { flowStepsMap.set(f.flow_id, []); }
+      }
+    }
+
+    // ─── 内存过滤 ──────────────────────────────────
+    const auditRoles = ['auditor', 'security_auditor'];
     const filtered = [];
     for (const approval of allPending) {
-      // 部门密级过滤
+      // 部门过滤（使用批量加载的 Map）
       if (deptFilter) {
-        const applicant = await db('user_profiles').where('user_id', approval.applicant_user_id).first();
+        const applicant = applicantMap.get(approval.applicant_user_id);
         if (!applicant || applicant.department_id !== deptFilter) continue;
       }
+      // 密级过滤
       if (secretFilter && !secretFilter.includes(approval.secret_level)) continue;
 
-      // 加载审批流程步骤
-      let steps = [];
-      if (approval.approval_flow_id) {
-        const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
-        if (flow) {
-          try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); }
-          catch { steps = []; }
-        }
-      }
-
-      const currentStepIdx = (approval.current_step || 1) - 1;
-      const currentStepName = steps[currentStepIdx] || '';
+      // 角色匹配 — 使用批量加载的审批流程步骤
+      const steps = approval.approval_flow_id ? (flowStepsMap.get(approval.approval_flow_id) || []) : [];
+      const currentStepName = steps[(approval.current_step || 1) - 1] || '';
       const requiredRole = getRoleForStep(currentStepName);
 
-      // auditor 和 security_auditor 视为等价角色
-      const auditRoles = ['auditor', 'security_auditor'];
       const roleMatch = requiredRole && (
         requiredRole === userRole ||
         (auditRoles.includes(requiredRole) && auditRoles.includes(userRole))
@@ -173,12 +183,7 @@ router.get('/pending', authenticate, async (req, res, next) => {
 
     res.json({
       code: 200,
-      data: {
-        list: paged,
-        total,
-        page: parseInt(page),
-        pageSize: parseInt(pageSize),
-      },
+      data: { list: paged, total, page: parseInt(page), pageSize: parseInt(pageSize) },
     });
   } catch (error) {
     next(error);
@@ -393,7 +398,7 @@ router.post('/', authenticate, async (req, res, next) => {
       ? (description ? description + '\n<!--BODY ' + body + ' BODY-->' : '<!--BODY ' + body + ' BODY-->')
       : description;
 
-    const [insertId] = await db('approvals').insert({
+    const [row] = await db('approvals').insert({
       operation_type: operationType,
       title,
       description: fullDescription,
@@ -412,6 +417,9 @@ router.post('/', authenticate, async (req, res, next) => {
       created_at: new Date(),
       updated_at: new Date(),
     }).returning('approval_id');
+
+    // Knex 3.x + pg: .returning('col') 返回 [{col: val}]，提取纯值
+    const insertId = (row && typeof row === 'object') ? (row.approval_id ?? row) : row;
 
     res.json({
       code: 200,
