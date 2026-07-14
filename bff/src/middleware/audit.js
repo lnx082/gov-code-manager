@@ -5,6 +5,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { getDb } from '../database/connection.js';
+import { detectRisks } from '../services/riskDetector.js';
 
 /**
  * 审计日志中间件
@@ -136,6 +137,13 @@ async function recordAuditLog(req, res, body, responseTime) {
 
     await db('audit_logs').insert(logData);
     console.log(`✅ 审计日志已记录: ${logId}`);
+
+    // 异步风险检测，不阻塞审计日志记录
+    setImmediate(() => {
+      detectRisks(logData).catch(err => {
+        console.error('风险检测异常:', err.message);
+      });
+    });
   } catch (error) {
     console.error('审计日志写入失败:', error.message);
   }
