@@ -157,16 +157,16 @@ async function handleChangePassword() {
     return
   }
   try {
-    await changePassword({
+    const res = await changePassword({
       oldPassword: passwordForm.oldPassword,
       newPassword: passwordForm.newPassword
     })
-    ElMessage.success('密码修改成功')
+    ElMessage.success(res.message || '密码修改成功')
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
   } catch (error) {
-    ElMessage.warning('密码修改失败')
+    ElMessage.warning(error?.response?.data?.message || '密码修改失败')
   }
 }
 

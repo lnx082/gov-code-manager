@@ -4,6 +4,7 @@
 import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 import db from '../database/connection.js';
+import { getCredential } from '../services/credentialStore.js';
 
 export async function authenticate(req, res, next) {
   // 优先从 Authorization 头获取，其次从 query 参数获取（用于 window.open 下载）
@@ -37,6 +38,15 @@ export async function authenticate(req, res, next) {
         return res.status(403).json({ code: 403, message: '账号已被锁定，无法执行操作' });
       }
     } catch { /* 查询失败不影响正常请求 */ }
+
+    // C-03 修复：从服务端凭据存储注入 giteaToken，JWT 不再携带
+    // 下游路由无需修改，继续使用 req.user.giteaToken
+    req.user.giteaToken = getCredential(decoded.userId) || '';
+
+    // 兜底：管理员用户可使用全局配置的 admin token
+    if (!req.user.giteaToken && (decoded.roleCode === 'admin' || decoded.isAdmin)) {
+      req.user.giteaToken = config.gitea?.token || '';
+    }
 
     next();
   } catch (error) {
@@ -80,6 +90,33 @@ export function requirePermission(...permissions) {
       });
     }
     
+    next();
+  };
+}
+
+// 角色检查中间件（允许指定角色列表访问）
+// auditor 和 security_auditor 视为等价
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ code: 401, message: '未登录' });
+    }
+
+    const userRole = req.user.roleCode || 'user';
+    const auditRoles = ['auditor', 'security_auditor'];
+
+    // 检查用户角色是否在允许列表中（auditor 双向等价匹配）
+    const matched = roles.some(r =>
+      r === userRole ||
+      (auditRoles.includes(r) && auditRoles.includes(userRole))
+    );
+
+    if (req.user.permissions?.includes('*')) return next();
+    if (userRole === 'admin') return next(); // 管理员始终放行
+
+    if (!matched) {
+      return res.status(403).json({ code: 403, message: '没有权限执行此操作' });
+    }
     next();
   };
 }

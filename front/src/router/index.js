@@ -174,7 +174,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 审计人员只能访问审计相关页面和工作台
-  if (userStore.userInfo && userStore.role === 'auditor' && to.path !== '/login') {
+  if (userStore.userInfo && userStore.isAuditor && to.path !== '/login') {
     const auditAllowed = [
       '/dashboard', '/profile', '/settings',
       '/audit/logs', '/audit/reports', '/audit/warning'

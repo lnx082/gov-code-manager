@@ -81,7 +81,35 @@ router.get('/:tagName', authenticate, async (req, res, next) => {
 router.post('/', authenticate, async (req, res, next) => {
   try {
     const { repoOwner, repoName, tagName, message, targetBranch } = req.body;
-    
+
+    // 检查仓库是否已归档或已冻结
+    const activeArchive = await db('archives')
+      .where('repo_owner', repoOwner)
+      .where('repo_name', repoName)
+      .where('status', 'active')
+      .first();
+    if (activeArchive) {
+      return res.status(400).json({ code: 400, message: '该仓库已归档，无法创建版本' });
+    }
+    const frozenBaseline = await db('baselines')
+      .where('repo_owner', repoOwner)
+      .where('repo_name', repoName)
+      .where('status', 'frozen')
+      .first();
+    if (frozenBaseline) {
+      return res.status(400).json({ code: 400, message: '该仓库的基线已冻结，无法创建版本' });
+    }
+
+    // 自动分配默认审批流程（与 POST /approvals 保持一致）
+    let flowId = null;
+    try {
+      const defaultFlow = await db('approval_flows')
+        .where('is_default', true)
+        .where('is_active', true)
+        .first();
+      if (defaultFlow) flowId = defaultFlow.flow_id;
+    } catch { /* 流程查询失败不影响创建 */ }
+
     // 创建审批申请
     await db('approvals').insert({
       operation_type: 'version',
@@ -91,6 +119,8 @@ router.post('/', authenticate, async (req, res, next) => {
       repo_name: repoName,
       target_branch: targetBranch,
       status: 'pending',
+      current_step: 1,
+      approval_flow_id: flowId,
       urgency: 'normal',
       secret_level: 'internal',
       applicant_user_id: req.user.userId,

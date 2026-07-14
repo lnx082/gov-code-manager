@@ -642,11 +642,7 @@ html, body {
 }
 
 /* ============ Form Required Indicator ============ */
-.form-required::before {
-  content: '*';
-  color: $primary;
-  margin-right: 4px;
-}
+/* Element Plus 表单验证 (required: true) 已自带红色星号，无需手动添加 */
 
 /* ============ Alert Styles ============ */
 .info-alert {

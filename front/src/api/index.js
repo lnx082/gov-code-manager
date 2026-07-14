@@ -3,6 +3,7 @@
  */
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { API_BASE_URL } from '@/config'
 
 // token 存储工具 — 使用 sessionStorage 实现标签页独立登录
 const TOKEN_KEY = 'gitea_token'
@@ -34,7 +35,7 @@ function handleUnauthorized() {
 
 // 创建 BFF API 实例
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://123.60.219.19:8080/api/bff',
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -103,7 +104,7 @@ export { service }
 
 // 创建 Gitea API 实例（通过 BFF 代理，避免跨域）
 const giteaService = axios.create({
-  baseURL: (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff') + '/gitea',
+  baseURL: API_BASE_URL + '/gitea',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -139,4 +140,4 @@ export { giteaService }
 export const bffService = service
 
 // 暴露 token 工具给 store 使用
-export { getToken, setToken, removeToken, getApiToken, setApiToken, removeApiToken }
+export { getToken, setToken, removeToken }

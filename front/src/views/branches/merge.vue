@@ -86,31 +86,31 @@
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.pageSize"
         :total="pagination.total"
-        layout="total, prev, pager, next"
+        layout="total, prev, pager, next, jumper"
         @current-change="loadData"
       />
     </div>
 
     <el-dialog v-model="createDialogVisible" title="创建合并请求" width="700px">
       <el-form :model="createForm" :rules="createRules" label-width="120px">
-        <el-form-item label="标题" prop="title" class="form-required">
-          <el-input v-model="createForm.title" placeholder="请输入合并请求标题" />
+        <el-form-item label="标题" prop="title">
+          <el-input v-model="createForm.title" placeholder="请输入合并请求标题" style="width: 100%" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="详细描述此次合并的变更内容" />
+          <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="详细描述此次合并的变更内容" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="仓库" prop="sourceRepoId" class="form-required">
-          <el-select v-model="createForm.sourceRepoId" placeholder="选择仓库" @change="onSourceRepoChange">
+        <el-form-item label="仓库" prop="sourceRepoId">
+          <el-select v-model="createForm.sourceRepoId" placeholder="选择仓库" style="width: 100%" @change="onSourceRepoChange">
             <el-option v-for="repo in repoList" :key="repo.id" :label="repo.full_name || repo.name" :value="repo.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="源分支" prop="sourceBranch" class="form-required">
-          <el-select v-model="createForm.sourceBranch" placeholder="选择源分支">
+        <el-form-item label="源分支" prop="sourceBranch">
+          <el-select v-model="createForm.sourceBranch" placeholder="选择源分支" style="width: 100%">
             <el-option v-for="branch in sourceBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标分支" prop="targetBranch" class="form-required">
-          <el-select v-model="createForm.targetBranch" placeholder="选择目标分支">
+        <el-form-item label="目标分支" prop="targetBranch">
+          <el-select v-model="createForm.targetBranch" placeholder="选择目标分支" style="width: 100%">
             <el-option v-for="branch in targetBranches" :key="branch" :label="branch" :value="branch" />
           </el-select>
         </el-form-item>
@@ -386,7 +386,8 @@ async function loadData() {
   loading.value = true
   try {
     // ===== 主数据源：从 BFF approvals 表加载合并请求列表 =====
-    const params = { page: 1, pageSize: 50 }
+    // 一次性取较多数据，前端做用户过滤 + 分页切片（与分支页保持一致）
+    const params = { page: 1, pageSize: 200 }
     if (filterForm.status) params.status = filterForm.status
 
     const res = await getMergeApprovals(params)
@@ -437,8 +438,10 @@ async function loadData() {
     // 只显示当前用户发起的合并请求
     const currentUser = userStore.username || userStore.userInfo?.username || ''
     const filtered = list.filter(item => item.author === currentUser || item.applicant_username === currentUser)
-    mergeRequestList.value = filtered
     pagination.total = filtered.length
+    // 客户端分页切片（与分支页保持一致的实现方式）
+    const start = (pagination.page - 1) * pagination.pageSize
+    mergeRequestList.value = filtered.slice(start, start + pagination.pageSize)
   } catch (error) {
     console.error('加载合并请求列表失败:', error)
     ElMessage.warning('加载合并请求列表失败：' + (error.message || '网络错误'))

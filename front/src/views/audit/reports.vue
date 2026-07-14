@@ -94,7 +94,7 @@
       </el-table>
     </el-card>
     <!-- 仓库操作弹窗 -->
-    <el-dialog v-model="showRepoDialog" title="仓库操作" width="650px">
+    <el-dialog v-model="showRepoDialog" title="仓库操作" width="750px">
       <el-table :data="repoOperationList" v-loading="loadingRepo" stripe border max-height="400">
         <el-table-column prop="username" label="操作用户" width="120" />
         <el-table-column label="操作类型" width="100">
@@ -107,8 +107,20 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <span style="float:left;color:#909399;font-size:14px;line-height:32px">共 {{ repoOperationList.length }} 条仓库操作</span>
-        <el-button @click="showRepoDialog = false">关闭</el-button>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#909399;font-size:14px">共 {{ repoPagination.total }} 条仓库操作</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <el-pagination
+              v-model:current-page="repoPagination.page"
+              :page-size="repoPagination.pageSize"
+              :total="repoPagination.total"
+              layout="prev, pager, next, jumper"
+              @current-change="loadRepoOperations"
+              small
+            />
+            <el-button @click="showRepoDialog = false">关闭</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -208,14 +220,19 @@ async function showRiskWarnings() {
 const showRepoDialog = ref(false)
 const loadingRepo = ref(false)
 const repoOperationList = ref([])
+const repoPagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 async function showRepoOperations() {
   showRepoDialog.value = true
+  repoPagination.page = 1
+  await loadRepoOperations()
+}
+
+async function loadRepoOperations() {
   loadingRepo.value = true
   try {
     const { getAuditLogs } = await import('@/api/audit')
-    // 后端直接按路径过滤，与统计口径一致
-    const res = await getAuditLogs({ page: 1, pageSize: 500, target: '/repos/' })
+    const res = await getAuditLogs({ page: repoPagination.page, pageSize: repoPagination.pageSize, target: '/repos/' })
     const data = res.data || res
     const list = data.list || []
     repoOperationList.value = list.map(r => ({
@@ -225,6 +242,7 @@ async function showRepoOperations() {
       ip: r.request_ip || '-',
       timestamp: r.timestamp,
     }))
+    repoPagination.total = data.total || 0
   } catch {
     repoOperationList.value = []
     ElMessage.warning('获取仓库操作失败')
@@ -242,19 +260,13 @@ async function showActiveUsers() {
   showActiveDialog.value = true
   loadingActive.value = true
   try {
-    const { getAuditLogs } = await import('@/api/audit')
-    // 获取最近 1000 条日志，按用户名分组统计
-    const res = await getAuditLogs({ page: 1, pageSize: 1000 })
-    const data = res.data || res
-    const list = data.list || []
-    const userMap = {}
-    for (const log of list) {
-      if (!log.username) continue // 跳过 null 用户名，与后端统计一致
-      if (!userMap[log.username]) userMap[log.username] = { username: log.username, ip: log.request_ip || '-', count: 0 }
-      userMap[log.username].count++
-      if (log.request_ip) userMap[log.username].ip = log.request_ip
-    }
-    activeUserList.value = Object.values(userMap).sort((a, b) => b.count - a.count)
+    // 直接使用 stats 中缓存的活跃用户列表（后端已按操作次数分组排序）
+    const list = stats._activeUsers || []
+    activeUserList.value = list.map(u => ({
+      username: u.username,
+      ip: u.ip || '-',
+      count: u.count || 0,
+    }))
   } catch {
     activeUserList.value = []
     ElMessage.warning('获取活跃用户失败')
@@ -277,6 +289,8 @@ async function loadStats() {
       stats.totalUsers = data.totalUsers || data.users || 0
       stats.totalRepos = data.totalRepos || data.repos || 0
       stats.riskCount = data.riskCount || data.risks || 0
+      // 缓存活跃用户详情（后端已分组排序，前端弹窗直接使用）
+      stats._activeUsers = data.activeUsers || []
     }
   } catch (error) {
     ElMessage.warning('加载统计数据失败')

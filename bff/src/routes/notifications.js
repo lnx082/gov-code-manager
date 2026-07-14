@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { filterMyPending } from './approvals.js';
 
 const router = Router();
 
@@ -68,12 +69,9 @@ router.post('/read-all', authenticate, async (req, res, next) => {
   }
 });
 
-// 获取未读通知总数（系统通知 + 待我审批）
+// 获取未读通知总数（系统通知 + 待我审批，使用共享过滤逻辑）
 router.get('/count', authenticate, async (req, res, next) => {
   try {
-    const userRole = req.user.roleCode || 'user';
-    const isAdmin = userRole === 'admin';
-
     // 1. 未读系统通知数
     let sysUnread = 0;
     try {
@@ -81,30 +79,12 @@ router.get('/count', authenticate, async (req, res, next) => {
       sysUnread = parseInt(r?.c || 0);
     } catch { /* ignore */ }
 
-    // 2. 待我审批数
-    function getRoleForStep(name) {
-      if (!name) return null;
-      if (name.includes('系统管理员')) return 'admin';
-      if (name.includes('项目管理员')) return 'project_manager';
-      return null;
-    }
-
+    // 2. 待我审批数 — 复用 approvals.js 的共享过滤函数（批量加载，无N+1，无admin兜底）
     let pendingCount = 0;
     try {
-      const allPending = await db('approvals').where('status', 'pending');
-      for (const approval of allPending) {
-        let steps = [];
-        if (approval.approval_flow_id) {
-          const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
-          if (flow) {
-            try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); } catch {}
-          }
-        }
-        const stepIdx = (approval.current_step || 1) - 1;
-        const requiredRole = getRoleForStep(steps[stepIdx] || '');
-        if (requiredRole && requiredRole === userRole) pendingCount++;
-        else if (!approval.approval_flow_id && isAdmin) pendingCount++;
-      }
+      const allPending = await db('approvals').where('status', 'pending').select('*');
+      const myPending = await filterMyPending(allPending, req.user);
+      pendingCount = myPending.length;
     } catch { /* ignore */ }
 
     res.json({ code: 200, data: { count: sysUnread + pendingCount } });

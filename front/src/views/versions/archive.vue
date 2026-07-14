@@ -12,13 +12,15 @@
     </el-alert>
 
     <el-table :data="archiveList" v-loading="loading" stripe border>
-      <el-table-column prop="tag_name" label="版本号" width="120" />
-      <el-table-column label="所属仓库" width="200">
+      <el-table-column prop="tag_name" label="版本号" min-width="120" />
+      <el-table-column label="所属仓库" min-width="200">
         <template #default="{ row }">{{ getRepoDisplay(row.repo_owner, row.repo_name) }}</template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">{{ row.status === 'active' ? '已归档' : row.status }}</el-tag>
+          <el-tag :type="row.status === 'active' ? 'success' : row.status === 'restored' ? 'info' : 'danger'" size="small">
+            {{ row.status === 'active' ? '已归档' : row.status === 'restored' ? '已恢复' : row.status }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="归档时间" width="160">
@@ -26,13 +28,14 @@
       </el-table-column>
       <el-table-column label="操作" width="100">
         <template #default="{ row }">
-          <el-button type="primary" link @click="restore(row)" v-if="row.status === 'active' && isAdmin">恢复</el-button>
+          <span style="color:#909399;font-size:12px" v-if="row.status === 'active'">已归档不可恢复</span>
+          <span style="color:#909399;font-size:12px" v-else>已恢复</span>
         </template>
       </el-table-column>
     </el-table>
 
     <div class="pagination-wrapper">
-      <el-pagination v-model:current-page="pagination.page" :total="pagination.total" layout="total, prev, pager, next" @current-change="loadArchives" />
+      <el-pagination v-model:current-page="pagination.page" :total="pagination.total" layout="total, prev, pager, next, jumper" @current-change="loadArchives" />
     </div>
 
     <el-dialog v-model="createDialogVisible" title="添加归档" width="600px">
@@ -61,16 +64,15 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getArchiveList, restoreArchive, getBaselineList } from '@/api/admin'
+import { getArchiveList, getBaselineList } from '@/api/admin'
 import { getMyRepos } from '@/api/gitea'
 import { createApproval } from '@/api/bff'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const isPM = computed(() => userStore.role === 'project_manager')
-const isAdmin = computed(() => userStore.role === 'admin')
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -151,14 +153,6 @@ async function handleCreate() {
   } catch (e) {
     ElMessage.error('提交失败: ' + (e?.response?.data?.message || e?.message || ''))
   } finally { submitting.value = false }
-}
-
-async function restore(row) {
-  try {
-    await ElMessageBox.confirm('确定恢复该归档吗？仓库将重新开放。', '恢复', { type: 'warning' })
-    await restoreArchive(row.archive_id)
-    ElMessage.success('已恢复'); loadArchives()
-  } catch (e) { if (e !== 'cancel') ElMessage.warning('恢复失败') }
 }
 
 function getRepoDisplay(owner, name) {

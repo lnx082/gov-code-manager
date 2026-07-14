@@ -188,7 +188,7 @@ router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req,
 // ============================================================
 router.post('/repos', authenticate, async (req, res, next) => {
   try {
-    const giteaUrl = `${config.gitea.url}/api/v1/repos`;
+    const giteaUrl = `${config.gitea.url}/api/v1/user/repos`;
     const giteaToken = req.user?.giteaToken || '';
     const authHeader = giteaToken || req.headers.authorization || '';
 
@@ -198,7 +198,19 @@ router.post('/repos', authenticate, async (req, res, next) => {
       headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
     });
-    const result = await response.json();
+
+    // 安全解析响应（Gitea 错误时可能返回纯文本而非 JSON）
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      const text = await response.text();
+      return res.status(response.status).json({
+        code: response.status,
+        message: text?.substring(0, 200) || `Gitea 返回非 JSON 响应 (HTTP ${response.status})`,
+      });
+    }
+
     if (!response.ok) {
       return res.status(response.status).json(result);
     }
@@ -257,7 +269,7 @@ router.post('/repos', authenticate, async (req, res, next) => {
     const repoName = result.name || req.body.name;
     const displayMatch = desc.match(/\[显示名=([^\]]+)\]/);
     const secretMatch = desc.match(/\[(公开|内部|秘密|机密|绝密)\]/);
-    const displayName = displayMatch ? displayMatch[1] : (desc.split(']').pop()?.trim() || `${owner}/${repoName}`);
+    const displayName = displayMatch ? displayMatch[1] : `${owner}/${repoName}`;
     const secretLevel = secretMatch ? ({'公开':'public','内部':'internal','秘密':'secret','机密':'confidential','绝密':'top-secret'})[secretMatch[1]] || 'internal' : 'internal';
 
     try {
@@ -267,7 +279,22 @@ router.post('/repos', authenticate, async (req, res, next) => {
         secret_level: secretLevel,
         display_name: displayName
       }).onConflict(['repo_owner', 'repo_name']).merge();
-    } catch { /* metadata 创建失败不影响主流程 */ }
+      console.log(`[RepoCreate] 已创建 repo_metadata: ${owner}/${repoName} (部门=${targetDeptName || '未指定'}, 密级=${secretLevel})`);
+    } catch (e) {
+      console.error(`[RepoCreate] repo_metadata 创建失败: ${owner}/${repoName}`, e.message);
+      // 重试：不带 onConflict 的简单 insert（兼容不支持 upsert 的环境）
+      try {
+        await db('repo_metadata').insert({
+          repo_owner: owner, repo_name: repoName,
+          department_id: targetDeptId || null,
+          secret_level: secretLevel,
+          display_name: displayName
+        });
+        console.log(`[RepoCreate] repo_metadata 重试成功: ${owner}/${repoName}`);
+      } catch (e2) {
+        console.error(`[RepoCreate] repo_metadata 重试也失败: ${owner}/${repoName}`, e2.message);
+      }
+    }
 
     res.status(response.status).json(result);
   } catch (error) {
@@ -304,6 +331,25 @@ router.all('/*', authenticate, async (req, res, next) => {
     }
 
     const response = await fetch(giteaUrl, fetchOptions);
+
+    // 删除仓库成功时，同步清理 repo_metadata 表
+    if (req.method === 'DELETE' && response.ok) {
+      const repoMatch = giteaPath.match(/^\/repos\/([^/]+)\/([^/]+)$/);
+      if (repoMatch) {
+        const [, owner, repoName] = repoMatch;
+        try {
+          const deleted = await db('repo_metadata')
+            .where({ repo_owner: owner, repo_name: repoName })
+            .delete();
+          if (deleted > 0) {
+            console.log(`[Gitea代理] 已同步删除 repo_metadata: ${owner}/${repoName}`);
+          }
+        } catch (err) {
+          console.warn(`[Gitea代理] 删除 repo_metadata 失败: ${owner}/${repoName}`, err.message);
+        }
+      }
+    }
+
     // 禁止缓存，防止浏览器返回 304 空数据
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');

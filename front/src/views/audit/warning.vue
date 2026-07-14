@@ -87,7 +87,7 @@
       <el-pagination
         v-model:current-page="pagination.page"
         :total="pagination.total"
-        layout="total, prev, pager, next"
+        layout="total, prev, pager, next, jumper"
         @current-change="loadWarnings"
       />
     </div>

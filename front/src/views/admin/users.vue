@@ -31,7 +31,7 @@
     </el-card>
 
     <el-table :data="userList" v-loading="loading" stripe border>
-      <el-table-column prop="gitea_username" label="用户名" width="150">
+      <el-table-column prop="gitea_username" label="用户名" min-width="150">
         <template #default="{ row }">
           <div class="user-cell">
             <el-avatar :size="32" :icon="UserFilled" />
@@ -354,6 +354,7 @@ async function loadRoles() {
       { code: 'project_manager', name: '项目管理员' },
       { code: 'developer', name: '开发人员' },
       { code: 'auditor', name: '审计人员' },
+      { code: 'security_auditor', name: '审计人员' },
     ]
   }
 }
@@ -471,11 +472,7 @@ async function handleResetPasswordSubmit() {
       const res = await resetUserPassword(userId, {
         newPassword: resetPasswordForm.newPassword
       })
-      if (res.data?.giteaSynced) {
-        ElMessage.success('密码重置成功，已同步 Gitea')
-      } else {
-        ElMessage.success('密码重置成功（用户可立即登录，密码将自动同步到 Gitea）')
-      }
+      ElMessage.success(res.message || '密码重置成功')
       showResetPasswordDialog.value = false
     } catch (error) {
       ElMessage.error((error?.response?.data?.message) || error?.message || '密码重置失败')
@@ -554,7 +551,8 @@ const roleNameMap = {
   'admin': '系统管理员',
   'project_manager': '项目管理员',
   'developer': '开发人员',
-  'auditor': '审计人员'
+  'auditor': '审计人员',
+  'security_auditor': '审计人员'
 }
 
 function getRoleName(row) {

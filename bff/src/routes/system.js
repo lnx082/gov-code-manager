@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import db from '../database/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.get('/config', authenticate, async (req, res, next) => {
 });
 
 // 更新系统配置
-router.put('/config', authenticate, async (req, res, next) => {
+router.put('/config', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { configs } = req.body;
     

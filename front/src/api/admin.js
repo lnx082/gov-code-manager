@@ -101,6 +101,10 @@ export function freezeBaseline(id) {
   return request.post(`/baselines/${id}/freeze`)
 }
 
+export function unfreezeBaseline(id) {
+  return request.post(`/baselines/${id}/unfreeze`)
+}
+
 // ===== 版本管理 =====
 export function getVersionList(params) {
   return request.get('/versions', { params })

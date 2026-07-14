@@ -110,53 +110,74 @@ function getRoleForStep(stepName) {
   return null;
 }
 
+// ─── 共享：过滤出当前用户需要审批的记录（批量加载，无N+1）───
+async function filterMyPending(allPending, user) {
+  if (allPending.length === 0) return [];
+
+  const userRole = user.roleCode || 'user';
+  const isAdmin = userRole === 'admin';
+  const auditRoles = ['auditor', 'security_auditor'];
+  const { deptFilter, secretFilter } = await getDeptFilter(user);
+
+  // 批量加载 user_profiles（部门过滤用）
+  const applicantIds = [...new Set(allPending.map(a => a.applicant_user_id).filter(Boolean))];
+  let applicantMap = new Map();
+  if (deptFilter && applicantIds.length > 0) {
+    const profiles = await db('user_profiles').whereIn('user_id', applicantIds).select('user_id', 'department_id');
+    for (const p of profiles) { applicantMap.set(p.user_id, p); }
+  }
+
+  // 批量加载 approval_flows（步骤角色匹配用）
+  const flowIds = [...new Set(allPending.map(a => a.approval_flow_id).filter(Boolean))];
+  let flowStepsMap = new Map();
+  if (flowIds.length > 0) {
+    const flows = await db('approval_flows').whereIn('flow_id', flowIds).select('flow_id', 'steps');
+    for (const f of flows) {
+      try { flowStepsMap.set(f.flow_id, typeof f.steps === 'string' ? JSON.parse(f.steps) : (f.steps || [])); }
+      catch { flowStepsMap.set(f.flow_id, []); }
+    }
+  }
+
+  const result = [];
+  for (const approval of allPending) {
+    // 部门过滤
+    if (deptFilter) {
+      const applicant = applicantMap.get(approval.applicant_user_id);
+      if (!applicant || applicant.department_id !== deptFilter) continue;
+    }
+    // 密级过滤
+    if (secretFilter && !secretFilter.includes(approval.secret_level)) continue;
+
+    // 角色匹配
+    const steps = approval.approval_flow_id ? (flowStepsMap.get(approval.approval_flow_id) || []) : [];
+    const currentStepName = steps[(approval.current_step || 1) - 1] || '';
+    const requiredRole = getRoleForStep(currentStepName);
+
+    const roleMatch = requiredRole && (
+      requiredRole === userRole ||
+      (auditRoles.includes(requiredRole) && auditRoles.includes(userRole))
+    );
+
+    if (roleMatch) { result.push(approval); }
+  }
+  return result;
+}
+
 // 获取待我审批列表
 router.get('/pending', authenticate, async (req, res, next) => {
   try {
     const { page = 1, pageSize = 10, type } = req.query;
-    const userRole = req.user.roleCode || 'user';
-    const isAdmin = userRole === 'admin';
-    const isManager = userRole === 'project_manager';
 
-    // 只查询 pending 状态
     let query = db('approvals').where('status', 'pending');
-
-    if (type) {
-      query = query.where('operation_type', type);
-    }
-
+    if (type) query = query.where('operation_type', type);
     const allPending = await query.orderBy('created_at', 'desc');
 
-    // 获取部门密级过滤条件
-    const { deptFilter, secretFilter } = await getDeptFilter(req.user);
-
-    // 按用户角色过滤：只展示当前步骤需要当前用户审批的申请
-    const filtered = [];
-    for (const approval of allPending) {
-      // 部门密级过滤
-      if (deptFilter) {
-        const applicant = await db('user_profiles').where('user_id', approval.applicant_user_id).first();
-        if (!applicant || applicant.department_id !== deptFilter) continue;
-      }
-      if (secretFilter && !secretFilter.includes(approval.secret_level)) continue;
-
-      // 加载审批流程步骤
-      let steps = [];
-      if (approval.approval_flow_id) {
-        const flow = await db('approval_flows').where('flow_id', approval.approval_flow_id).first();
-        if (flow) {
-          try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps || []); }
-          catch { steps = []; }
-        }
-      }
-
-      const currentStepIdx = (approval.current_step || 1) - 1;
-      const currentStepName = steps[currentStepIdx] || '';
-      const requiredRole = getRoleForStep(currentStepName);
-
-      if (requiredRole && requiredRole === userRole) { filtered.push(approval); }
-      else if (!approval.approval_flow_id && isAdmin) { filtered.push(approval); }
+    if (allPending.length === 0) {
+      return res.json({ code: 200, data: { list: [], total: 0, page: parseInt(page), pageSize: parseInt(pageSize) } });
     }
+
+    // 使用共享的步骤角色过滤（批量加载，无 N+1）
+    const filtered = await filterMyPending(allPending, req.user);
 
     const total = filtered.length;
     const paged = filtered.slice(
@@ -166,12 +187,7 @@ router.get('/pending', authenticate, async (req, res, next) => {
 
     res.json({
       code: 200,
-      data: {
-        list: paged,
-        total,
-        page: parseInt(page),
-        pageSize: parseInt(pageSize),
-      },
+      data: { list: paged, total, page: parseInt(page), pageSize: parseInt(pageSize) },
     });
   } catch (error) {
     next(error);
@@ -371,6 +387,28 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { operationType, title, description, repoOwner, repoName, sourceBranch, targetBranch, urgency, secretLevel, giteaPrNumber, approvalFlowId, body } = req.body;
 
+    // 版本发布 / 基线创建前检查仓库是否已归档或已冻结
+    if ((operationType === 'version_release' || operationType === 'baseline_create') && repoOwner && repoName) {
+      // 检查是否已归档
+      const activeArchive = await db('archives')
+        .where('repo_owner', repoOwner)
+        .where('repo_name', repoName)
+        .where('status', 'active')
+        .first();
+      if (activeArchive) {
+        return res.status(400).json({ code: 400, message: '该仓库已归档，无法创建版本或基线' });
+      }
+      // 检查是否有冻结的基线
+      const frozenBaseline = await db('baselines')
+        .where('repo_owner', repoOwner)
+        .where('repo_name', repoName)
+        .where('status', 'frozen')
+        .first();
+      if (frozenBaseline) {
+        return res.status(400).json({ code: 400, message: '该仓库的基线已冻结，无法创建版本或基线' });
+      }
+    }
+
     // 未指定审批流程时，自动使用默认流程
     let flowId = approvalFlowId || null;
     if (!flowId) {
@@ -386,7 +424,7 @@ router.post('/', authenticate, async (req, res, next) => {
       ? (description ? description + '\n<!--BODY ' + body + ' BODY-->' : '<!--BODY ' + body + ' BODY-->')
       : description;
 
-    const [insertId] = await db('approvals').insert({
+    const [row] = await db('approvals').insert({
       operation_type: operationType,
       title,
       description: fullDescription,
@@ -405,6 +443,9 @@ router.post('/', authenticate, async (req, res, next) => {
       created_at: new Date(),
       updated_at: new Date(),
     }).returning('approval_id');
+
+    // Knex 3.x + pg: .returning('col') 返回 [{col: val}]，提取纯值
+    const insertId = (row && typeof row === 'object') ? (row.approval_id ?? row) : row;
 
     res.json({
       code: 200,
@@ -521,7 +562,7 @@ router.post('/:id/process', authenticate, async (req, res, next) => {
 
 // 审批通过后的后置操作
 async function executePostApprovalAction(approval) {
-  const giteaUrl = config.gitea?.url || 'http://123.60.219.19:3000';
+  const giteaUrl = config.gitea?.url || 'http://localhost:3000';
   const adminToken = config.gitea?.token || '';
   const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
 
@@ -646,6 +687,6 @@ async function executePostApprovalAction(approval) {
 }
 
 // 导出给审批路由使用
-export { executePostApprovalAction };
+export { executePostApprovalAction, filterMyPending, getRoleForStep };
 
 export default router;

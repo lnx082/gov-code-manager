@@ -41,9 +41,9 @@
     </header>
 
     <!-- 主体区域 -->
-    <div class="app-body">
+    <div class="app-body" :style="{ paddingLeft: sidebarWidth }">
       <!-- 侧边栏 -->
-      <aside class="gov-sidebar" :style="{ width: sidebarCollapsed ? '64px' : '220px' }">
+      <aside class="gov-sidebar" :style="{ width: sidebarWidth }">
         <el-menu
           :default-active="$route.path"
           :collapse="sidebarCollapsed"
@@ -52,6 +52,7 @@
           background-color="#ffffff"
           text-color="#303133"
           active-text-color="#ffffff"
+          @mousemove="onMenuMousemove"
         >
           <el-menu-item index="/dashboard">
             <el-icon class="menu-icon"><HomeFilled /></el-icon>
@@ -96,7 +97,7 @@
             <el-menu-item index="/approval/history">审批历史</el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="audit" v-show="userStore.role === 'admin' || userStore.role === 'auditor'">
+          <el-sub-menu index="audit" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.isAuditor)">
             <template #title>
               <el-icon class="menu-icon"><Search /></el-icon>
               <span>审计管理</span>
@@ -114,51 +115,68 @@
             <el-menu-item index="/admin/users">用户管理</el-menu-item>
             <el-menu-item index="/admin/roles">角色权限</el-menu-item>
             <el-menu-item index="/admin/depts">部门管理</el-menu-item>
-            <el-menu-item index="/admin/backup">备份管理</el-menu-item>
+            <!-- <el-menu-item index="/admin/backup">备份管理</el-menu-item> -->
           </el-sub-menu>
         </el-menu>
 
+        <!-- 侧边栏折叠按钮（固定在功能栏底部，菜单滚动时不随之移动） -->
+        <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
+          <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
+        </div>
       </aside>
-
-      <!-- 侧边栏折叠按钮（固定屏幕左下角） -->
-      <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed" :style="{ left: sidebarCollapsed ? '64px' : '220px' }">
-        <el-icon><DArrowRight v-if="sidebarCollapsed" /><DArrowLeft v-else /></el-icon>
-      </div>
 
       <!-- 主内容区 -->
       <main class="app-main">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <div class="main-content">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
+
+        <!-- 底部版权（属于右侧主体内容） -->
+        <footer class="gov-footer">
+          <p>党政软件版本管控平台 © 2026 版权所有 | 技术支持：电科院52组</p>
+        </footer>
       </main>
     </div>
 
-    <!-- 底部版权 -->
-    <footer class="gov-footer">
-      <p>党政软件版本管控平台 © 2026 版权所有 | 技术支持：电科院52组</p>
-    </footer>
-
     <!-- 通知弹窗 -->
-    <el-dialog v-model="showNoticeDialog" title="系统通知" width="600px">
+    <el-dialog v-model="showNoticeDialog" title="系统通知" width="650px">
       <div class="notice-list">
         <el-empty v-if="notices.length === 0" description="暂无通知" />
-        <div v-else v-for="notice in notices" :key="notice.id" class="notice-item">
-          <div class="notice-header">
-            <div class="notice-title">{{ notice.title }}</div>
-            <el-tag v-if="notice.isSys" size="small" type="info">系统通知</el-tag>
-            <el-tag v-else size="small" type="warning">审批通知</el-tag>
+        <template v-else>
+          <div v-for="notice in pagedNotices" :key="notice.id" class="notice-item" :class="{ 'notice-unread': !notice.read }">
+            <div class="notice-header">
+              <div class="notice-title">
+                <span v-if="!notice.read" class="unread-dot"></span>
+                {{ notice.title }}
+              </div>
+              <el-tag v-if="notice.isSys" size="small" type="info">系统通知</el-tag>
+              <el-tag v-else size="small" type="warning">审批通知</el-tag>
+            </div>
+            <div class="notice-content">{{ notice.content }}</div>
+            <div class="notice-footer">
+              <span class="notice-time">{{ notice.createTime }}</span>
+              <el-button type="primary" link size="small" @click="viewNoticeDetail(notice)">查看详情</el-button>
+              <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
+              <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
+              <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
+            </div>
           </div>
-          <div class="notice-content">{{ notice.content }}</div>
-          <div class="notice-footer">
-            <span class="notice-time">{{ notice.createTime }}</span>
-            <el-button type="primary" link size="small" @click="viewNoticeDetail(notice)">查看详情</el-button>
-            <el-button v-if="notice.isSys && !notice.read" type="primary" link size="small" @click="handleSysNotice(notice)">标记已读</el-button>
-            <el-button v-else-if="notice.isSys && notice.read" type="success" link size="small" disabled>已读</el-button>
-            <el-button v-else type="warning" link size="small" @click="handleApprovalNotice(notice)">去审批</el-button>
+          <!-- 分页 -->
+          <div class="notice-pagination" v-if="notices.length > noticePageSize">
+            <el-pagination
+              v-model:current-page="noticePage"
+              :page-size="noticePageSize"
+              :total="notices.length"
+              layout="prev, pager, next"
+              size="small"
+              background
+            />
           </div>
-        </div>
+        </template>
       </div>
     </el-dialog>
 
@@ -183,7 +201,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
@@ -196,11 +214,14 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const sidebarCollapsed = ref(false)
+const sidebarWidth = computed(() => sidebarCollapsed.value ? '64px' : '220px')
 const showNoticeDialog = ref(false)
 const showDetailDialog = ref(false)
 const noticeCount = ref(0)
 const notices = ref([])
 const detailNotice = ref(null)
+const noticePage = ref(1)
+const noticePageSize = 10
 let noticeTimer = null
 
 onMounted(async () => {
@@ -208,11 +229,36 @@ onMounted(async () => {
   loadNoticeCount()
   // 每 15 秒轮询一次通知数
   noticeTimer = setInterval(loadNoticeCount, 15000)
+  // 折叠弹出菜单的鼠标追踪悬停动画
+  document.addEventListener('mousemove', onPopupMousemove, { passive: true })
 })
 
 onUnmounted(() => {
   if (noticeTimer) clearInterval(noticeTimer)
+  document.removeEventListener('mousemove', onPopupMousemove)
 })
+
+// 菜单项悬停动画 — 鼠标位置追踪，浅红色从鼠标中心向四周辐射渐变
+function onMenuMousemove(e) {
+  const item = e.target.closest('.el-menu-item, .el-sub-menu__title')
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const x = ((e.clientX - rect.left) / rect.width) * 100
+  const y = ((e.clientY - rect.top) / rect.height) * 100
+  item.style.setProperty('--mx', `${x}%`)
+  item.style.setProperty('--my', `${y}%`)
+}
+
+// 折叠状态下弹出子菜单的悬停动画（popup 渲染在组件外部，需全局监听）
+function onPopupMousemove(e) {
+  const item = e.target.closest('.el-menu--popup .el-menu-item, .el-menu--popup .el-sub-menu__title')
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const x = ((e.clientX - rect.left) / rect.width) * 100
+  const y = ((e.clientY - rect.top) / rect.height) * 100
+  item.style.setProperty('--mx', `${x}%`)
+  item.style.setProperty('--my', `${y}%`)
+}
 
 async function loadNoticeCount() {
   try {
@@ -225,7 +271,7 @@ async function loadNotices() {
   const all = []
   // 加载全部通知（含已读，便于展示历史）
   try {
-    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 50 } })
+    const sysRes = await request.get('/notifications', { params: { page: 1, pageSize: 200 } })
     const sysList = (sysRes.data || sysRes)?.list || []
     for (const item of sysList) {
       all.push({
@@ -233,15 +279,16 @@ async function loadNotices() {
         title: item.title || '系统通知',
         content: item.content || '',
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
+        _ts: item.created_at ? new Date(item.created_at).getTime() : 0,  // 排序用时间戳
         isSys: true,
         notiId: item.notification_id,
         read: item.is_read === true || item.is_read === 'true'
       })
     }
   } catch (_) { /* ignore */ }
-  // 审批通知
+  // 审批通知（待我审批）
   try {
-    const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 10 } })
+    const pendRes = await request.get('/approvals/pending', { params: { page: 1, pageSize: 100 } })
     const pendList = (pendRes.data || pendRes)?.list || []
     const stepNames = ['', '待项目管理员审批', '待系统管理员审批']
     const typeMap = { version_release: '版本发布', baseline_create: '基线申请', baseline_change: '基线变更', baseline_freeze: '基线冻结', baseline_archive: '基线归档', merge: '合并请求' }
@@ -249,14 +296,26 @@ async function loadNotices() {
       all.push({
         id: 'pend_' + item.approval_id,
         title: item.title,
-        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + stepNames[item.current_step] + ' | 申请人: ' + item.applicant_username,
+        content: (typeMap[item.operation_type] || item.operation_type) + ' | ' + (stepNames[item.current_step] || '待审批') + ' | 申请人: ' + item.applicant_username,
         createTime: item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '',
-        isSys: false
+        _ts: item.created_at ? new Date(item.created_at).getTime() : 0,
+        isSys: false,
+        approvalId: item.approval_id,
+        read: false  // 审批通知始终显示为未读状态
       })
     }
   } catch (_) { /* ignore */ }
+  // ★ 按时间倒序排列（最新在最前面）
+  all.sort((a, b) => b._ts - a._ts)
   notices.value = all
+  noticePage.value = 1  // 重置到第一页
 }
+
+// 当前分页显示的通知
+const pagedNotices = computed(() => {
+  const start = (noticePage.value - 1) * noticePageSize
+  return notices.value.slice(start, start + noticePageSize)
+})
 
 function handleUserCommand(command) {
   switch (command) {
@@ -305,9 +364,13 @@ async function handleSysNotice(notice) {
   loadNoticeCount()
 }
 
-function handleApprovalNotice() {
+function handleApprovalNotice(notice) {
   showNoticeDialog.value = false
-  router.push('/approval/pending')
+  if (notice?.approvalId) {
+    router.push({ path: '/approval/pending', query: { highlight: notice.approvalId } })
+  } else {
+    router.push('/approval/pending')
+  }
 }
 </script>
 
@@ -432,41 +495,97 @@ function handleApprovalNotice() {
   flex: 1;
   display: flex;
   overflow: hidden;
+  transition: padding-left 0.3s ease;
 }
 
-/* 侧边栏 */
+/* 侧边栏 — 固定在屏幕左侧，不随页面滚动 */
 .gov-sidebar {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  height: calc(100vh - 64px);
   background: #ffffff;
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
-  overflow: hidden;
+  overflow: visible;
   border-right: 1px solid #e4e7ed;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  z-index: 99;
 
   .sidebar-menu {
     flex: 1;
     border-right: none;
     overflow-y: auto;
     overflow-x: hidden;
+    // 底部留出空间给固定的折叠按钮，避免最后一项被完全遮挡
+    padding-bottom: 44px;
 
     &:not(.el-menu--collapse) {
       width: 100%;
     }
 
     .menu-icon {
-      margin-right: 10px;
       font-size: 16px;
       width: 20px;
       text-align: center;
     }
 
+    // 非折叠状态下图标与文字间距
+    &:not(.el-menu--collapse) .menu-icon {
+      margin-right: 10px;
+    }
+
+    // 折叠状态下菜单项图标居中
+    &.el-menu--collapse :deep(.el-menu-item),
+    &.el-menu--collapse :deep(.el-sub-menu__title) {
+      justify-content: center;
+      padding: 0 !important;
+
+      .menu-icon {
+        margin-right: 0;
+      }
+    }
+
+    // 菜单项悬停动画：浅红色从鼠标中心向四周辐射渐变，边缘保留最浅的浅红色
+    :deep(.el-sub-menu__title),
+    :deep(.el-menu-item) {
+      position: relative;
+      // 默认鼠标位置在中心
+      --mx: 50%;
+      --my: 50%;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at var(--mx) var(--my),
+          rgba(198, 40, 40, 0.12) 0%,
+          rgba(198, 40, 40, 0.06) 35%,
+          rgba(198, 40, 40, 0.02) 70%,
+          rgba(198, 40, 40, 0.008) 100%
+        );
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      &:hover::before {
+        opacity: 1;
+      }
+
+      // 确保文字在伪元素之上，同时保留子菜单箭头的绝对定位
+      > :not(.el-sub-menu__icon-arrow) {
+        position: relative;
+        z-index: 1;
+      }
+    }
+
     :deep(.el-sub-menu__title) {
       color: #303133;
       &:hover {
-        background: #ffebee !important;
+        background: transparent !important;
         color: #c62828 !important;
       }
     }
@@ -478,7 +597,7 @@ function handleApprovalNotice() {
     :deep(.el-menu-item) {
       color: #303133;
       &:hover {
-        background: #ffebee !important;
+        background: transparent !important;
         color: #c62828 !important;
       }
 
@@ -489,40 +608,67 @@ function handleApprovalNotice() {
     }
   }
 
-.sidebar-toggle {
-  position: fixed;
-  bottom: 0;
-  z-index: 101;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #909399;
-  cursor: pointer;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 0 6px 0 0;
-  transition: left 0.3s ease;
-  font-size: 14px;
+  // 折叠按钮 — 固定在功能栏底部，菜单在其下方滚动
+  .sidebar-toggle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #909399;
+    cursor: pointer;
+    background: #fff;
+    border-top: 1px solid #ebeef5;
+    transition: color 0.3s ease, background 0.3s ease;
+    font-size: 14px;
+    z-index: 10;
+    flex-shrink: 0;
 
-  &:hover {
-    background: #ffebee;
-    color: #c62828;
+    // 渐变遮罩层：菜单项向下滚动时从按钮底部逐渐浮现
+    &::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      height: 28px;
+      background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.7) 40%, #ffffff 100%);
+      pointer-events: none;
+    }
+
+    &:hover {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .el-icon {
+      transition: transform 0.3s ease;
+    }
   }
 }
-}
 
-/* 主内容区 */
+/* 主内容区 — 右侧独立滚动，包含版权栏 */
 .app-main {
   flex: 1;
-  padding: 20px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  min-width: 0;
   background: #f5f5f5;
+
+  .main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+  }
 }
 
-/* 底部版权 */
+/* 底部版权 — 属于右侧主体内容底部 */
 .gov-footer {
+  flex-shrink: 0;
   background: #fff;
   color: #666;
   padding: 16px 20px;
@@ -572,6 +718,26 @@ function handleApprovalNotice() {
       }
     }
   }
+  // 未读通知高亮
+  .notice-unread {
+    background: #f0f7ff;
+  }
+  // 未读标记点
+  .unread-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #409eff;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  // 分页
+  .notice-pagination {
+    padding: 12px 0;
+    display: flex;
+    justify-content: center;
+  }
 }
 
 .notice-detail {
@@ -601,5 +767,55 @@ function handleApprovalNotice() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<!-- 折叠弹出子菜单的悬停动画（全局样式，popup 渲染在组件外部） -->
+<style lang="scss">
+.el-menu--popup {
+  .el-menu-item,
+  .el-sub-menu__title {
+    position: relative;
+    --mx: 50%;
+    --my: 50%;
+
+    // 去掉 Element Plus 默认灰色背景
+    &:hover {
+      background: transparent !important;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle at var(--mx) var(--my),
+        rgba(198, 40, 40, 0.12) 0%,
+        rgba(198, 40, 40, 0.06) 35%,
+        rgba(198, 40, 40, 0.02) 70%,
+        rgba(198, 40, 40, 0.008) 100%
+      );
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    &:hover::before {
+      opacity: 1;
+    }
+
+    // 确保文字在伪元素之上
+    > :not(.el-sub-menu__icon-arrow) {
+      position: relative;
+      z-index: 1;
+    }
+  }
+
+  // 弹出菜单中当前激活项：深红文字 + 浅红背景，避免白字看不见
+  .el-menu-item.is-active {
+    color: #c62828 !important;
+    background: #ffebee !important;
+  }
 }
 </style>

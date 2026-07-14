@@ -80,32 +80,32 @@
       <el-pagination
         v-model:current-page="pagination.page"
         :total="pagination.total"
-        layout="total, prev, pager, next"
+        layout="total, prev, pager, next, jumper"
         @current-change="loadVersions"
       />
     </div>
 
     <el-dialog v-model="createTagDialogVisible" title="创建版本" width="600px">
-      <el-form :model="createForm" :rules="createRules" label-width="100px">
-        <el-form-item label="所属仓库" prop="repoId" class="form-required">
+      <el-form :model="createForm" :rules="createRules" label-width="120px">
+        <el-form-item label="所属仓库" prop="repoId">
           <el-select v-model="createForm.repoId" placeholder="选择仓库" style="width: 100%" @change="onCreateRepoChange">
             <el-option v-for="repo in repoList" :key="repo.id" :label="repo.displayName" :value="repo.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="基于分支" prop="targetBranch" class="form-required">
+        <el-form-item label="基于分支" prop="targetBranch">
           <el-select v-model="createForm.targetBranch" placeholder="选择分支" style="width: 100%" :disabled="!createForm.repoId">
             <el-option v-for="b in createBranchList" :key="b" :label="b" :value="b" />
           </el-select>
         </el-form-item>
         <el-form-item label="发布标题" prop="title">
-          <el-input v-model="createForm.title" placeholder="如：用户模块 v1.0.0 正式发布" />
+          <el-input v-model="createForm.title" placeholder="如：用户模块 v1.0.0 正式发布" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="版本号" prop="name" class="form-required">
-          <el-input v-model="createForm.name" placeholder="v1.0.0" />
+        <el-form-item label="版本号" prop="name">
+          <el-input v-model="createForm.name" placeholder="v1.0.0" style="width: 100%" />
           <div class="form-tip">建议遵循语义化版本规范：主版本号.次版本号.修订号</div>
         </el-form-item>
-        <el-form-item label="版本说明" prop="message" class="form-required">
-          <el-input v-model="createForm.message" type="textarea" :rows="4" placeholder="描述本次版本的主要变更内容" />
+        <el-form-item label="版本说明" prop="message">
+          <el-input v-model="createForm.message" type="textarea" :rows="4" placeholder="描述本次版本的主要变更内容" style="width: 100%" />
         </el-form-item>
         <el-form-item label="版本类型">
           <el-radio-group v-model="createForm.type">
@@ -113,10 +113,9 @@
             <el-radio label="beta"><el-icon><VideoPlay /></el-icon> 测试版本</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="关联审批">
-          <el-switch v-model="createForm.requireApproval" />
-          <span class="switch-tip">提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）</span>
-        </el-form-item>
+        <div class="form-tip" style="margin-left:120px;margin-bottom:12px;color:#909399;font-size:12px">
+          提交后将进入默认审批流程（项目管理员审批 → 系统管理员审批）
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="createTagDialogVisible = false">取消</el-button>
@@ -140,7 +139,7 @@
           <el-divider v-if="activeVersion.release" content-position="left">Release 信息</el-divider>
           <el-descriptions v-if="activeVersion.release" :column="2" border>
             <el-descriptions-item label="发布名称">{{ activeVersion.release.name || activeVersion.name }}</el-descriptions-item>
-            <el-descriptions-item label="发布者">{{ activeVersion.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ getAuthorName(activeVersion.release.author) }}</el-descriptions-item>
             <el-descriptions-item label="是否预发布">
               <el-tag :type="activeVersion.release.prerelease ? 'warning' : 'success'" size="small">
                 {{ activeVersion.release.prerelease ? '是' : '否' }}
@@ -168,6 +167,7 @@ import { getTags, getBranches, getReleases, getTag } from '@/api/gitea'
 import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
+import { downloadRepoArchive } from '@/utils/download'
 import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -197,8 +197,7 @@ const createForm = reactive({
   title: '',
   name: '',
   message: '',
-  type: 'release',
-  requireApproval: true
+  type: 'release'
 })
 
 const createRules = {
@@ -315,7 +314,6 @@ async function showCreateTag() {
   createForm.name = ''
   createForm.message = ''
   createForm.type = 'release'
-  createForm.requireApproval = true
   createBranchList.value = []
   createTagDialogVisible.value = true
 }
@@ -396,15 +394,32 @@ async function viewVersionDetail(row) {
 }
 function downloadVersion(row) {
   if (row.repoOwner && row.repoName) {
-    const a = document.createElement('a')
-    a.href = `http://123.60.219.19:3000/${row.repoOwner}/${row.repoName}/archive/${row.name}.zip`
-    a.download = `${row.repoName}-${row.name}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadRepoArchive(row.repoOwner, row.repoName, row.name, {
+      filename: `${row.repoName}-${row.name}.zip`
+    })
   } else {
     ElMessage.warning('无法获取仓库信息')
   }
+}
+
+function getAuthorName(author) {
+  if (!author) return '-'
+  
+  if (typeof author === 'string') {
+    try { 
+      const p = JSON.parse(author);
+      // 增加一行判断：确保解析出来的 p 真的是个对象
+      if (typeof p === 'object' && p !== null) {
+        return p.login || p.username || '-';
+      }
+      // 如果解析出来还是个纯字符串（比如 "besti"），直接返回
+      return p;
+    } catch { 
+      return author; 
+    }
+  }
+  
+  return author.login || author.username || '-'
 }
 
 function formatTime(time) {
@@ -435,12 +450,6 @@ function formatTime(time) {
   font-size: 12px;
   color: #909399;
   margin-top: 5px;
-}
-
-.switch-tip {
-  margin-left: 10px;
-  color: #909399;
-  font-size: 12px;
 }
 
 .release-body { max-height:300px; overflow-y:auto; padding:8px; background:#fafafa; border-radius:4px; font-size:13px; line-height:1.6; word-break:break-word; }

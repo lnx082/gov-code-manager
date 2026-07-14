@@ -218,7 +218,7 @@ async function checkNotAdmin(id) {
 }
 
 // 更新用户
-router.put('/:id', authenticate, async (req, res, next) => {
+router.put('/:id', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     await checkNotAdmin(id);
@@ -284,7 +284,7 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, 
       return res.status(404).json({ code: 404, message: '用户不存在' });
     }
 
-    // 更新本地密码（先更新本地，确保用户能用本地兜底登录）
+    // 1. 更新本地密码哈希（先更新本地，确保用户兜底登录立即可用）
     await db('user_profiles')
       .where('user_id', id)
       .update({
@@ -292,29 +292,28 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res, 
         updated_at: new Date(),
       });
 
-    // 后台同步 Gitea 密码（不阻塞响应，自愈机制）
-    let giteaSynced = false;
-    let giteaErrorMsg = '';
+    // 2. 清除目标用户的下载 token 缓存（密码已变）
+    await db('user_profiles')
+      .where('user_id', id)
+      .update({ gitea_download_token: null })
+      .catch(() => {});
 
-    try {
-      giteaSynced = await syncPasswordToGitea(profile.gitea_username, newPassword, profile.role_code);
-      if (giteaSynced) {
-        console.log(`[PasswordReset] Gitea 用户 ${profile.gitea_username} 密码同步成功`);
-      }
-    } catch (syncErr) {
-      giteaErrorMsg = syncErr.message;
-      console.error(`[PasswordReset] Gitea 密码同步异常: ${giteaErrorMsg}`);
+    // 3. 同步 Gitea 密码（管理员操作，通过 admin token 修改目标用户密码）
+    const giteaSynced = await syncPasswordToGitea(profile.gitea_username, newPassword, profile.role_code);
+
+    if (giteaSynced) {
+      console.log(`[PasswordReset] Gitea 用户 ${profile.gitea_username} 密码同步成功`);
+      res.json({
+        code: 200,
+        message: '密码重置成功（Gitea 已同步）',
+      });
+    } else {
+      console.warn(`[PasswordReset] Gitea 用户 ${profile.gitea_username} 密码同步失败，仅更新本地`);
+      res.json({
+        code: 200,
+        message: '密码重置成功（本地已生效，用户可立即用新密码登录，Gitea 将在下次登录时自动同步）',
+      });
     }
-
-    if (!giteaSynced && !giteaErrorMsg) {
-      giteaErrorMsg = 'Gitea 同步未完成（后台自动重试中，下次登录时自愈）';
-    }
-
-    res.json({
-      code: 200,
-      message: '密码重置成功',
-      data: { giteaSynced, giteaError: giteaErrorMsg || undefined }
-    });
   } catch (error) {
     next(error);
   }
@@ -430,31 +429,31 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res, next) => {
 router.post('/change-password', authenticate, async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
-    
+
     if (!oldPassword || !newPassword) {
-      return res.status(400).json({ 
-        code: 400, 
-        message: '原密码和新密码不能为空' 
+      return res.status(400).json({
+        code: 400,
+        message: '原密码和新密码不能为空'
       });
     }
-    
+
     if (newPassword.length < 6) {
-      return res.status(400).json({ 
-        code: 400, 
-        message: '新密码长度不能少于6位' 
+      return res.status(400).json({
+        code: 400,
+        message: '新密码长度不能少于6位'
       });
     }
-    
+
     // 验证旧密码
     const profile = await db('user_profiles')
       .where('user_id', req.user.userId)
       .first();
-    
+
     if (!profile) {
       return res.status(404).json({ code: 404, message: '用户不存在' });
     }
-    
-    // 如果有保存密码，验证旧密码
+
+    // 验证旧密码：优先用本地密码哈希，否则用 Gitea Basic Auth 验证
     if (profile.password_hash) {
       const isValid = await bcrypt.compare(oldPassword, profile.password_hash);
       if (!isValid) {
@@ -463,9 +462,18 @@ router.post('/change-password', authenticate, async (req, res, next) => {
           message: '原密码错误',
         });
       }
+    } else {
+      // 本地没有密码哈希（首次登录未设置密码的用户），通过 Gitea API 验证旧密码
+      const giteaOk = await verifyGiteaPassword(profile.gitea_username, oldPassword);
+      if (!giteaOk) {
+        return res.status(400).json({
+          code: 400,
+          message: '原密码错误',
+        });
+      }
     }
-    
-    // 更新密码
+
+    // 1. 更新本地密码哈希（先更新本地，确保兜底登录立即可用）
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await db('user_profiles')
       .where('user_id', req.user.userId)
@@ -473,15 +481,49 @@ router.post('/change-password', authenticate, async (req, res, next) => {
         password_hash: hashedPassword,
         updated_at: new Date(),
       });
-    
-    res.json({
-      code: 200,
-      message: '密码修改成功',
-    });
+
+    // 2. 清除缓存的下载 token（密码已变）
+    await db('user_profiles')
+      .where('user_id', req.user.userId)
+      .update({ gitea_download_token: null })
+      .catch(() => {});
+
+    // 3. 同步 Gitea 密码（用旧密码做 Basic Auth 自服务认证，无需管理员权限）
+    const giteaSynced = await syncPasswordToGitea(
+      profile.gitea_username, newPassword, profile.role_code, oldPassword
+    );
+
+    if (giteaSynced) {
+      console.log(`[ChangePassword] 用户 ${profile.gitea_username} 密码已同步到 Gitea`);
+      res.json({ code: 200, message: '密码修改成功（Gitea 已同步）' });
+    } else {
+      console.warn(`[ChangePassword] 用户 ${profile.gitea_username} Gitea 同步失败，已更新本地密码（兜底登录可用）`);
+      res.json({
+        code: 200,
+        message: '密码修改成功（本地已生效，Gitea 将在下次登录时自动同步）',
+        data: { giteaSynced: false }
+      });
+    }
   } catch (error) {
     next(error);
   }
 });
+
+/**
+ * 通过 Gitea API 验证用户密码
+ * 用于修改密码时确认旧密码正确（当本地没有 password_hash 时使用）
+ */
+async function verifyGiteaPassword(username, password) {
+  try {
+    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    const res = await fetch(`${config.gitea.url}/api/v1/user`, {
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${credentials}` }
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 // 同步用户对部门仓库的协作者权限
 async function syncDeptCollaborators(username, departmentId, giteaToken, action) {

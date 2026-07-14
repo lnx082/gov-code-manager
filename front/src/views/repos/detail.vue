@@ -74,7 +74,7 @@
               <el-button type="primary" link @click="viewCommitDiff(c)">差异对比</el-button>
             </div>
           </div>
-          <el-pagination v-model:current-page="commitPage" :page-size="20" :total="commitTotal" layout="prev,pager,next" @current-change="loadCommits" />
+          <el-pagination v-model:current-page="commitPage" :page-size="20" :total="commitTotal" layout="prev,pager,next,jumper" @current-change="loadCommits" />
         </div>
       </el-tab-pane>
 
@@ -170,7 +170,7 @@
           <el-divider v-if="tagDetail.release" content-position="left">Release 信息</el-divider>
           <el-descriptions v-if="tagDetail.release" :column="2" border>
             <el-descriptions-item label="发布名称">{{ tagDetail.release.name || tagDetail.name }}</el-descriptions-item>
-            <el-descriptions-item label="发布者">{{ tagDetail.release.author || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="发布者">{{ getAuthorName(tagDetail.release.author) }}</el-descriptions-item>
             <el-descriptions-item label="是否预发布">
               <el-tag :type="tagDetail.release.prerelease ? 'warning' : 'success'" size="small">
                 {{ tagDetail.release.prerelease ? '是' : '否' }}
@@ -214,6 +214,8 @@ import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collectio
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
 import { getLastCommits } from '@/api/bff'
+import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
+import { downloadRepoArchive } from '@/utils/download'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
@@ -253,8 +255,8 @@ const cleanDescription = computed(() => {
     .replace(/\[显示名=[^\]]+\]\s*/, '')
     .replace(/\[(公开|秘密|机密|绝密)\]\s*/, '')
 })
-const httpCloneUrl = computed(() => `http://123.60.219.19:3000/${repoInfo.owner}/${repoInfo.name}.git`)
-const sshCloneUrl = computed(() => `git@123.60.219.19:${repoInfo.owner}/${repoInfo.name}.git`)
+const httpCloneUrl = computed(() => `${GITEA_URL}/${repoInfo.owner}/${repoInfo.name}.git`)
+const sshCloneUrl = computed(() => `git@${GITEA_SSH_HOST}:${repoInfo.owner}/${repoInfo.name}.git`)
 
 onMounted(() => { loadRepoDetail(); loadFiles(); loadBranches(); loadTags(); loadCommits(); loadPulls(); loadMembers() })
 
@@ -481,16 +483,15 @@ async function toggleBranchProtect(branch, enable) {
   } catch { ElMessage.error('操作失败') }
 }
 
-function downloadZip() { window.open(`http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${repoInfo.defaultBranch||'main'}.zip`, '_blank') }
+function downloadZip() {
+  downloadRepoArchive(route.params.owner, route.params.name, repoInfo.defaultBranch || 'main')
+}
 
 function downloadTagZip() {
   if (tagDetail.name) {
-    const a = document.createElement('a')
-    a.href = `http://123.60.219.19:3000/${route.params.owner}/${route.params.name}/archive/${tagDetail.name}.zip`
-    a.download = `${route.params.name}-${tagDetail.name}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadRepoArchive(route.params.owner, route.params.name, tagDetail.name, {
+      filename: `${route.params.name}-${tagDetail.name}.zip`
+    })
   }
 }
 
@@ -523,6 +524,7 @@ async function handleAddMember() {
   finally{addMemberLoading.value=false}
 }
 
+function getAuthorName(author) { if(!author)return'-'; if(typeof author==='string'){ try{ const p=JSON.parse(author); return p.login||p.username||'-' }catch{ return author } } return author.login||author.username||'-' }
 function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-CN') }
 </script>
 

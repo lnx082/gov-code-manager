@@ -7,34 +7,22 @@ import { execSync } from 'child_process';
 import db from '../database/connection.js';
 import config from '../config/index.js';
 import { authenticate } from '../middleware/auth.js';
+import { filterMyPending } from './approvals.js';
 
 const router = Router();
 
 // 获取仪表盘统计
 router.get('/dashboard', authenticate, async (req, res, next) => {
   try {
-    // 按用户角色过滤待审批数
-    const userRole = req.user.roleCode || 'user';
-    const isAdmin = userRole === 'admin';
-    function getRoleForStep(name) {
-      if (!name) return null;
-      if (name.includes('系统管理员')) return 'admin';
-      if (name.includes('项目管理员')) return 'project_manager';
-      return null;
-    }
-    const allPending = await db('approvals').where('status', 'pending');
+    const isAdmin = req.user.roleCode === 'admin';
+
+    // 待审批数 — 复用 approvals.js 的共享过滤函数（批量加载，按审批步骤角色过滤）
     let pendingApprovals = 0;
-    for (const a of allPending) {
-      let steps = [];
-      if (a.approval_flow_id) {
-        const flow = await db('approval_flows').where('flow_id', a.approval_flow_id).first();
-        if (flow) { try { steps = typeof flow.steps === 'string' ? JSON.parse(flow.steps) : (flow.steps||[]); } catch {} }
-      }
-      const stepIdx = (a.current_step||1)-1;
-      const requiredRole = getRoleForStep(steps[stepIdx]||'');
-      if (requiredRole && requiredRole === userRole) pendingApprovals++;
-      else if (!a.approval_flow_id && isAdmin) pendingApprovals++;
-    }
+    try {
+      const allPending = await db('approvals').where('status', 'pending').select('*');
+      const myPending = await filterMyPending(allPending, req.user);
+      pendingApprovals = myPending.length;
+    } catch { /* ignore */ }
 
     const versionCount = await db('approvals').where('operation_type', 'version_release').count('* as count').first();
     const baselineCount = await db('baselines').where('status', 'active').count('* as count').first();
@@ -44,28 +32,68 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
       .count('* as count').first();
 
     // 从 Gitea 获取仓库数和真实版本（tag）数
+    // 管理员：尝试 admin API 获取全部仓库；普通用户：用自己 token 查 /user/repos
     let repoCount = 0;
     let giteaVersionCount = 0;
     const adminToken = config.gitea?.token || '';
-    if (adminToken) {
+    const userToken = req.user?.giteaToken || '';
+
+    // 选择最佳 token 和 API 路径
+    let repos = [];
+    let repoAuthHeader = '';
+
+    if (isAdmin && adminToken) {
+      // 管理员：尝试 admin/repos → repos/search → user/repos
+      const adminAuth = adminToken.startsWith('Basic ') || adminToken.startsWith('Bearer ')
+        ? adminToken : `Bearer ${adminToken}`;
+
       try {
-        const reposRes = await fetch(`${config.gitea.url}/api/v1/user/repos?limit=200`, {
-          headers: { 'Authorization': adminToken }
+        const adminRes = await fetch(`${config.gitea.url}/api/v1/admin/repos?limit=200`, {
+          headers: { 'Authorization': adminAuth }
         });
-        const repos = await reposRes.json();
-        if (Array.isArray(repos)) {
-          repoCount = repos.length;
-          for (const repo of repos) {
-            try {
-              const tagsRes = await fetch(`${config.gitea.url}/api/v1/repos/${repo.owner.login}/${repo.name}/tags?limit=100`, {
-                headers: { 'Authorization': adminToken }
-              });
-              const tags = await tagsRes.json();
-              if (Array.isArray(tags)) giteaVersionCount += tags.length;
-            } catch { /* skip */ }
+        if (adminRes.ok) {
+          repos = await adminRes.json();
+          repoAuthHeader = adminAuth;
+        } else if (adminRes.status === 404) {
+          const searchRes = await fetch(`${config.gitea.url}/api/v1/repos/search?limit=200`, {
+            headers: { 'Authorization': adminAuth }
+          });
+          if (searchRes.ok) {
+            const result = await searchRes.json();
+            repos = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+            repoAuthHeader = adminAuth;
           }
         }
       } catch { /* skip */ }
+    }
+
+    // 降级：使用用户自己的 token
+    if (repos.length === 0 && userToken) {
+      const userAuth = userToken.startsWith('Basic ') ? userToken : `token ${userToken}`;
+      try {
+        const userRes = await fetch(`${config.gitea.url}/api/v1/user/repos?limit=200`, {
+          headers: { 'Authorization': userAuth }
+        });
+        if (userRes.ok) {
+          repos = await userRes.json();
+          repoAuthHeader = userAuth;
+        }
+      } catch { /* skip */ }
+    }
+
+    if (Array.isArray(repos) && repos.length > 0) {
+      repoCount = repos.length;
+      repoAuthHeader = repoAuthHeader || (adminToken.startsWith('Basic ') || adminToken.startsWith('Bearer ')
+        ? adminToken : `Bearer ${adminToken}`);
+      for (const repo of repos) {
+        try {
+          const tagsRes = await fetch(`${config.gitea.url}/api/v1/repos/${repo.owner.login}/${repo.name}/tags?limit=100`, {
+            headers: { 'Authorization': repoAuthHeader }
+          });
+          const tags = await tagsRes.json();
+          if (Array.isArray(tags)) giteaVersionCount += tags.length;
+        } catch { /* skip */ }
+      }
     }
 
     res.json({
@@ -88,21 +116,49 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
 // 获取趋势数据
 router.get('/trends', authenticate, async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
-    
-    // 生成模拟趋势数据
+    const days = parseInt(req.query.days) || 7;
     const data = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      data.unshift({
-        date: date.toISOString().split('T')[0],
-        commits: Math.floor(Math.random() * 50) + 10,
-        versions: Math.floor(Math.random() * 5) + 1,
-        approvals: Math.floor(Math.random() * 10) + 2,
-      });
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const nextDateStr = new Date(d.getTime() + 86400000).toISOString().split('T')[0];
+
+      // 从 audit_logs 统计当日操作数（commits）
+      let commits = 0;
+      try {
+        const commitCount = await db('audit_logs')
+          .where('timestamp', '>=', dateStr)
+          .where('timestamp', '<', nextDateStr)
+          .count('* as count').first();
+        commits = parseInt(commitCount?.count || 0);
+      } catch { /* ignore */ }
+
+      // 从 approvals 统计当日版本发布数
+      let versions = 0;
+      try {
+        const versionCount = await db('approvals')
+          .where('created_at', '>=', dateStr)
+          .where('created_at', '<', nextDateStr)
+          .where('operation_type', 'version_release')
+          .count('* as count').first();
+        versions = parseInt(versionCount?.count || 0);
+      } catch { /* ignore */ }
+
+      // 从 approvals 统计当日审批数
+      let approvals = 0;
+      try {
+        const approvalCount = await db('approvals')
+          .where('created_at', '>=', dateStr)
+          .where('created_at', '<', nextDateStr)
+          .count('* as count').first();
+        approvals = parseInt(approvalCount?.count || 0);
+      } catch { /* ignore */ }
+
+      data.push({ date: dateStr, commits, versions, approvals });
     }
-    
+
     res.json({ code: 200, data });
   } catch (error) {
     next(error);
@@ -158,7 +214,7 @@ router.get('/system', authenticate, async (req, res) => {
     // 远程服务连通性检查
     let giteaOk = false, dbOk = false;
     try {
-      const giteaUrl = config.gitea.url || 'http://123.60.219.19:3000';
+      const giteaUrl = config.gitea.url || 'http://localhost:3000';
       const adminToken = config.gitea.token || '';
       const headers = adminToken ? { 'Authorization': adminToken } : {};
       const gr = await fetch(`${giteaUrl}/api/v1/version`, { headers });
@@ -184,7 +240,7 @@ router.get('/system', authenticate, async (req, res) => {
         memory: { total: totalMem, used: usedMem, free: freeMem, usagePct: Math.round((usedMem / totalMem) * 100) },
         disk: { total: diskTotal, free: diskFree, usagePct: diskTotal > 0 ? Math.round(((diskTotal - diskFree) / diskTotal) * 100) : 0 },
         services: {
-          gitea: { url: config.gitea?.url || 'http://123.60.219.19:3000', online: giteaOk },
+          gitea: { url: config.gitea?.url || 'http://localhost:3000', online: giteaOk },
           database: { host: config.database?.host || '', online: dbOk },
         },
       },

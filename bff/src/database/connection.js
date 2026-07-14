@@ -42,6 +42,7 @@ async function fixDatabaseSchema(database) {
       { name: 'password_hash', def: 'VARCHAR(255)' },
       { name: 'secret_level', def: 'VARCHAR(20) DEFAULT \'internal\'' },
       { name: 'permissions', def: 'TEXT' },
+      { name: 'gitea_download_token', def: 'VARCHAR(255)' },
     ],
     roles: [
       { name: 'sort_order', def: 'INTEGER DEFAULT 0' },
@@ -64,6 +65,43 @@ async function fixDatabaseSchema(database) {
       { name: 'ip_address', def: 'VARCHAR(50)' },
       { name: 'user_agent', def: 'VARCHAR(500)' },
       { name: 'last_active_at', def: 'TIMESTAMP' },
+    ],
+    approvals: [
+      { name: 'approval_flow_id', def: 'INTEGER' },
+      { name: 'urgency', def: 'VARCHAR(20) DEFAULT \'normal\'' },
+      { name: 'secret_level', def: 'VARCHAR(20) DEFAULT \'internal\'' },
+      { name: 'applicant_username', def: 'VARCHAR(100)' },
+      { name: 'completed_at', def: 'TIMESTAMP' },
+      { name: 'reviewers', def: 'TEXT' },
+      { name: 'attachments', def: 'TEXT' },
+      { name: 'compliance_checklist', def: 'TEXT' },
+    ],
+    approval_records: [
+      { name: 'step_name', def: 'VARCHAR(100)' },
+      { name: 'comment', def: 'TEXT' },
+    ],
+    baselines: [
+      { name: 'name', def: 'VARCHAR(100)' },
+      { name: 'version', def: 'VARCHAR(50)' },
+      { name: 'repo_owner', def: 'VARCHAR(100)' },
+      { name: 'repo_name', def: 'VARCHAR(100)' },
+      { name: 'tag_name', def: 'VARCHAR(100)' },
+      { name: 'created_username', def: 'VARCHAR(100)' },
+      { name: 'description', def: 'TEXT' },
+      { name: 'status', def: 'VARCHAR(20) DEFAULT \'active\'' },
+      { name: 'lock_status', def: 'VARCHAR(20) DEFAULT \'locked\'' },
+      { name: 'created_by', def: 'INTEGER' },
+      { name: 'locked_at', def: 'TIMESTAMP' },
+      { name: 'updated_at', def: 'TIMESTAMP' },
+      { name: 'approval_id', def: 'INTEGER' },
+    ],
+    archives: [
+      { name: 'archive_type', def: 'VARCHAR(50) DEFAULT \'archive\'' },
+      { name: 'archive_reason', def: 'TEXT' },
+      { name: 'archive_file_name', def: 'VARCHAR(255)' },
+      { name: 'archive_file_size', def: 'BIGINT' },
+      { name: 'storage_path', def: 'VARCHAR(500)' },
+      { name: 'approval_id', def: 'VARCHAR(100)' },
     ],
   };
 
@@ -676,6 +714,7 @@ function createMockDb() {
     version_rules: [],
     approval_flows: [],
     system_config: [],
+    repo_metadata: [],
   };
 
   // 创建一个可调用的函数对象：mockDb('table') 返回 QueryBuilder
@@ -832,20 +871,56 @@ function createMockDb() {
 
       insert(data) {
         const arr = Array.isArray(data) ? data : [data];
+        // 确保表在 mockTables 中存在（不存在则创建）
+        if (!mockTables[this._tableName]) mockTables[this._tableName] = [];
+        const table = mockTables[this._tableName];
+        let newId = 1;
         for (const item of arr) {
-          const table = mockTables[this._tableName] || [];
-          const newId = table.length > 0 ? Math.max(...table.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
+          const autoId = table.length > 0 ? Math.max(...table.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
           const newRow = { ...item };
           // 设置主键
           const pk = this._tableName === 'user_profiles' ? 'profile_id' :
                      this._tableName === 'roles' ? 'role_id' :
                      this._tableName === 'departments' ? 'dept_id' : 'id';
-          newRow[pk] = newRow[pk] || newId;
+          newRow[pk] = newRow[pk] || autoId;
+          newId = newRow[pk];
           if (!newRow.created_at) newRow.created_at = new Date();
           if (!newRow.updated_at) newRow.updated_at = new Date();
           table.push(newRow);
         }
-        return makeThenable(() => [newId || 1], [1]);
+        // 返回支持 onConflict().merge() 的 thenable（onConflict 为 no-op，merge 执行插入）
+        const self = this;
+        const thenable = makeThenable(() => [newId], [newId]);
+        thenable.onConflict = function() {
+          // mock 模式下 onConflict 为 no-op，merge() 等同 insert
+          const mergeThenable = makeThenable(() => {
+            if (!mockTables[self._tableName]) mockTables[self._tableName] = [];
+            const tbl = mockTables[self._tableName];
+            // merge: 如果主键冲突则更新，否则插入
+            for (const item of arr) {
+              const existingIdx = tbl.findIndex(r => {
+                // 用插入数据中的唯一键匹配（通常用 repo_owner+repo_name）
+                return Object.keys(item).some(k => r[k] === item[k]);
+              });
+              if (existingIdx >= 0) {
+                Object.assign(tbl[existingIdx], item, { updated_at: new Date() });
+              } else {
+                const autoId = tbl.length > 0 ? Math.max(...tbl.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
+                const newRow = { ...item };
+                const pk = self._tableName === 'user_profiles' ? 'profile_id' :
+                           self._tableName === 'roles' ? 'role_id' :
+                           self._tableName === 'departments' ? 'dept_id' : 'id';
+                newRow[pk] = newRow[pk] || autoId;
+                if (!newRow.created_at) newRow.created_at = new Date();
+                if (!newRow.updated_at) newRow.updated_at = new Date();
+                tbl.push(newRow);
+              }
+            }
+            return [newId];
+          }, [newId]);
+          return { merge: () => mergeThenable };
+        };
+        return thenable;
       },
 
       update(data) {
