@@ -90,9 +90,46 @@ router.post('/', authenticate, async (req, res, next) => {
   }
 });
 
-// 恢复归档（已禁用：一旦归档不能恢复）
-router.post('/:id/restore', authenticate, async (req, res) => {
-  return res.status(403).json({ code: 403, message: '归档后不能恢复，如需重新启用请创建新基线' });
+// 恢复归档 — 同时解冻 Gitea 仓库（取消 archived 状态）
+router.post('/:id/restore', authenticate, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const archive = await db('archives').where('archive_id', id).first();
+    if (!archive) {
+      return res.status(404).json({ code: 404, message: '归档记录不存在' });
+    }
+
+    // 解冻 Gitea 仓库（archived: false），使其恢复读写
+    if (archive.repo_owner && archive.repo_name) {
+      try {
+        const { default: config } = await import('../config/index.js');
+        const adminToken = config.gitea?.token || req.user?.giteaToken || '';
+        const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `Bearer ${adminToken}` : '');
+        if (authHeader) {
+          const giteaRes = await fetch(`${config.gitea.url}/api/v1/repos/${archive.repo_owner}/${archive.repo_name}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+            body: JSON.stringify({ archived: false }),
+          });
+          if (giteaRes.ok) {
+            console.log(`[Archive] Gitea 仓库 ${archive.repo_owner}/${archive.repo_name} 已解除归档`);
+          } else {
+            const errBody = await giteaRes.text();
+            console.warn(`[Archive] Gitea 解冻失败: ${giteaRes.status} ${errBody}`);
+          }
+        }
+      } catch (giteaErr) {
+        console.warn('[Archive] Gitea API 调用异常:', giteaErr.message);
+      }
+    }
+
+    // 删除归档记录
+    await db('archives').where('archive_id', id).delete();
+
+    res.json({ code: 200, message: '归档已恢复，仓库已解除只读状态' });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

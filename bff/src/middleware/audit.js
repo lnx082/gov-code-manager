@@ -4,9 +4,12 @@
  * 【功能】拦截所有 API 请求的 res.send，自动记录请求/响应到审计日志表（audit_logs）
  *        每条日志包含 SHA-256 哈希链（prev_hash → integrity_hash）实现防篡改
  *        提供链完整性验证（verifyAuditChain）和统计查询
+ *        记录完成后异步触发风险检测（detectRisks），不阻塞本次请求
  * 【数据】写入：audit_logs（日志内容 + 哈希链）
  *        查询：audit_logs（获取上一条日志的哈希值、统计查询）
+ *        触发：riskDetector.detectRisks（异步风险规则检查）
  * 【来源】openGauss（通过 getDb() 写入/查询 audit_logs 表）
+ *        riskDetector 服务（异步调用，基于审计数据做风险分析）
  */
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';

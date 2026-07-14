@@ -201,4 +201,170 @@ export async function initDatabase() {
   console.log(`   主机: ${config.database.host}`);
   console.log(`   端口: ${config.database.port}`);
   console.log(`   数据库: ${config.database.database}`);
+
+  try {
+    db = knex({
+      client: 'pg',
+      connection: {
+        host: config.database.host,
+        port: config.database.port,
+        database: config.database.database,
+        user: config.database.user,
+        password: config.database.password,
+        ssl: config.database.ssl ? { rejectUnauthorized: false } : false,
+        connectionTimeoutMillis: 10000,
+        idleTimeoutMillis: 30000
+      },
+      pool: { min: 2, max: 10, acquireTimeoutMillis: 30000 }
+    });
+
+    await db.raw('SELECT version()');
+    console.log('✅ 数据库连接成功');
+    dbInitialized = true;
+    return db;
+  } catch (error) {
+    console.error('❌ 数据库连接失败:', error.message);
+    console.log('⚠️  将使用模拟数据模式运行');
+    db = createMockDb();
+    dbInitialized = true;
+    return db;
+  }
+}
+
+/**
+ * 获取数据库实例（供其他模块调用）
+ */
+export function getDb() {
+  if (!db) initDatabase();
+  return db;
+}
+
+/**
+ * 默认导出，兼容 db('table_name') 调用方式
+ */
+export default function getDefaultDb(tableName) {
+  const instance = getDb();
+  return tableName ? instance(tableName) : instance;
+}
+
+/**
+ * 测试数据库连接
+ */
+export async function testConnection() {
+  try {
+    const database = getDb();
+    if (!database) return false;
+    await database.raw('SELECT version()');
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * 关闭数据库连接
+ */
+export async function closeDatabase() {
+  if (db) { await db.destroy(); db = null; dbInitialized = false; }
+}
+
+/**
+ * 创建内存模拟数据库（开发/演示模式）
+ */
+function createMockDb() {
+  const mockTables = { user_profiles: [], roles: [], departments: [], approvals: [], audit_logs: [], baselines: [], archives: [], notifications: [], risk_warnings: [], version_rules: [], approval_flows: [], system_config: [] };
+
+  function makeThenable(fn) {
+    return { then(resolve) { resolve(fn()); }, catch(reject) { this.then(null, reject); } };
+  }
+
+  function getBuilder(tableName) {
+    const data = mockTables[tableName] || [];
+    const ops = {
+      _where: [], _orderBy: null, _orderDir: 'asc', _limit: null, _offset: null,
+      clone() { const b = getBuilder(tableName); b._where = [...this._where]; return b; },
+      where(col, val) { const b = this.clone(); b._where.push({ col, val }); return b; },
+      orderBy(col, dir) { const b = this.clone(); b._orderBy = col; b._orderDir = dir || 'asc'; return b; },
+      limit(v) { const b = this.clone(); b._limit = v; return b; },
+      offset(v) { const b = this.clone(); b._offset = v; return b; },
+      first() { return makeThenable(() => { const r = this.apply(); return r.length > 0 ? r[0] : null; }); },
+      count() { return makeThenable(() => ({ count: String(this.apply().length) })); },
+      insert(arr) { return makeThenable(() => { const items = Array.isArray(arr) ? arr : [arr]; items.forEach(item => mockTables[tableName].push({ ...item, created_at: new Date(), updated_at: new Date() })); return [mockTables[tableName].length]; }); },
+      update(data) { return makeThenable(() => { this.apply().forEach(r => Object.assign(r, data, { updated_at: new Date() })); return 1; }); },
+      delete() { return makeThenable(() => { const items = this.apply(); items.forEach(item => { const idx = mockTables[tableName].indexOf(item); if (idx >= 0) mockTables[tableName].splice(idx, 1); }); return items.length; }); },
+      apply() {
+        let r = [...(mockTables[tableName] || [])];
+        this._where.forEach(w => { r = r.filter(item => item[w.col] == w.val); });
+        return r;
+      },
+      then(resolve) { resolve(this.apply()); },
+      catch(reject) { this.then(null, reject); }
+    };
+    return ops;
+  }
+
+  const fn = (table) => getBuilder(table);
+  fn.table = (table) => getBuilder(table);
+  fn.raw = () => Promise.resolve({ rows: [] });
+  fn.destroy = () => Promise.resolve();
+  return fn;
+}
+
+/**
+ * 执行数据库迁移（创建表和修复结构）
+ * fixDatabaseSchema 已在启动时调用，此函数供外部模块引用
+ */
+export async function runMigrations() {
+  const database = getDb();
+  if (!database) { console.warn('⚠️  数据库未连接，跳过迁移'); return; }
+  console.log('🔄 开始执行数据库迁移...');
+  await fixDatabaseSchema(database);
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS approval_flows (flow_id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, description TEXT, applicable_operations TEXT[], applicable_secret_levels TEXT[], steps TEXT[], is_default BOOLEAN DEFAULT FALSE, is_active BOOLEAN DEFAULT TRUE, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS approvals (approval_id SERIAL PRIMARY KEY, operation_type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, description TEXT, repo_owner VARCHAR(100), repo_name VARCHAR(100), source_branch VARCHAR(100), target_branch VARCHAR(100), gitea_pr_number INTEGER, secret_level VARCHAR(20) DEFAULT 'internal', urgency VARCHAR(20) DEFAULT 'normal', status VARCHAR(20) DEFAULT 'pending', current_step INTEGER DEFAULT 1, approval_flow_id INTEGER, applicant_user_id INTEGER NOT NULL, applicant_username VARCHAR(100) NOT NULL, reviewers TEXT, attachments TEXT, compliance_checklist TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, completed_at TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS approval_records (record_id SERIAL PRIMARY KEY, approval_id INTEGER NOT NULL, step INTEGER NOT NULL, step_name VARCHAR(100), reviewer_user_id INTEGER, action VARCHAR(20) NOT NULL, comment TEXT, action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS baselines (baseline_id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, version VARCHAR(50) NOT NULL, repo_owner VARCHAR(100) NOT NULL, repo_name VARCHAR(100) NOT NULL, tag_name VARCHAR(100) NOT NULL, description TEXT, status VARCHAR(20) DEFAULT 'active', lock_status VARCHAR(20) DEFAULT 'locked', approval_id INTEGER, created_by INTEGER NOT NULL, created_username VARCHAR(100) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, locked_at TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS archives (archive_id SERIAL PRIMARY KEY, repo_owner VARCHAR(100) NOT NULL, repo_name VARCHAR(100) NOT NULL, tag_name VARCHAR(100) NOT NULL, archive_type VARCHAR(50) DEFAULT 'archive', archive_reason TEXT, archive_file_name VARCHAR(255), archive_file_size BIGINT, storage_path VARCHAR(500), status VARCHAR(20) DEFAULT 'archived', archived_by INTEGER, approval_id VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS audit_logs (log_id VARCHAR(100) PRIMARY KEY, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, user_id INTEGER, username VARCHAR(100), nickname VARCHAR(100), department_id INTEGER, department_name VARCHAR(100), role_code VARCHAR(50), action_type VARCHAR(50) NOT NULL, action_name VARCHAR(100), target_type VARCHAR(50), target_id VARCHAR(100), target_name VARCHAR(255), request_method VARCHAR(10), request_path VARCHAR(500), request_body TEXT, request_ip VARCHAR(50), request_user_agent VARCHAR(500), response_status INTEGER, response_time_ms INTEGER, result VARCHAR(20), error_message TEXT, details TEXT, session_id VARCHAR(100), integrity_hash VARCHAR(64), prev_hash VARCHAR(64))`,
+    `CREATE TABLE IF NOT EXISTS roles (role_id SERIAL PRIMARY KEY, role_code VARCHAR(50) UNIQUE NOT NULL, role_name VARCHAR(100) NOT NULL, description TEXT, permissions TEXT, is_system BOOLEAN DEFAULT FALSE, is_active BOOLEAN DEFAULT TRUE, sort_order INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS departments (dept_id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, code VARCHAR(50) UNIQUE NOT NULL, parent_id INTEGER, sort_order INTEGER DEFAULT 0, leader VARCHAR(100), description TEXT, is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS user_profiles (profile_id SERIAL PRIMARY KEY, user_id INTEGER UNIQUE NOT NULL, gitea_username VARCHAR(100) NOT NULL, nickname VARCHAR(100), password_hash VARCHAR(255), department_id INTEGER, role_code VARCHAR(50) DEFAULT 'user', secret_level VARCHAR(20) DEFAULT 'internal', permissions TEXT, is_active BOOLEAN DEFAULT TRUE, account_locked BOOLEAN DEFAULT FALSE, last_login_ip VARCHAR(50), last_login_time TIMESTAMP, failed_login_attempts INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS sessions (session_id VARCHAR(100) PRIMARY KEY, user_id INTEGER NOT NULL, username VARCHAR(100) NOT NULL, ip_address VARCHAR(50), user_agent VARCHAR(500), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TIMESTAMP NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS notifications (notification_id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, content TEXT, related_type VARCHAR(50), related_id VARCHAR(100), is_read BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS risk_warnings (warning_id SERIAL PRIMARY KEY, level VARCHAR(20) NOT NULL, type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, description TEXT, related_user_id INTEGER, related_username VARCHAR(100), source_ip VARCHAR(50), triggered_rule VARCHAR(100), triggered_value TEXT, rule_threshold TEXT, status VARCHAR(20) DEFAULT 'unhandled', handler_user_id INTEGER, handler_comment TEXT, handled_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS system_config (config_key VARCHAR(100) PRIMARY KEY, config_value TEXT, config_type VARCHAR(20) DEFAULT 'string', description TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS version_rules (id SERIAL PRIMARY KEY, default_pattern VARCHAR(100) DEFAULT 'MAJOR.MINOR.PATCH', patterns TEXT, auto_increment_rules TEXT, prohibit_patterns TEXT, enforce_on_tag_creation BOOLEAN DEFAULT TRUE, is_active BOOLEAN DEFAULT TRUE, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+  ];
+  for (const sql of tables) { try { await database.raw(sql); } catch (err) { if (!err.message.includes('already exists')) console.warn('   警告:', err.message); } }
+  console.log('✅ 数据库迁移完成');
+}
+
+/**
+ * 插入默认种子数据
+ */
+export async function seedDefaultData() {
+  const database = getDb();
+  if (!database) return;
+  console.log('📝 插入默认数据...');
+  try {
+    const roleCount = await database('roles').count('* as count').first();
+    if (parseInt(roleCount.count) === 0) {
+      await database('roles').insert([
+        { role_code: 'admin', role_name: '系统管理员', code: 'admin', name: '系统管理员', description: '系统管理员，拥有所有权限', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', code: 'project_manager', name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', code: 'developer', name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', code: 'auditor', name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
+      ]);
+      console.log('   ✅ 默认角色已插入');
+    }
+    const deptCount = await database('departments').count('* as count').first();
+    if (parseInt(deptCount.count) === 0) {
+      await database('departments').insert([{ name: '技术部', code: 'TECH', sort_order: 1 }, { name: '运维部', code: 'OPS', sort_order: 2 }, { name: '安全部', code: 'SEC', sort_order: 3 }, { name: '综合部', code: 'ADMIN', sort_order: 4 }]);
+      console.log('   ✅ 默认部门已插入');
+    }
+    const flowCount = await database('approval_flows').count('* as count').first();
+    if (parseInt(flowCount.count) === 0) {
+      await database('approval_flows').insert([{ name: '标准审批流程', description: '适用于普通操作的二级审批流程', applicable_operations: ['merge', 'version_create', 'baseline_create'], applicable_secret_levels: ['public', 'internal'], steps: ['技术负责人审核', '项目经理审批'], is_default: true, is_active: true }, { name: '涉密版本审批流程', description: '适用于涉密操作的四级审批流程', applicable_operations: ['merge', 'version_create', 'baseline_create', 'delete'], applicable_secret_levels: ['secret', 'top-secret'], steps: ['开发人员提交', '技术负责人审核', '安全管理员审核', '主管领导审批'], is_default: false, is_active: true }]);
+      console.log('   ✅ 默认审批流程已插入');
+    }
+    console.log('📝 默认数据插入完成');
+  } catch (error) { console.error('❌ 插入默认数据失败:', error.message); }
 }

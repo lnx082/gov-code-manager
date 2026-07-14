@@ -1,9 +1,11 @@
 /**
  * 用户登录/登出认证（Gitea 认证 + JWT 签发 + 本地用户同步）
  *
- * 【功能】用户登录（双通道认证：Gitea Basic Auth + bcrypt 本地兜底）、登出、获取当前用户信息
+ * 【功能】用户登录（双通道认证：Gitea Basic Auth + bcrypt 本地兜底）、
+ *        登出、获取当前用户信息、管理员首次登录自动缓存 Gitea Token
  * 【数据】查询：user_profiles（用户信息/角色/密级）、sessions（会话）、departments（部门名称）
  *        写入：user_profiles（更新登录时间）、sessions（创建/删除会话）
+ *        缓存：credentialStore（服务端凭据存储）、adminTokenCache（管理员 Token）
  * 【来源】openGauss（通过 db()）、Gitea API（通过 fetch() 验证密码、获取用户信息）
  */
 import { Router } from 'express';
