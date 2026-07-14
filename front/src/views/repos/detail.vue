@@ -74,7 +74,7 @@
               <el-button type="primary" link @click="viewCommitDiff(c)">差异对比</el-button>
             </div>
           </div>
-          <el-pagination v-model:current-page="commitPage" :page-size="20" :total="commitTotal" layout="prev,pager,next" @current-change="loadCommits" />
+          <el-pagination v-model:current-page="commitPage" :page-size="20" :total="commitTotal" layout="prev,pager,next,jumper" @current-change="loadCommits" />
         </div>
       </el-tab-pane>
 

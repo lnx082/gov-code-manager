@@ -35,7 +35,7 @@
     </el-table>
 
     <div class="pagination-wrapper">
-      <el-pagination v-model:current-page="pagination.page" :total="pagination.total" layout="total, prev, pager, next" @current-change="loadArchives" />
+      <el-pagination v-model:current-page="pagination.page" :total="pagination.total" layout="total, prev, pager, next, jumper" @current-change="loadArchives" />
     </div>
 
     <el-dialog v-model="createDialogVisible" title="添加归档" width="600px">

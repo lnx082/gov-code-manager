@@ -88,6 +88,17 @@
       </template>
     </div>
 
+    <!-- 趋势图（系统管理员可见） -->
+    <el-card v-if="isAdmin" class="trends-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span><el-icon><DataAnalysis /></el-icon> 近 7 日趋势 </span>
+          <span style="font-size:12px;color:#909399">操作量 · 版本发布 · 审批数</span>
+        </div>
+      </template>
+      <div ref="trendChartRef" class="trend-chart"></div>
+    </el-card>
+
     <!-- 主内容 -->
     <div class="main-content">
       <!-- 左侧 -->
@@ -244,15 +255,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, DocumentChecked, Folder, Collection, User, Clock, Share, Document, Notebook, Lightning, Monitor, Search, Bell, WarningFilled, DataAnalysis } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDashboardStats } from '@/api/admin'
 import { getApprovalList } from '@/api/approval'
-import { getSessions, publishNotification } from '@/api/bff'
+import { getSessions, publishNotification, getTrends } from '@/api/bff'
 import request from '@/api'
 import { Solar } from 'lunar-javascript'
+import * as echarts from 'echarts'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.hasPermission('admin:manage') || userStore.role === 'admin')
@@ -318,6 +330,98 @@ const pendingApprovals = computed(() => stats.pendingApprovals)
 const recentActivities = ref([])
 const sysInfo = ref(null)
 
+// 趋势折线图
+const trendChartRef = ref(null)
+let trendChartInstance = null
+
+async function initTrendChart() {
+  if (!isAdmin.value) return
+  await nextTick()
+  if (!trendChartRef.value) return
+
+  try {
+    const res = await getTrends({ days: 7 })
+    const data = res.data || res
+    const trendData = Array.isArray(data) ? data : []
+
+    if (!trendChartInstance) {
+      trendChartInstance = echarts.init(trendChartRef.value)
+    }
+
+    const dates = trendData.map(d => d.date?.slice(5) || '') // MM-DD
+    const commits = trendData.map(d => d.commits || 0)
+    const versions = trendData.map(d => d.versions || 0)
+    const approvals = trendData.map(d => d.approvals || 0)
+
+    trendChartInstance.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: {
+        data: ['操作量', '版本发布', '审批数'],
+        bottom: 0,
+      },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: '8%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: dates,
+        axisLine: { lineStyle: { color: '#dcdfe6' } },
+        axisLabel: { color: '#909399' },
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        splitLine: { lineStyle: { color: '#ebeef5', type: 'dashed' } },
+        axisLabel: { color: '#909399' },
+      },
+      series: [
+        {
+          name: '操作量',
+          type: 'line',
+          smooth: true,
+          data: commits,
+          itemStyle: { color: '#409eff' },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(64,158,255,0.25)' },
+            { offset: 1, color: 'rgba(64,158,255,0.02)' },
+          ])},
+          lineStyle: { width: 2 },
+        },
+        {
+          name: '版本发布',
+          type: 'line',
+          smooth: true,
+          data: versions,
+          itemStyle: { color: '#67c23a' },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(103,194,58,0.25)' },
+            { offset: 1, color: 'rgba(103,194,58,0.02)' },
+          ])},
+          lineStyle: { width: 2 },
+        },
+        {
+          name: '审批数',
+          type: 'line',
+          smooth: true,
+          data: approvals,
+          itemStyle: { color: '#e6a23c' },
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(230,162,60,0.25)' },
+            { offset: 1, color: 'rgba(230,162,60,0.02)' },
+          ])},
+          lineStyle: { width: 2 },
+        },
+      ],
+    })
+  } catch {
+    // trends fetch failed, chart remains empty
+  }
+}
+
+// 窗口大小变化时自适应
+function handleResize() {
+  trendChartInstance?.resize?.()
+}
+
 // 发布通知
 const showPublishDialog = ref(false)
 const publishing = ref(false)
@@ -350,6 +454,14 @@ onMounted(() => {
   loadDashboardData()
   loadRecentActivities()
   loadSystemInfo()
+  initTrendChart()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  trendChartInstance?.dispose()
+  trendChartInstance = null
 })
 
 async function loadDashboardData() {
@@ -543,6 +655,17 @@ function formatUptime(seconds) {
         box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
       }
     }
+  }
+}
+
+/* 趋势图 */
+.trends-card {
+  margin-bottom: 20px;
+  border-radius: 12px;
+
+  .trend-chart {
+    width: 100%;
+    height: 340px;
   }
 }
 

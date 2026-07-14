@@ -116,21 +116,49 @@ router.get('/dashboard', authenticate, async (req, res, next) => {
 // 获取趋势数据
 router.get('/trends', authenticate, async (req, res, next) => {
   try {
-    const { startDate, endDate } = req.query;
-    
-    // 生成模拟趋势数据
+    const days = parseInt(req.query.days) || 7;
     const data = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      data.unshift({
-        date: date.toISOString().split('T')[0],
-        commits: Math.floor(Math.random() * 50) + 10,
-        versions: Math.floor(Math.random() * 5) + 1,
-        approvals: Math.floor(Math.random() * 10) + 2,
-      });
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const nextDateStr = new Date(d.getTime() + 86400000).toISOString().split('T')[0];
+
+      // 从 audit_logs 统计当日操作数（commits）
+      let commits = 0;
+      try {
+        const commitCount = await db('audit_logs')
+          .where('timestamp', '>=', dateStr)
+          .where('timestamp', '<', nextDateStr)
+          .count('* as count').first();
+        commits = parseInt(commitCount?.count || 0);
+      } catch { /* ignore */ }
+
+      // 从 approvals 统计当日版本发布数
+      let versions = 0;
+      try {
+        const versionCount = await db('approvals')
+          .where('created_at', '>=', dateStr)
+          .where('created_at', '<', nextDateStr)
+          .where('operation_type', 'version_release')
+          .count('* as count').first();
+        versions = parseInt(versionCount?.count || 0);
+      } catch { /* ignore */ }
+
+      // 从 approvals 统计当日审批数
+      let approvals = 0;
+      try {
+        const approvalCount = await db('approvals')
+          .where('created_at', '>=', dateStr)
+          .where('created_at', '<', nextDateStr)
+          .count('* as count').first();
+        approvals = parseInt(approvalCount?.count || 0);
+      } catch { /* ignore */ }
+
+      data.push({ date: dateStr, commits, versions, approvals });
     }
-    
+
     res.json({ code: 200, data });
   } catch (error) {
     next(error);

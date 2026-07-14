@@ -118,8 +118,27 @@ router.get('/stats/operations', authenticate, requirePermission('audit:view'), a
 
     // 总操作数
     const totalOp = await query.clone().count('* as count').first();
-    // 活跃用户数
-    const activeUsers = await query.clone().select('username').count('* as count').whereNotNull('username').groupBy('username');
+    // 活跃用户（按用户名分组，含操作次数，取前100名，用于弹窗详情）
+    const activeUserRows = await query.clone()
+      .select('username')
+      .count('* as count')
+      .whereNotNull('username')
+      .groupBy('username')
+      .orderBy('count', 'desc')
+      .limit(100);
+    // 补充 IP：取每个用户最新一条日志的 IP
+    const userIPMap = {};
+    try {
+      const ipRows = await query.clone()
+        .select('username', 'request_ip')
+        .whereNotNull('username')
+        .whereNotNull('request_ip')
+        .orderBy('timestamp', 'desc')
+        .limit(500);
+      for (const r of (ipRows || [])) {
+        if (!userIPMap[r.username]) userIPMap[r.username] = r.request_ip;
+      }
+    } catch { /* IP 查询失败不影响主流程 */ }
     // 仓库操作数（含 repos 路径的请求）
     const repoOps = await query.clone().where('request_path', 'like', '%/repos/%').count('* as count').first();
     // 风险预警数
@@ -133,14 +152,20 @@ router.get('/stats/operations', authenticate, requirePermission('audit:view'), a
       code: 200,
       data: {
         totalOperations: parseInt(totalOp?.count || 0),
-        totalUsers: activeUsers?.length || 0,
+        totalUsers: activeUserRows?.length || 0,
         totalRepos: parseInt(repoOps?.count || 0),
         riskCount,
         // 兼容旧字段名
         total: parseInt(totalOp?.count || 0),
-        users: activeUsers?.length || 0,
+        users: activeUserRows?.length || 0,
         repos: parseInt(repoOps?.count || 0),
         risks: riskCount,
+        // 活跃用户详情（供弹窗展示，避免前端二次查询）
+        activeUsers: (activeUserRows || []).map(r => ({
+          username: r.username,
+          count: parseInt(r.count),
+          ip: userIPMap[r.username] || '-',
+        })),
       },
     });
   } catch (error) {

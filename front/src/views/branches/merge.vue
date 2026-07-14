@@ -86,7 +86,7 @@
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.pageSize"
         :total="pagination.total"
-        layout="total, prev, pager, next"
+        layout="total, prev, pager, next, jumper"
         @current-change="loadData"
       />
     </div>
