@@ -1,9 +1,5 @@
 /**
  * 版本编号规则管理
- *
- * 【功能】版本编号规则 CRUD、校验版本号格式、自动生成下一个版本号
- * 【数据】查询/写入：version_rules（编号规则配置）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

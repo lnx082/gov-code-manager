@@ -1,9 +1,5 @@
 /**
  * 数据库备份管理（创建/恢复/删除）
- *
- * 【功能】备份列表查询、创建新备份、恢复备份、删除备份
- * 【数据】查询/写入：backups（备份记录）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

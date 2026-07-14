@@ -1,9 +1,5 @@
 /**
  * 版本废弃管理
- *
- * 【功能】版本废弃申请 CRUD、查询废弃详情
- * 【数据】查询/写入：deprecations（版本废弃记录）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

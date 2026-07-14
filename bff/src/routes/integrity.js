@@ -1,9 +1,5 @@
 /**
  * 完整性校验
- *
- * 【功能】触发审计日志链完整性校验、查询校验结果
- * 【数据】查询：audit_logs（逐条验证哈希链 prev_hash）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

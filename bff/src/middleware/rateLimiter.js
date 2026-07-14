@@ -1,9 +1,5 @@
 /**
  * 速率限制中间件（登录限流/API 限流）
- *
- * 【功能】登录接口限流（5次/分钟）、通用 API 限流（100次/分钟）
- * 【数据】不操作数据库，基于内存计数
- * 【来源】express-rate-limit 内存存储
  */
 import rateLimit from 'express-rate-limit';
 

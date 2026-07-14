@@ -1,11 +1,5 @@
 /**
  * 基线管理 CRUD（锁定/解锁/冻结）
- *
- * 【功能】基线列表/详情/创建、锁定/解锁基线、冻结基线（同时归档 Gitea 仓库）
- *        创建基线时通过审批后置操作自动执行
- * 【数据】查询/写入：baselines（基线信息）
- * 【来源】openGauss（通过 db() 操作 baselines 表）
- *        Gitea API（通过 fetch() 获取仓库 Tag、归档/冻结仓库）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

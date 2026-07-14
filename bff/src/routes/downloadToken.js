@@ -1,11 +1,8 @@
 /**
  * 下载 Token 路由 — 为当前用户创建/返回 Gitea 访问令牌用于下载 ZIP
+ * GET /api/bff/user/download-token
  *
- * 【功能】为当前用户创建/查询 Gitea 访问令牌（用于仓库 ZIP 下载免登录）
- *        优先使用用户自己的 Basic Auth 调用 Gitea API（无需管理员权限）
- * 【数据】不操作本地数据库
- * 【来源】Gitea API（通过 fetch() 创建/查询 Token）
- */
+ * 策略：优先使用用户自己的 Basic Auth 调用 Gitea 用户 API 为自己创建 token（无需管理员权限）。
  *       如果用户 token 不可用，则降级使用管理员 token 调用 Admin API。
  *       若均失败，返回详细的失败原因便于排查。
  */

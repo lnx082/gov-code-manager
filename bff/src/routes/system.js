@@ -1,9 +1,5 @@
 /**
  * 系统配置管理
- *
- * 【功能】读取/更新系统配置项
- * 【数据】查询/写入：system_config（键值对配置）
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import db from '../database/connection.js';

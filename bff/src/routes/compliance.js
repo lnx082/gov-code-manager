@@ -1,9 +1,5 @@
 /**
  * 合规检查
- *
- * 【功能】执行合规检查（如检查版本号规范、审批流程完整性等）
- * 【数据】查询：approvals / versions / version_rules 等业务表
- * 【来源】openGauss（通过 db()）
  */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';

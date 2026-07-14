@@ -1,10 +1,5 @@
 /**
  * Gitea API 透传代理（提交差异/PR审批）
- *
- * 【功能】透传代理 Gitea API 请求（提交差异对比、文件变更查询等）
- *        所有请求直接转发到 Gitea 服务器，不操作本地数据库
- * 【数据】无（不操作本地数据库）
- * 【来源】Gitea API（通过 fetch() 透传所有请求）
  */
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';

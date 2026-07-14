@@ -1,9 +1,5 @@
 /**
- * 审批流程模板管理
- *
- * 【功能】审批流程模板 CRUD、获取建议流程列表
- * 【数据】查询/写入：approval_flows（流程模板）
- * 【来源】openGauss（通过 db()）
+ * 审批流程模板管理 - openGauss 版本
  */
 import { Router } from 'express';
 import { getDb } from '../database/connection.js';

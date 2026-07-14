@@ -6,8 +6,6 @@
  * 【来源】通过 giteaService（Axios 实例）→ BFF 代理 → Gitea 云服务器
  */
 import { giteaService } from './index'
- * 用于 Git 原生操作（仓库、分支、Tag、PR、提交、文件）
- */
 
 // ============ 用户认证 ============
 
