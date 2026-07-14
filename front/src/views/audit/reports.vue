@@ -172,6 +172,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAuditReports, generateReport } from '@/api/audit'
 import { getAuditStats } from '@/api/bff'
+import { API_BASE_URL } from '@/config'
 
 const stats = reactive({
   totalOperations: 0,
@@ -341,7 +342,7 @@ async function downloadReport(row) {
     return
   }
   // 后端根据报表存储的 format 字段返回对应格式文件（CSV/TXT）
-  const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff'
+  const baseURL = API_BASE_URL
   const url = `${baseURL}/reports/${row.id}/export?token=${encodeURIComponent(token)}`
   window.open(url, '_blank')
 }

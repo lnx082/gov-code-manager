@@ -226,6 +226,7 @@ import { ElMessage } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, getPullRequestReviews, submitPullRequestReview } from '@/api/gitea'
 import { getApprovalFlows, createApproval, processApproval, withdrawApproval } from '@/api/bff'
+import { API_BASE_URL } from '@/config'
 import { getMergeApprovals } from '@/api/approval'
 import { getUserList } from '@/api/user'
 import { useUserStore } from '@/stores/user'
@@ -325,7 +326,7 @@ async function loadRepos() {
     // 获取用户可见的仓库元数据（部门+密级过滤）
     let visibleRepos = null
     try {
-      const metaRes = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/bff'}/repo-meta/visible`, {
+      const metaRes = await fetch(`${API_BASE_URL}/repo-meta/visible`, {
         headers: { 'Authorization': `Bearer ${sessionStorage.getItem('gitea_token')}` }
       })
       const meta = await metaRes.json()
