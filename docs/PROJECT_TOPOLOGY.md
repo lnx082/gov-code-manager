@@ -208,10 +208,17 @@ bff/
     │   └── gitea.js           [API] # Gitea 透传代理
     │
     ├── services/
-    │   └── adminTokenCache.js       # Token 缓存（纯内存）
+    │   ├── adminTokenCache.js      # 管理员 Gitea Token 缓存（纯内存）
+    │   ├── credentialStore.js      # [C-03] 服务端凭据存储（JWT 不再携带凭据）
+    │   └── riskDetector.js         # 风险检测引擎：4 条规则（登录异常/高频下载/越权/泄露）
     │
-    └── stores/
-        └── user.js                  # 内部用户存储（纯内存）
+    ├── stores/
+    │   └── user.js                  # 内部用户存储（纯内存）
+    │
+    ├── init-data.sql                # SQL 初始化数据
+    ├── init-tables.sql              # SQL 建表脚本
+    ├── init-database.bat            # Windows 数据库初始化脚本
+    └── init-database.sh             # Linux 数据库初始化脚本
 ```
 
 ---
