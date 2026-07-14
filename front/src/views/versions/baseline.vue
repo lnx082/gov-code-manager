@@ -34,8 +34,8 @@
       <el-table-column prop="description" label="基线说明" min-width="200" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-            {{ row.status === 'active' ? '激活' : '归档' }}
+          <el-tag :type="row.status === 'active' ? 'success' : row.status === 'frozen' ? 'warning' : 'info'" size="small">
+            {{ row.status === 'active' ? '激活' : row.status === 'frozen' ? '已冻结' : row.status === 'archived' ? '已归档' : row.status }}
           </el-tag>
         </template>
       </el-table-column>
@@ -45,11 +45,12 @@
           {{ formatTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
           <el-button type="primary" link @click="handleChange(row)" v-if="row.status === 'active'">变更</el-button>
           <el-button type="danger" link @click="handleFreeze(row)" v-if="row.status === 'active'">冻结</el-button>
+          <el-button type="warning" link @click="handleUnfreeze(row)" v-if="row.status === 'frozen' && isAdmin">解冻</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -68,12 +69,20 @@
           <el-input v-model="versionSearch" placeholder="输入版本号搜索" clearable />
         </el-form-item>
         <el-form-item label="选择版本" prop="versionKey" class="form-required">
-          <el-select v-model="createForm.versionKey" placeholder="选择版本" style="width: 100%" filterable>
+          <el-select v-model="createForm.versionKey" placeholder="选择版本" style="width: 100%" filterable @change="onVersionSelect">
             <el-option v-for="v in filteredVersionOptions" :key="v.key" :label="v.label" :value="v.key">
               <span>{{ v.name }}</span>
               <span style="float: right; color: #909399; font-size: 12px; margin-left: 8px">{{ v.displayName }}</span>
             </el-option>
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="selectedVersionConflict" label=" ">
+          <el-alert type="warning" :closable="false" show-icon>
+            <template #title>
+              {{ selectedVersionConflict }}
+              <el-button type="warning" link size="small" style="margin-left:8px" @click="goToChangeBaseline">去变更基线 →</el-button>
+            </template>
+          </el-alert>
         </el-form-item>
         <el-form-item label="基线说明" prop="description" class="form-required">
           <el-input v-model="createForm.description" type="textarea" :rows="4" placeholder="说明基线的用途和适用范围" />
@@ -95,8 +104,8 @@
           <el-descriptions-item label="对应版本">{{ currentBaseline.version }}</el-descriptions-item>
           <el-descriptions-item label="所属仓库">{{ currentBaseline.repoName }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="currentBaseline.status === 'active' ? 'success' : 'info'" size="small">
-              {{ currentBaseline.status === 'active' ? '激活' : '归档' }}
+            <el-tag :type="currentBaseline.status === 'active' ? 'success' : currentBaseline.status === 'frozen' ? 'warning' : 'info'" size="small">
+              {{ currentBaseline.status === 'active' ? '激活' : currentBaseline.status === 'frozen' ? '已冻结' : currentBaseline.status === 'archived' ? '已归档' : currentBaseline.status }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建者">{{ currentBaseline.creator }}</el-descriptions-item>
@@ -137,10 +146,16 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBaselineList, createBaseline, freezeBaseline } from '@/api/admin'
+import { getBaselineList, createBaseline, freezeBaseline, unfreezeBaseline } from '@/api/admin'
 import { getTags, getMyRepos } from '@/api/gitea'
 import { createApproval } from '@/api/bff'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.role === 'admin')
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
@@ -185,6 +200,59 @@ const filteredVersionOptions = computed(() => {
   }
   return list
 })
+
+// 检测所选版本的仓库是否已有基线
+const selectedVersionConflict = computed(() => {
+  if (!createForm.versionKey) return ''
+  const version = versionOptions.value.find(v => v.key === createForm.versionKey)
+  if (!version) return ''
+  const owner = version.repoOwner, repo = version.repoName
+  const existing = baselineList.value.find(b => {
+    const bo = b.repo_owner || b.repoOwner
+    const bn = b.repo_name || b.repoName
+    return bo === owner && bn === repo && (b.status === 'active' || b.status === 'archived' || b.status === 'frozen')
+  })
+  if (!existing) return ''
+  if (existing.status === 'archived') return `该仓库已有归档基线「${existing.name || existing.baseline_name}」，仓库已归档无法创建新基线`
+  if (existing.status === 'frozen') return `该仓库已有冻结基线「${existing.name || existing.baseline_name}」，仓库已冻结无法创建新基线`
+  return `该仓库已有基线「${existing.name || existing.baseline_name}」，同一仓库只能创建一个基线，请使用基线变更功能`
+})
+
+function onVersionSelect() {
+  // 选中版本后的处理（由 computed 自动驱动提示）
+}
+
+function goToChangeBaseline() {
+  createDialogVisible.value = false
+  // 找到冲突的基线并打开变更对话框
+  const version = versionOptions.value.find(v => v.key === createForm.versionKey)
+  if (!version) return
+  const owner = version.repoOwner, repo = version.repoName
+  const existing = baselineList.value.find(b => {
+    const bo = b.repo_owner || b.repoOwner
+    const bn = b.repo_name || b.repoName
+    return bo === owner && bn === repo && b.status === 'active'
+  })
+  if (!existing) {
+    // 基线可能已冻结或已归档，无法变更
+    ElMessage.warning('该仓库的基线已冻结或已归档，无法变更')
+    return
+  }
+  if (existing) {
+    // 直接打开基线变更对话框
+    changeForm.baselineId = existing.baseline_id
+    changeForm.repoOwner = existing.repo_owner || existing.repoOwner
+    changeForm.repoName = existing.repo_name || existing.repoName
+    changeForm.newTagName = ''
+    changeCurrentTag.value = existing.tag_name || existing.version || ''
+    changeTagOptions.value = []
+    changeDialogVisible.value = true
+    getTags(changeForm.repoOwner, changeForm.repoName).then(res => {
+      const tags = res.data || res
+      changeTagOptions.value = (Array.isArray(tags) ? tags : []).map(t => t.name)
+    }).catch(() => { changeTagOptions.value = [] })
+  }
+}
 
 onMounted(() => {
   loadBaselines()
@@ -360,6 +428,20 @@ async function handleFreeze(row) {
     ElMessage.success('冻结申请已提交，等待审批')
   } catch (e) {
     if (e !== 'cancel') ElMessage.warning('冻结失败: ' + (e?.message || ''))
+  }
+}
+
+async function handleUnfreeze(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要解冻基线 "${row.name}" 吗？解冻后仓库将恢复读写，基线恢复为激活状态。`,
+      '解冻基线', { type: 'warning' }
+    )
+    await unfreezeBaseline(row.baseline_id)
+    ElMessage.success('基线已解冻，仓库已恢复读写')
+    loadBaselines()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.warning('解冻失败: ' + (e?.response?.data?.message || e?.message || ''))
   }
 }
 

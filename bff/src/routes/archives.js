@@ -85,19 +85,9 @@ router.post('/', authenticate, async (req, res, next) => {
   }
 });
 
-// 恢复归档
-router.post('/:id/restore', authenticate, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    await db('archives')
-      .where('archive_id', id)
-      .update({ status: 'active' });
-    
-    res.json({ code: 200, message: '恢复成功' });
-  } catch (error) {
-    next(error);
-  }
+// 恢复归档（已禁用：一旦归档不能恢复）
+router.post('/:id/restore', authenticate, async (req, res) => {
+  return res.status(403).json({ code: 403, message: '归档后不能恢复，如需重新启用请创建新基线' });
 });
 
 export default router;

@@ -3,7 +3,7 @@
  */
 import { Router } from 'express';
 import db from '../database/connection.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 import config from '../config/index.js';
 import { getRepoVisibilityFilter } from './repoMeta.js';
 
@@ -145,12 +145,24 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { name, versionName, repoOwner, repoName, sha, description } = req.body;
 
-    // 同一仓库只能有一个活跃基线
+    // 检查仓库是否已归档
+    const activeArchive = await db('archives')
+      .where('repo_owner', repoOwner)
+      .where('repo_name', repoName)
+      .where('status', 'active')
+      .first();
+    if (activeArchive) {
+      return res.status(400).json({ code: 400, message: '该仓库已归档，无法创建基线，请先恢复归档' });
+    }
+
+    // 同一仓库只能有一个基线（检查 active / archived / frozen 三种存在状态）
     const existingBaseline = await db('baselines')
       .where('repo_owner', repoOwner).where('repo_name', repoName)
-      .where('status', 'active').first();
+      .whereIn('status', ['active', 'archived', 'frozen']).first();
     if (existingBaseline) {
-      return res.status(400).json({ code: 400, message: '该仓库已存在活跃基线，只能变更基线不能重复创建' });
+      const statusMap = { archived: '已归档', frozen: '已冻结' };
+      const statusText = statusMap[existingBaseline.status] || '已存在';
+      return res.status(400).json({ code: 400, message: `该仓库${statusText}基线，只能变更基线不能重复创建` });
     }
 
     // 同一仓库不能有多个待审批的基线创建申请
@@ -200,12 +212,12 @@ async function executeBaselineCreate(approval) {
     if (m) bodyData = JSON.parse(m[1]);
   } catch { return; }
 
-  // 双重保险：同一仓库只能有一个活跃基线
+  // 双重保险：同一仓库只能有一个基线（含archived和frozen状态）
   const existing = await db('baselines')
     .where('repo_owner', bodyData.repoOwner).where('repo_name', bodyData.repoName)
-    .where('status', 'active').first();
+    .whereIn('status', ['active', 'archived', 'frozen']).first();
   if (existing) {
-    console.warn(`[Baseline] 仓库 ${bodyData.repoOwner}/${bodyData.repoName} 已有活跃基线，跳过创建`);
+    console.warn(`[Baseline] 仓库 ${bodyData.repoOwner}/${bodyData.repoName} 已有基线(status=${existing.status})，跳过创建`);
     return;
   }
 
@@ -251,23 +263,90 @@ router.post('/:id/lock', authenticate, async (req, res, next) => {
   }
 });
 
-// 冻结基线
-router.post('/:id/freeze', authenticate, async (req, res, next) => {
+// 冻结基线（管理员专用，直接冻结不走审批）
+router.post('/:id/freeze', authenticate, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
+    const baseline = await db('baselines').where('baseline_id', id).first();
+    if (!baseline) {
+      return res.status(404).json({ code: 404, message: '基线不存在' });
+    }
+    if (baseline.status !== 'active') {
+      return res.status(400).json({ code: 400, message: '只能冻结激活状态的基线' });
+    }
+
     await db('baselines')
       .where('baseline_id', id)
       .update({
         status: 'frozen',
         is_locked: true,
         locked_at: new Date(),
+        locked_by: req.user.userId,
       });
-    
-    res.json({
-      code: 200,
-      message: '基线已冻结',
-    });
+
+    // 同步归档 Gitea 仓库
+    if (baseline.repo_owner && baseline.repo_name) {
+      try {
+        const adminToken = config.gitea?.token || '';
+        const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
+        await fetch(`${config.gitea.url}/api/v1/repos/${baseline.repo_owner}/${baseline.repo_name}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+          body: JSON.stringify({ archived: true }),
+        });
+        console.log(`[Freeze] 仓库 ${baseline.repo_owner}/${baseline.repo_name} 已归档（冻结）`);
+      } catch (e) {
+        console.warn('[Freeze] Gitea 归档失败:', e.message);
+      }
+    }
+
+    res.json({ code: 200, message: '基线已冻结' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 解冻基线（仅系统管理员）
+router.post('/:id/unfreeze', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const baseline = await db('baselines').where('baseline_id', id).first();
+    if (!baseline) {
+      return res.status(404).json({ code: 404, message: '基线不存在' });
+    }
+    if (baseline.status !== 'frozen') {
+      return res.status(400).json({ code: 400, message: '只能解冻已冻结的基线' });
+    }
+
+    // 1. 恢复基线状态为 active
+    await db('baselines')
+      .where('baseline_id', id)
+      .update({
+        status: 'active',
+        is_locked: false,
+        locked_by: null,
+        locked_at: null,
+      });
+
+    // 2. 解锁 Gitea 仓库
+    if (baseline.repo_owner && baseline.repo_name) {
+      try {
+        const adminToken = config.gitea?.token || '';
+        const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
+        await fetch(`${config.gitea.url}/api/v1/repos/${baseline.repo_owner}/${baseline.repo_name}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+          body: JSON.stringify({ archived: false }),
+        });
+        console.log(`[Unfreeze] 仓库 ${baseline.repo_owner}/${baseline.repo_name} 已解锁（解冻）`);
+      } catch (e) {
+        console.warn('[Unfreeze] Gitea 解锁失败:', e.message);
+      }
+    }
+
+    res.json({ code: 200, message: '基线已解冻，仓库已恢复读写' });
   } catch (error) {
     next(error);
   }

@@ -386,7 +386,8 @@ async function loadData() {
   loading.value = true
   try {
     // ===== 主数据源：从 BFF approvals 表加载合并请求列表 =====
-    const params = { page: 1, pageSize: 50 }
+    // 一次性取较多数据，前端做用户过滤 + 分页切片（与分支页保持一致）
+    const params = { page: 1, pageSize: 200 }
     if (filterForm.status) params.status = filterForm.status
 
     const res = await getMergeApprovals(params)
@@ -437,8 +438,10 @@ async function loadData() {
     // 只显示当前用户发起的合并请求
     const currentUser = userStore.username || userStore.userInfo?.username || ''
     const filtered = list.filter(item => item.author === currentUser || item.applicant_username === currentUser)
-    mergeRequestList.value = filtered
     pagination.total = filtered.length
+    // 客户端分页切片（与分支页保持一致的实现方式）
+    const start = (pagination.page - 1) * pagination.pageSize
+    mergeRequestList.value = filtered.slice(start, start + pagination.pageSize)
   } catch (error) {
     console.error('加载合并请求列表失败:', error)
     ElMessage.warning('加载合并请求列表失败：' + (error.message || '网络错误'))

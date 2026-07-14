@@ -714,6 +714,7 @@ function createMockDb() {
     version_rules: [],
     approval_flows: [],
     system_config: [],
+    repo_metadata: [],
   };
 
   // 创建一个可调用的函数对象：mockDb('table') 返回 QueryBuilder
@@ -870,20 +871,56 @@ function createMockDb() {
 
       insert(data) {
         const arr = Array.isArray(data) ? data : [data];
+        // 确保表在 mockTables 中存在（不存在则创建）
+        if (!mockTables[this._tableName]) mockTables[this._tableName] = [];
+        const table = mockTables[this._tableName];
+        let newId = 1;
         for (const item of arr) {
-          const table = mockTables[this._tableName] || [];
-          const newId = table.length > 0 ? Math.max(...table.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
+          const autoId = table.length > 0 ? Math.max(...table.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
           const newRow = { ...item };
           // 设置主键
           const pk = this._tableName === 'user_profiles' ? 'profile_id' :
                      this._tableName === 'roles' ? 'role_id' :
                      this._tableName === 'departments' ? 'dept_id' : 'id';
-          newRow[pk] = newRow[pk] || newId;
+          newRow[pk] = newRow[pk] || autoId;
+          newId = newRow[pk];
           if (!newRow.created_at) newRow.created_at = new Date();
           if (!newRow.updated_at) newRow.updated_at = new Date();
           table.push(newRow);
         }
-        return makeThenable(() => [newId || 1], [1]);
+        // 返回支持 onConflict().merge() 的 thenable（onConflict 为 no-op，merge 执行插入）
+        const self = this;
+        const thenable = makeThenable(() => [newId], [newId]);
+        thenable.onConflict = function() {
+          // mock 模式下 onConflict 为 no-op，merge() 等同 insert
+          const mergeThenable = makeThenable(() => {
+            if (!mockTables[self._tableName]) mockTables[self._tableName] = [];
+            const tbl = mockTables[self._tableName];
+            // merge: 如果主键冲突则更新，否则插入
+            for (const item of arr) {
+              const existingIdx = tbl.findIndex(r => {
+                // 用插入数据中的唯一键匹配（通常用 repo_owner+repo_name）
+                return Object.keys(item).some(k => r[k] === item[k]);
+              });
+              if (existingIdx >= 0) {
+                Object.assign(tbl[existingIdx], item, { updated_at: new Date() });
+              } else {
+                const autoId = tbl.length > 0 ? Math.max(...tbl.map(r => r[Object.keys(r)[0] || 'id'] || 0)) + 1 : 1;
+                const newRow = { ...item };
+                const pk = self._tableName === 'user_profiles' ? 'profile_id' :
+                           self._tableName === 'roles' ? 'role_id' :
+                           self._tableName === 'departments' ? 'dept_id' : 'id';
+                newRow[pk] = newRow[pk] || autoId;
+                if (!newRow.created_at) newRow.created_at = new Date();
+                if (!newRow.updated_at) newRow.updated_at = new Date();
+                tbl.push(newRow);
+              }
+            }
+            return [newId];
+          }, [newId]);
+          return { merge: () => mergeThenable };
+        };
+        return thenable;
       },
 
       update(data) {
