@@ -296,3 +296,5 @@ openGauss ─── 配置源：bff/.env → DB_HOST / DB_PORT / DB_NAME
 | 后端路由模块 | 27 |
 | 后端中间件 | 8 |
 | 数据库表 | 15 |
+
+
