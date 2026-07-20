@@ -116,10 +116,10 @@ async function fixDatabaseSchema(database) {
     if (parseInt(rolesCount.count) === 0) {
       console.log('  📥 插入默认角色...');
       await database('roles').insert([
-        { role_code: 'admin', role_name: '系统管理员', code: 'admin', name: '系统管理员', description: '系统管理员，拥有全部权限', permissions: '["*"]', is_system: true, sort_order: 1 },
-        { role_code: 'project_manager', role_name: '项目管理员', code: 'project_manager', name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
-        { role_code: 'developer', role_name: '开发人员', code: 'developer', name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
-        { role_code: 'auditor', role_name: '审计人员', code: 'auditor', name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
+        { role_code: 'admin', role_name: '系统管理员', description: '系统管理员，拥有全部权限', permissions: '["*"]', is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责项目管理', permissions: '["repo:*", "branch:*", "version:*", "approval:*", "baseline:*"]', is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码开发', permissions: '["repo:view", "repo:create", "branch:*", "version:view", "approval:create"]', is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责审计监督', permissions: '["audit:*"]', is_system: true, sort_order: 4 },
       ]);
       console.log('  ✅ 默认角色插入成功');
     }
@@ -316,7 +316,8 @@ export async function runMigrations() {
   const database = getDb();
   if (!database) { console.warn('⚠️  数据库未连接，跳过迁移'); return; }
   console.log('🔄 开始执行数据库迁移...');
-  await fixDatabaseSchema(database);
+
+  // 1. 先建表（确保表存在）
   const tables = [
     `CREATE TABLE IF NOT EXISTS approval_flows (flow_id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, description TEXT, applicable_operations TEXT[], applicable_secret_levels TEXT[], steps TEXT[], is_default BOOLEAN DEFAULT FALSE, is_active BOOLEAN DEFAULT TRUE, created_by INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS approvals (approval_id SERIAL PRIMARY KEY, operation_type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, description TEXT, repo_owner VARCHAR(100), repo_name VARCHAR(100), source_branch VARCHAR(100), target_branch VARCHAR(100), gitea_pr_number INTEGER, secret_level VARCHAR(20) DEFAULT 'internal', urgency VARCHAR(20) DEFAULT 'normal', status VARCHAR(20) DEFAULT 'pending', current_step INTEGER DEFAULT 1, approval_flow_id INTEGER, applicant_user_id INTEGER NOT NULL, applicant_username VARCHAR(100) NOT NULL, reviewers TEXT, attachments TEXT, compliance_checklist TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, completed_at TIMESTAMP)`,
@@ -334,6 +335,8 @@ export async function runMigrations() {
     `CREATE TABLE IF NOT EXISTS version_rules (id SERIAL PRIMARY KEY, default_pattern VARCHAR(100) DEFAULT 'MAJOR.MINOR.PATCH', patterns TEXT, auto_increment_rules TEXT, prohibit_patterns TEXT, enforce_on_tag_creation BOOLEAN DEFAULT TRUE, is_active BOOLEAN DEFAULT TRUE, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   ];
   for (const sql of tables) { try { await database.raw(sql); } catch (err) { if (!err.message.includes('already exists')) console.warn('   警告:', err.message); } }
+  // 2. 修复表结构+插入默认角色/部门（建表完成后再执行 ALTER TABLE / INSERT）
+  await fixDatabaseSchema(database);
   console.log('✅ 数据库迁移完成');
 }
 
@@ -348,10 +351,10 @@ export async function seedDefaultData() {
     const roleCount = await database('roles').count('* as count').first();
     if (parseInt(roleCount.count) === 0) {
       await database('roles').insert([
-        { role_code: 'admin', role_name: '系统管理员', code: 'admin', name: '系统管理员', description: '系统管理员，拥有所有权限', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
-        { role_code: 'project_manager', role_name: '项目管理员', code: 'project_manager', name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
-        { role_code: 'developer', role_name: '开发人员', code: 'developer', name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
-        { role_code: 'auditor', role_name: '审计人员', code: 'auditor', name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
+        { role_code: 'admin', role_name: '系统管理员', description: '系统管理员，拥有所有权限', permissions: JSON.stringify(['*']), is_system: true, sort_order: 1 },
+        { role_code: 'project_manager', role_name: '项目管理员', description: '项目管理员，负责仓库和版本管理', permissions: JSON.stringify(['repo:*', 'branch:*', 'version:*', 'approval:*', 'baseline:*']), is_system: true, sort_order: 2 },
+        { role_code: 'developer', role_name: '开发人员', description: '开发人员，负责代码提交和分支操作', permissions: JSON.stringify(['repo:view', 'branch:create', 'version:view', 'approval:create']), is_system: true, sort_order: 3 },
+        { role_code: 'auditor', role_name: '审计人员', description: '审计人员，负责查看审计日志', permissions: JSON.stringify(['audit:*', 'report:*']), is_system: true, sort_order: 4 },
       ]);
       console.log('   ✅ 默认角色已插入');
     }

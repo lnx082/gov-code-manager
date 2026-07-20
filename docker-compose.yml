@@ -25,13 +25,13 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - DB_TYPE=opengauss
-      - DB_HOST=${DB_HOST:-123.60.219.19}
-      - DB_PORT=${DB_PORT:-5432}
+      - DB_HOST=${DB_HOST:-172.30.94.142}
+      - DB_PORT=${DB_PORT:-15432}
       - DB_NAME=${DB_NAME:-gov_code_manager}
       - DB_USER=${DB_USER:-dev_admin}
       - DB_PASSWORD=${DB_PASSWORD:-Besti@2026_db}
       - DB_SSL=${DB_SSL:-false}
-      - GITEA_URL=${GITEA_URL:-http://123.60.219.19:3000}
+      - GITEA_URL=${GITEA_URL:-http://172.30.94.142:3000}
       - GITEA_ADMIN_TOKEN=${GITEA_ADMIN_TOKEN:-}
       - JWT_SECRET=${JWT_SECRET:-gov_code_manager_jwt_secret_key_2024_secure}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
