@@ -60,7 +60,8 @@
       </template>
     </el-alert>
 
-    <el-table :data="logList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="logList" v-loading="loading" stripe border>
       <el-table-column type="index" width="50" />
       <el-table-column label="时间" width="180">
         <template #default="{ row }">
@@ -95,6 +96,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

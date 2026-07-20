@@ -25,23 +25,25 @@
       <template #header>
         <span>审批流程配置</span>
       </template>
-      <el-table :data="approvalFlows" stripe>
-        <el-table-column prop="name" label="流程名称" />
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="默认流程">
-          <template #default="{ row }">
-            <el-tag v-if="row.is_default" type="success">是</el-tag>
-            <span v-else>否</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态">
-          <template #default="{ row }">
-            <el-tag :type="row.is_active ? 'success' : 'info'">
-              {{ row.is_active ? '启用' : '禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-responsive">
+        <el-table :data="approvalFlows" stripe>
+          <el-table-column prop="name" label="流程名称" />
+          <el-table-column prop="description" label="描述" show-overflow-tooltip />
+          <el-table-column label="默认流程">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_default" type="success">是</el-tag>
+              <span v-else>否</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态">
+            <template #default="{ row }">
+              <el-tag :type="row.is_active ? 'success' : 'info'">
+                {{ row.is_active ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
   </div>
 </template>
@@ -51,6 +53,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getVersionRules, updateVersionRules } from '@/api/version'
 import { getApprovalFlows } from '@/api/approval'
+import { useResponsive } from '@/composables/useResponsive'
+
+const { isMobile } = useResponsive()
 
 const versionRules = reactive({
   defaultPattern: 'MAJOR.MINOR.PATCH',
@@ -97,5 +102,11 @@ async function handleSaveVersionRules() {
 <style lang="scss" scoped>
 .mt-20 {
   margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+  .settings-container {
+    padding: 12px;
+  }
 }
 </style>

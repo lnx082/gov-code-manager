@@ -6,6 +6,9 @@
     <!-- 顶部导航栏 - 政务风格 -->
     <header class="gov-header">
       <div class="header-left">
+        <el-button class="hamburger-btn" @click="mobileDrawerVisible = true">
+          <el-icon :size="22"><Operation /></el-icon>
+        </el-button>
         <svg t="1783868029100" class="header-emblem-svg" viewBox="0 0 1024 1024" width="28" height="28"><path d="M513.697876 0l40.17103 2.817752 38.870528 5.346504 37.244902 7.911381 35.763777 10.331757 34.174275 12.607635 32.657024 14.73901 30.959147 16.906513 29.333522 18.496013 27.74402 20.663515 25.865519 22.108517 24.239893 23.625767 22.361391 25.070768 20.663515 26.551895 18.857264 27.59952 16.906512 28.719396 14.991886 29.622522 13.113385 30.417272 11.126508 31.248148 9.139632 31.645523 7.080505 32.187399 5.093629 32.584773 2.962252 32.83765 0.903126 32.873774-1.336626 32.837649-3.323503 32.729274-5.780004 32.584773-7.911381 32.042899-10.151132 31.645523-12.463134 30.959148-14.739011 30.164397-17.303888 29.369646-19.543639 28.430396 92.552318 88.217315-124.161716 129.688845-91.107317-90.240316-19.146264 11.523883-19.182389 10.873633-19.290764 10.042758-19.290764 9.248006-19.290765 8.561632-19.435264 7.803005-19.399139 7.11663-19.435264 6.285755-19.579765 5.346504-19.399139 4.840754-19.579764 3.901502-19.543639 3.215128-19.68814 2.420377-19.579764 1.589501-19.543639 0.686375-19.579765 0.108375-19.543639-0.79475-19.435264-1.589501-19.579765-2.420377-19.543639-3.106753-19.435264-4.009877-19.54364-4.840754-19.435264-5.491004-19.290764-6.430255-19.290764-7.225005-19.290764-8.200381-19.290764-8.706131-19.146264-9.789883-19.037889-10.584632-19.037889-11.415509-19.001764-12.210259-18.893389-12.968884-14.08876 13.79976 0.93925 7.622381 0.397376 7.26113v7.225005l-0.505751 6.863755-0.93925 6.68313-1.481126 6.32188-1.878502 6.141254-2.131376 5.924505-2.564877 5.635504-3.070628 5.346504-3.359627 4.949128-3.612503 4.696254-3.865377 4.298878-4.298879 4.009878-4.551753 3.648627-4.840753 3.215128-4.949129 2.817752-5.346504 2.528752-5.491004 2.023001-5.635504 1.589501-5.780004 1.228251-5.88838 0.794751-6.032879 0.252875-6.285755-0.252875-6.177379-0.686376-6.430255-1.192126-6.430255-1.734001-6.430254-2.275876-6.430255-2.709377-6.430255-3.323503-6.53863-3.901503-6.430254-4.551753-4.154378-5.888379-3.757003-5.924505-3.215127-5.888379-2.817753-5.888379-2.420376-6.03288-2.023002-5.924504-1.589501-5.888379-1.192126-5.88838-0.686375-5.924504-0.397376-5.743879 0.1445-5.780005 0.397376-5.635504 0.79475-5.491004 1.336626-5.382629 1.625627-5.202003 1.986876-5.093629 2.420377-4.985254 2.673252-4.696253 3.070627-4.551754 3.648628-4.407253 3.720877-4.009878 4.298879-3.901503 4.551753-3.612502 4.840753-3.359628 5.346504-3.106752 5.491004-2.781627 5.88838-2.420377 6.321879-2.275876 6.430255-1.770127 6.936005-1.481126 7.26113-1.047626 7.514006-0.686375 10.042757-8.706132-66.072673-80.594934 76.765681-78.969307 14.08876 12.752134 14.305511 12.318634 14.630636 11.921259 14.847385 11.415508 15.136387 10.982008 15.425386 10.476258 15.678261 9.898257 15.931137 9.392507 16.220137 8.850631 16.328512 8.308756 16.509137 7.658506 16.725887 6.97213 17.014888 6.430255 17.159387 5.635504 17.267763 5.093629 17.412263 4.298878 17.701263 3.757003 17.665138 2.817752 17.954138 2.131376 17.954138 1.336626 18.098638 0.686376 18.207013-0.289 18.351514-1.047626 18.387638-2.023002 18.351514-2.673252 18.459888-3.757002 18.496014-4.551754 18.640513-5.491004 18.604389-6.466379 18.640514-7.514006 18.604388-8.417131 18.496014-9.392507-329.026741-318.983984-90.709942 94.50307-146.017356-146.414733 250.635433-265.338319 5.780004 1.336626 5.635504 1.192126 5.59938 1.083751 5.635504 0.79475 5.491004 0.939251 5.491004 0.541875 5.491004 0.541876 5.382629 0.252875 5.346504 0.1445h5.202003l5.238129-0.1445 5.238129-0.1445 5.093629-0.505751 5.093629-0.686375 5.093628-0.650251 4.949129-0.93925 4.949129-1.228251 4.804628-1.192126 4.985254-1.481126 4.696253-1.481126 4.660129-1.878502 4.696253-1.986876 4.696253-2.167502 4.407254-2.275876 4.551753-2.528752 4.443378-2.709377 4.407254-2.926127 4.298878-3.106753 4.262753-3.215127 4.298878-3.468002 4.046003-3.648628 4.118253-3.865378 79.330558 81.389685-126.076342 135.143724 335.890496 334.011994 10.295632-19.435264 8.995132-20.26614 7.47788-21.169265 6.17738-21.855641 4.949128-22.542017 3.468003-23.047767 2.312002-23.589642 0.93925-24.023143-0.4335-24.239892-1.589501-24.565018-2.817752-24.781768-4.154378-24.962394-5.238129-24.781768-6.53863-24.817893-7.766881-24.817893-8.850631-24.528893-10.042757-24.276018-11.271009-23.878642-12.318634-23.445143-13.402384-22.939391-14.594511-22.253017-15.678262-21.711141-16.762012-20.91639-17.809638-20.12164-18.748889-19.182389-19.977139-18.243138-20.735766-17.159388-21.855641-16.075636-22.903266-14.739011-23.842518-13.546885-24.781768-12.210259L513.697876 0z" fill="#ffd700"/></svg>
         <div class="header-title">
           <h1>党政软件版本管控平台</h1>
@@ -125,6 +128,89 @@
         </div>
       </aside>
 
+      <!-- 移动端抽屉导航 -->
+      <el-drawer
+        v-model="mobileDrawerVisible"
+        direction="ltr"
+        size="240px"
+        :show-close="true"
+      >
+        <template #header>
+          <span style="font-weight:600;color:#c62828;">导航菜单</span>
+        </template>
+        <el-menu
+          :default-active="$route.path"
+          router
+          class="drawer-menu"
+          background-color="#ffffff"
+          text-color="#303133"
+          active-text-color="#ffffff"
+          @select="onDrawerSelect"
+        >
+          <el-menu-item index="/dashboard">
+            <el-icon class="menu-icon"><HomeFilled /></el-icon>
+            <template #title>工作台</template>
+          </el-menu-item>
+
+          <el-sub-menu index="repositories-m" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
+            <template #title>
+              <el-icon class="menu-icon"><Folder /></el-icon>
+              <span>仓库管理</span>
+            </template>
+            <el-menu-item index="/repos">仓库列表</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="branches-m" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
+            <template #title>
+              <el-icon class="menu-icon"><Share /></el-icon>
+              <span>分支管理</span>
+            </template>
+            <el-menu-item index="/branches">分支列表</el-menu-item>
+            <el-menu-item index="/branches/merge">合并请求</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="versions-m" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
+            <template #title>
+              <el-icon class="menu-icon"><Collection /></el-icon>
+              <span>版本管理</span>
+            </template>
+            <el-menu-item index="/versions">版本列表</el-menu-item>
+            <el-menu-item index="/versions/baseline">基线管理</el-menu-item>
+            <el-menu-item index="/versions/archive">归档管理</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="approval-m" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.role === 'project_manager' || userStore.role === 'developer')">
+            <template #title>
+              <el-icon class="menu-icon"><DocumentChecked /></el-icon>
+              <span>审批管理</span>
+            </template>
+            <el-menu-item index="/approval/pending" v-show="userStore.role === 'admin' || userStore.role === 'project_manager'">待我审批</el-menu-item>
+            <el-menu-item index="/approval/my-requests">我的申请</el-menu-item>
+            <el-menu-item index="/approval/history">审批历史</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="audit-m" v-show="userStore.userInfo && (userStore.role === 'admin' || userStore.isAuditor)">
+            <template #title>
+              <el-icon class="menu-icon"><Search /></el-icon>
+              <span>审计管理</span>
+            </template>
+            <el-menu-item index="/audit/logs">操作日志</el-menu-item>
+            <el-menu-item index="/audit/reports">审计报表</el-menu-item>
+            <el-menu-item index="/audit/warning">风险预警</el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="admin-m" v-show="userStore.userInfo && userStore.hasPermission('admin:manage')">
+            <template #title>
+              <el-icon class="menu-icon"><Setting /></el-icon>
+              <span>系统管理</span>
+            </template>
+            <el-menu-item index="/admin/users">用户管理</el-menu-item>
+            <el-menu-item index="/admin/roles">角色权限</el-menu-item>
+            <el-menu-item index="/admin/depts">部门管理</el-menu-item>
+          </el-sub-menu>
+        </el-menu>
+      </el-drawer>
+
       <!-- 主内容区 -->
       <main class="app-main">
         <div class="main-content">
@@ -204,8 +290,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform } from '@element-plus/icons-vue'
+import { Bell, User, Setting, SwitchButton, HomeFilled, Folder, Share, Collection, DocumentChecked, Search, DArrowRight, DArrowLeft, ArrowDown, Platform, Operation } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { useResponsive } from '@/composables/useResponsive'
 import request from '@/api'
 import { markNotificationRead } from '@/api/bff'
 
@@ -213,8 +300,14 @@ import { markNotificationRead } from '@/api/bff'
 const router = useRouter()
 const userStore = useUserStore()
 
+const { isMobile, isTablet } = useResponsive()
 const sidebarCollapsed = ref(false)
-const sidebarWidth = computed(() => sidebarCollapsed.value ? '64px' : '220px')
+const sidebarWidth = computed(() => {
+  if (isMobile.value) return '0px'
+  if (isTablet.value) return '64px'
+  return sidebarCollapsed.value ? '64px' : '220px'
+})
+const mobileDrawerVisible = ref(false)
 const showNoticeDialog = ref(false)
 const showDetailDialog = ref(false)
 const noticeCount = ref(0)
@@ -247,6 +340,11 @@ function onMenuMousemove(e) {
   const y = ((e.clientY - rect.top) / rect.height) * 100
   item.style.setProperty('--mx', `${x}%`)
   item.style.setProperty('--my', `${y}%`)
+}
+
+// 移动端抽屉菜单选中后自动关闭
+function onDrawerSelect() {
+  mobileDrawerVisible.value = false
 }
 
 // 折叠状态下弹出子菜单的悬停动画（popup 渲染在组件外部，需全局监听）
@@ -767,6 +865,99 @@ function handleApprovalNotice(notice) {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* ============ 响应式 ============ */
+/* 汉堡菜单按钮 — 默认隐藏，手机端显示 */
+.hamburger-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 6px 8px;
+  min-width: auto;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+@media (max-width: 768px) {
+  .gov-header {
+    padding: 0 12px;
+
+    .header-left {
+      gap: 10px;
+    }
+
+    .header-emblem-svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .header-title h1 {
+      font-size: 15px;
+    }
+  }
+
+  .hamburger-btn {
+    display: inline-flex;
+  }
+
+  .header-btn .btn-text {
+    display: none;
+  }
+
+  .user-details {
+    display: none;
+  }
+
+  .gov-sidebar {
+    display: none;
+  }
+
+  .app-body {
+    padding-left: 0 !important;
+  }
+
+  .app-main .main-content {
+    padding: 12px;
+  }
+
+  .gov-footer {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .gov-header {
+    padding: 0 16px;
+
+    .header-title h1 {
+      font-size: 17px;
+    }
+  }
+
+  .app-main .main-content {
+    padding: 16px;
+  }
+}
+
+/* 抽屉菜单样式 */
+.drawer-menu {
+  border-right: none;
+
+  .menu-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+  }
+
+  :deep(.el-menu-item.is-active) {
+    background: #c62828 !important;
+    color: #ffffff !important;
+  }
 }
 </style>
 

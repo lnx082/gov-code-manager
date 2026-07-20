@@ -11,7 +11,8 @@
       归档后该仓库将被锁定为只读，不能提交代码、发布版本或创建新基线。
     </el-alert>
 
-    <el-table :data="archiveList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="archiveList" v-loading="loading" stripe border>
       <el-table-column prop="tag_name" label="版本号" min-width="120" />
       <el-table-column label="所属仓库" min-width="200">
         <template #default="{ row }">{{ getRepoDisplay(row.repo_owner, row.repo_name) }}</template>
@@ -33,6 +34,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination v-model:current-page="pagination.page" :total="pagination.total" layout="total, prev, pager, next, jumper" @current-change="loadArchives" />

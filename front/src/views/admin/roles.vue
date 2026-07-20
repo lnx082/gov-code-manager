@@ -4,7 +4,8 @@
       <h2 class="page-title">角色权限管理</h2>
     </div>
 
-    <el-table :data="roleList" stripe border>
+    <div class="table-responsive">
+      <el-table :data="roleList" stripe border>
       <el-table-column label="角色名称" width="150">
         <template #default="{ row }">
           {{ row.role_name || row.name || '-' }}
@@ -36,6 +37,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog v-model="showPermissionDialog" :title="'角色权限 - ' + (currentRole?.role_name || currentRole?.name || '')" width="600px">
       <div v-if="currentRole">

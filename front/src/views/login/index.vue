@@ -384,7 +384,7 @@ async function handleLogin() {
   }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 768px) {
   .left-panel { display: none; }
   .gov-login-page { justify-content: center; }
   .login-card { margin-right: 0; }

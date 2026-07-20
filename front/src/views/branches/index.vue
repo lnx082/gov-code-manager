@@ -58,7 +58,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="branchList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="branchList" v-loading="loading" stripe border>
       <el-table-column label="分支名称" min-width="180">
         <template #default="{ row }">
           <div class="branch-cell">
@@ -98,6 +99,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

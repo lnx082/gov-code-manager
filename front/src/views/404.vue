@@ -43,4 +43,13 @@ function goHome() {
     margin-bottom: 30px;
   }
 }
+
+@media (max-width: 768px) {
+  .error-code {
+    font-size: 80px;
+  }
+  .error-message {
+    font-size: 16px;
+  }
+}
 </style>

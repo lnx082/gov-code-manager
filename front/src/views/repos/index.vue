@@ -34,7 +34,8 @@
     </el-card>
 
     <!-- 仓库列表 -->
-    <el-table :data="repoList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="repoList" v-loading="loading" stripe border>
       <el-table-column type="selection" width="50" />
       <el-table-column prop="name" label="仓库名称" min-width="180">
         <template #default="{ row }">
@@ -83,6 +84,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

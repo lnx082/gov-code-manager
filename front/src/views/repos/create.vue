@@ -8,11 +8,11 @@
     <el-card class="form-card">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="repo-form">
         <el-form-item label="仓库名称" prop="name">
-          <el-input v-model="form.name" placeholder="如 gov-user-service" maxlength="100" style="width: 360px" />
+          <el-input v-model="form.name" placeholder="如 gov-user-service" maxlength="100" :style="{ width: isMobile ? '100%' : '360px' }" />
         </el-form-item>
 
         <el-form-item label="仓库描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入仓库描述" style="width: 360px" />
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入仓库描述" :style="{ width: isMobile ? '100%' : '360px' }" />
         </el-form-item>
 
         <el-form-item label="仓库类型" prop="type">
@@ -33,7 +33,7 @@
         </el-form-item>
 
         <el-form-item label="所属部门" v-if="isAdmin">
-          <el-select v-model="form.department" placeholder="选择部门（默认创建者部门）" clearable style="width: 360px">
+          <el-select v-model="form.department" placeholder="选择部门（默认创建者部门）" clearable :style="{ width: isMobile ? '100%' : '360px' }">
             <el-option v-for="d in departments" :key="d.dept_id" :label="d.name" :value="d.name" />
           </el-select>
         </el-form-item>
@@ -63,6 +63,7 @@ import { createRepo } from '@/api/gitea'
 import { getDepartments } from '@/api/bff'
 import { useUserStore } from '@/stores/user'
 import { pinyin } from 'pinyin-pro'
+import { useResponsive } from '@/composables/useResponsive'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -70,6 +71,7 @@ const formRef = ref(null)
 const submitting = ref(false)
 const departments = ref([])
 const isAdmin = computed(() => userStore.role === 'admin')
+const { isMobile } = useResponsive()
 
 const form = reactive({
   name: '',
@@ -182,6 +184,15 @@ async function handleSubmit() {
   .switch-label {
     margin-left: 10px;
     color: #606266;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-card {
+    max-width: 100%;
+  }
+  .repo-form {
+    padding: 10px;
   }
 }
 </style>

@@ -672,13 +672,67 @@ html, body {
 }
 
 /* ============ Responsive ============ */
+
+/* 表格横向滚动容器 */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+}
+
 @media screen and (max-width: 768px) {
+  /* ── 页面容器 ── */
+  .page-container {
+    padding: 12px;
+    border-radius: 6px;
+    min-height: auto;
+  }
+
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 15px;
+    gap: 10px;
+    padding-left: 12px;
+    border-left-width: 3px;
+
+    .page-title {
+      font-size: 16px;
+    }
   }
 
+  /* ── 筛选卡片 ── */
+  .filter-card .el-form--inline,
+  .filter-card .el-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+
+    .el-form-item {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      margin-right: 0;
+      width: 100%;
+
+      .el-form-item__label {
+        text-align: left;
+        padding-bottom: 4px;
+      }
+
+      .el-form-item__content {
+        margin-left: 0 !important;
+      }
+
+      .el-select,
+      .el-input,
+      .el-date-picker {
+        width: 100%;
+      }
+    }
+  }
+
+  /* ── 按钮组 ── */
   .search-bar {
     flex-direction: column;
 
@@ -697,5 +751,81 @@ html, body {
     .el-button {
       width: 100%;
     }
+  }
+
+  /* ── 对话框全屏 ── */
+  .el-dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    margin-top: 2.5vh !important;
+    border-radius: 12px 12px 0 0 !important;
+
+    .el-dialog__header {
+      padding: 14px 16px 12px;
+    }
+
+    .el-dialog__body {
+      padding: 12px 16px;
+      max-height: 65vh;
+      overflow-y: auto;
+    }
+
+    .el-dialog__footer {
+      padding: 10px 16px 16px;
+    }
+  }
+
+  /* ── 分页居中紧凑 ── */
+  .pagination-wrapper {
+    justify-content: center;
+  }
+
+  .el-pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    .el-pagination__total {
+      float: none;
+      display: block;
+      text-align: center;
+      margin-bottom: 8px;
+      width: 100%;
+    }
+
+    .el-pagination__sizes {
+      float: none;
+      margin-right: 0;
+    }
+
+    button,
+    .el-pager li {
+      min-width: 28px;
+      height: 28px;
+      line-height: 28px;
+      font-size: 12px;
+    }
+  }
+
+  /* ── Tabs 横向滚动 ── */
+  .el-tabs__nav-wrap {
+    overflow-x: auto;
+    white-space: nowrap;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  /* ── el-row/el-col 全宽（统计卡片行） ── */
+  .stat-row .el-col {
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+    margin-bottom: 12px;
+  }
+
+  /* ── 表单标签适配 ── */
+  .el-form-item .el-form-item__label {
+    font-size: 13px;
   }
 }

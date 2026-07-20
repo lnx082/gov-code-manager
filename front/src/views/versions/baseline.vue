@@ -16,7 +16,8 @@
       </template>
     </el-alert>
 
-    <el-table :data="baselineList" v-loading="loading" stripe border class="baseline-table">
+    <div class="table-responsive">
+      <el-table :data="baselineList" v-loading="loading" stripe border class="baseline-table">
       <el-table-column label="基线名称" width="200">
         <template #default="{ row }">
           <div class="baseline-cell">
@@ -54,6 +55,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog v-model="createDialogVisible" title="创建基线" width="700px">
       <el-form :model="createForm" :rules="createRules" label-width="120px">

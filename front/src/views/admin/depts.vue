@@ -8,7 +8,8 @@
       </el-button>
     </div>
 
-    <el-table :data="deptList" stripe border row-key="dept_id">
+    <div class="table-responsive">
+      <el-table :data="deptList" stripe border row-key="dept_id">
       <el-table-column prop="name" label="部门名称" />
       <el-table-column prop="leader" label="负责人" width="120" />
       <el-table-column prop="description" label="描述" show-overflow-tooltip />
@@ -26,6 +27,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-dialog
       v-model="showCreateDialog"

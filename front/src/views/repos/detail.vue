@@ -28,6 +28,7 @@
               <el-breadcrumb-item v-for="(c,i) in breadcrumb" :key="i" @click="navigateToPath(c.path)" style="cursor:pointer">{{ c.name }}</el-breadcrumb-item>
             </el-breadcrumb>
           </div>
+          <div class="table-responsive">
           <div class="file-list">
             <div class="file-item header"><span class="file-name-col">文件名</span><span class="file-message-col">提交信息</span><span class="file-time-col">提交时间</span></div>
             <div v-for="f in fileList" :key="f.path" class="file-item" :class="{'is-dir':f.type==='dir'}" @click="handleFileClick(f)">
@@ -41,6 +42,7 @@
                 <span v-else>{{ formatTime(f.lastCommitTime) }}</span>
               </span>
             </div>
+          </div>
           </div>
         </div>
       </el-tab-pane>
@@ -126,11 +128,11 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="cloneDialogVisible" title="克隆仓库" width="500px"><p>HTTP: <el-input :model-value="httpCloneUrl" readonly /></p><p>SSH: <el-input :model-value="sshCloneUrl" readonly /></p></el-dialog>
-    <el-dialog v-model="fileContentDialogVisible" :title="viewingFile.name" width="80%" top="5vh"><div v-loading="fileContentLoading" style="max-height:70vh;overflow:auto"><pre v-if="!fileContentLoading" class="file-content"><code>{{ viewingFile.content }}</code></pre></div></el-dialog>
+    <el-dialog v-model="cloneDialogVisible" title="克隆仓库" :width="isMobile ? '95%' : '500px'"><p>HTTP: <el-input :model-value="httpCloneUrl" readonly /></p><p>SSH: <el-input :model-value="sshCloneUrl" readonly /></p></el-dialog>
+    <el-dialog v-model="fileContentDialogVisible" :title="viewingFile.name" :width="isMobile ? '95%' : '80%'" top="5vh"><div v-loading="fileContentLoading" style="max-height:70vh;overflow:auto"><pre v-if="!fileContentLoading" class="file-content"><code>{{ viewingFile.content }}</code></pre></div></el-dialog>
 
     <!-- 差异对比 -->
-    <el-dialog v-model="diffDialogVisible" :title="'提交 '+(diffData.sha||'').substring(0,7)" width="85%" top="5vh">
+    <el-dialog v-model="diffDialogVisible" :title="'提交 '+(diffData.sha||'').substring(0,7)" :width="isMobile ? '95%' : '85%'" top="5vh">
       <div v-loading="diffLoading">
         <div v-if="!diffLoading">
           <div class="diff-header">
@@ -156,7 +158,7 @@
     </el-dialog>
 
     <!-- 版本详情 -->
-    <el-dialog v-model="tagDetailDialogVisible" :title="'版本 ' + (tagDetail.name || '')" width="700px">
+    <el-dialog v-model="tagDetailDialogVisible" :title="'版本 ' + (tagDetail.name || '')" :width="isMobile ? '95%' : '700px'">
       <div v-loading="tagDetailLoading">
         <div v-if="!tagDetailLoading && tagDetail.name" class="tag-detail">
           <el-descriptions :column="2" border>
@@ -196,7 +198,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="addMemberDialogVisible" title="添加成员" width="450px">
+    <el-dialog v-model="addMemberDialogVisible" title="添加成员" :width="isMobile ? '95%' : '450px'">
       <el-form :model="addMemberForm" label-width="80px">
         <el-form-item label="用户名"><el-input v-model="addMemberForm.username" placeholder="Gitea 用户名" /></el-form-item>
         <el-form-item label="权限"><el-select v-model="addMemberForm.permission" style="width:100%"><el-option label="读取" value="read" /><el-option label="写入" value="write" /><el-option label="管理" value="admin" /></el-select></el-form-item>
@@ -216,8 +218,10 @@ import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent,
 import { getLastCommits } from '@/api/bff'
 import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
 import { downloadRepoArchive } from '@/utils/download'
+import { useResponsive } from '@/composables/useResponsive'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
+const { isMobile } = useResponsive()
 const loading = ref(false), activeTab = ref('files'), currentPath = ref(''), currentBranch = ref('main')
 
 const repoInfo = reactive({ id: null, name: '', description: '', owner: '', defaultBranch: 'main', updatedAt: '' })
@@ -595,5 +599,52 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@media (max-width: 768px) {
+  .repo-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .repo-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .repo-actions .el-button {
+    flex: 1;
+    min-width: auto;
+  }
+  .repo-tabs {
+    padding: 0 4px;
+  }
+  .repo-tabs :deep(.el-tabs__nav-wrap) {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .file-name-col {
+    font-size: 13px;
+  }
+  .file-message-col {
+    display: none;
+  }
+  .file-time-col {
+    display: none;
+  }
+  .commit-item {
+    flex-wrap: wrap;
+  }
+  .commit-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .settings-container {
+    max-width: 100%;
+    padding: 10px;
+  }
+  .diff-patch {
+    max-height: 200px;
+    font-size: 11px;
+  }
 }
 </style>

@@ -4,7 +4,7 @@
       <h2 class="page-title">审计报表</h2>
     </div>
 
-    <el-row :gutter="20" class="report-stats">
+    <el-row :gutter="20" class="report-stats stat-row">
       <el-col :span="6">
         <div class="stat-card clickable" @click="$router.push('/audit/logs')">
           <div class="stat-value">{{ stats.totalOperations }}</div>
@@ -377,6 +377,24 @@ function formatTime(time) {
 </script>
 
 <style lang="scss" scoped>
+@media (max-width: 768px) {
+  .report-card {
+    :deep(.el-form--inline) {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    :deep(.el-form-item) {
+      width: 100%;
+      margin-right: 0;
+    }
+    :deep(.el-select),
+    :deep(.el-date-picker) {
+      width: 100%;
+    }
+  }
+}
+
 .report-stats {
   margin-bottom: 20px;
   

@@ -34,7 +34,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="versionList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="versionList" v-loading="loading" stripe border>
       <el-table-column label="版本号" width="150">
         <template #default="{ row }">
           <div class="version-cell">
@@ -75,6 +76,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

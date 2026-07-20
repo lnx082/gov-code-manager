@@ -864,13 +864,45 @@ function formatUptime(seconds) {
   50% { opacity: 0.5; }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
   .main-content {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .welcome-banner {
+    padding: 20px 16px;
+  }
+  .banner-content {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .banner-left {
+    justify-content: flex-start;
+  }
+  .welcome-text h2 {
+    font-size: 32px;
+  }
+  .banner-right {
+    flex-direction: column;
+    width: 100%;
+  }
+  .banner-right .el-button {
+    width: 100%;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .trend-chart {
+    height: 250px;
+  }
+  .quick-links {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

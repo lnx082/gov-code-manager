@@ -54,16 +54,18 @@
       <template #header>
         <span>会话管理</span>
       </template>
-      <el-table :data="sessions" stripe>
-        <el-table-column prop="ip_address" label="登录IP" />
-        <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="登录时间" />
-        <el-table-column label="操作">
-          <template #default="{ row }">
-            <el-button type="danger" link @click="handleDeleteSession(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-responsive">
+        <el-table :data="sessions" stripe>
+          <el-table-column prop="ip_address" label="登录IP" />
+          <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip />
+          <el-table-column prop="created_at" label="登录时间" />
+          <el-table-column label="操作">
+            <template #default="{ row }">
+              <el-button type="danger" link @click="handleDeleteSession(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
   </div>
 </template>
@@ -79,8 +81,10 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getMySessions, deleteSession, updateUser, changePassword, getUserInfo } from '@/api/user'
+import { useResponsive } from '@/composables/useResponsive'
 
 const userStore = useUserStore()
+const { isMobile } = useResponsive()
 
 const form = reactive({
   username: '',
@@ -200,5 +204,11 @@ function formatTime(time) {
 <style lang="scss" scoped>
 .mt-20 {
   margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+  .profile-container {
+    padding: 12px;
+  }
 }
 </style>

@@ -30,7 +30,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="userList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="userList" v-loading="loading" stripe border>
       <el-table-column prop="gitea_username" label="用户名" min-width="150">
         <template #default="{ row }">
           <div class="user-cell">
@@ -89,6 +90,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

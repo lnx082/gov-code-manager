@@ -26,7 +26,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="pendingList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="pendingList" v-loading="loading" stripe border>
       <el-table-column type="index" width="50" label="序号" />
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
@@ -67,6 +68,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination

@@ -33,7 +33,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="mergeRequestList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="mergeRequestList" v-loading="loading" stripe border>
       <el-table-column label="编号" width="80">
         <template #default="{ row }">
           <span class="mr-id">#{{ row.bffApprovalId || row.id }}</span>
@@ -80,6 +81,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination
