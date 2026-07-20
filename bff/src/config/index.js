@@ -7,12 +7,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
-// 加载 .env 文件
-dotenv.config();
-
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 加载 .env 文件（显式指定 bff 目录下的 .env，避免从项目根目录启动时误加载前端 .env）
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 // 配置对象
 const config = {

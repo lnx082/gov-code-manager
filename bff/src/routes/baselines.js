@@ -72,12 +72,13 @@ router.get('/', authenticate, async (req, res, next) => {
     // 批量获取仓库描述以解析中文显示名
     const repoDisplayNames = {};
     const adminToken = config.gitea?.token || '';
+    const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
     for (const b of rawList) {
       const key = `${b.repo_owner}/${b.repo_name}`;
       if (!repoDisplayNames[key] && b.repo_owner && b.repo_name) {
         try {
           const resp = await fetch(`${config.gitea.url}/api/v1/repos/${b.repo_owner}/${b.repo_name}`, {
-            headers: { 'Authorization': adminToken }
+            headers: { 'Authorization': authHeader }
           });
           if (resp.ok) {
             const repo = await resp.json();

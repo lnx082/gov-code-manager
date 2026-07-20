@@ -216,7 +216,8 @@ router.get('/system', authenticate, async (req, res) => {
     try {
       const giteaUrl = config.gitea.url || 'http://localhost:3000';
       const adminToken = config.gitea.token || '';
-      const headers = adminToken ? { 'Authorization': adminToken } : {};
+      const authHeader = adminToken.startsWith('Basic ') ? adminToken : (adminToken ? `token ${adminToken}` : '');
+      const headers = authHeader ? { 'Authorization': authHeader } : {};
       const gr = await fetch(`${giteaUrl}/api/v1/version`, { headers });
       giteaOk = gr.ok;
       if (!gr.ok) console.warn(`[System] Gitea status ${gr.status}: ${await gr.text().catch(()=>'')}`);
