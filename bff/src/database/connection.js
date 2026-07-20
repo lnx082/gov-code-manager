@@ -367,7 +367,7 @@ export async function seedDefaultData() {
     }
     const flowCount = await database('approval_flows').count('* as count').first();
     if (parseInt(flowCount.count) === 0) {
-      await database('approval_flows').insert([{ name: '标准审批流程', description: '适用于普通操作的二级审批流程', applicable_operations: ['merge', 'version_create', 'baseline_create'], applicable_secret_levels: ['public', 'internal'], steps: ['技术负责人审核', '项目经理审批'], is_default: true, is_active: true }, { name: '涉密版本审批流程', description: '适用于涉密操作的四级审批流程', applicable_operations: ['merge', 'version_create', 'baseline_create', 'delete'], applicable_secret_levels: ['secret', 'top-secret'], steps: ['开发人员提交', '技术负责人审核', '安全管理员审核', '主管领导审批'], is_default: false, is_active: true }]);
+      await database('approval_flows').insert([{ name: '标准审批流程', description: '适用于普通操作的二级审批流程（项目管理员→系统管理员）', applicable_operations: ['merge', 'version_create', 'baseline_create'], applicable_secret_levels: ['public', 'internal'], steps: ['项目管理员审批', '系统管理员审批'], is_default: true, is_active: true }, { name: '涉密版本审批流程', description: '适用于涉密操作的四级审批流程（开发→项目管理员→审计→系统管理员）', applicable_operations: ['merge', 'version_create', 'baseline_create', 'delete'], applicable_secret_levels: ['secret', 'top-secret'], steps: ['开发人员提交', '项目管理员审核', '审计人员审核', '系统管理员审批'], is_default: false, is_active: true }]);
       console.log('   ✅ 默认审批流程已插入');
     }
     console.log('📝 默认数据插入完成');

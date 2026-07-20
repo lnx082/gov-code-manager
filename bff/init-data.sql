@@ -42,18 +42,18 @@ WHERE NOT EXISTS (SELECT 1 FROM departments WHERE code = 'ADMIN');
 
 -- 插入默认审批流程
 INSERT INTO approval_flows (name, description, applicable_operations, applicable_secret_levels, steps, is_default, is_active)
-SELECT '标准审批流程', '适用于普通操作的二级审批流程', 
+SELECT '标准审批流程', '适用于普通操作的二级审批流程（项目管理员→系统管理员）',
     ARRAY['merge', 'version_create', 'baseline_create'],
     ARRAY['public', 'internal'],
-    ARRAY['技术负责人审核', '项目经理审批'],
+    ARRAY['项目管理员审批', '系统管理员审批'],
     true, true
 WHERE NOT EXISTS (SELECT 1 FROM approval_flows WHERE name = '标准审批流程');
 
 INSERT INTO approval_flows (name, description, applicable_operations, applicable_secret_levels, steps, is_default, is_active)
-SELECT '涉密版本审批流程', '适用于涉密操作的四级审批流程',
+SELECT '涉密版本审批流程', '适用于涉密操作的四级审批流程（开发→项目管理员→审计→系统管理员）',
     ARRAY['merge', 'version_create', 'baseline_create', 'delete'],
     ARRAY['secret', 'top-secret'],
-    ARRAY['开发人员提交', '技术负责人审核', '安全管理员审核', '主管领导审批'],
+    ARRAY['开发人员提交', '项目管理员审核', '审计人员审核', '系统管理员审批'],
     false, true
 WHERE NOT EXISTS (SELECT 1 FROM approval_flows WHERE name = '涉密版本审批流程');
 

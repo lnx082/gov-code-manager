@@ -103,10 +103,11 @@ router.get('/', authenticate, async (req, res, next) => {
 function getRoleForStep(stepName) {
   if (!stepName) return null;
   const s = stepName.trim();
-  if (s.includes('系统管理员')) return 'admin';
-  if (s.includes('项目管理员')) return 'project_manager';
+  // 精确匹配系统角色（步骤名包含这些关键词即可）
+  if (s.includes('系统管理员') || s.includes('主管领导')) return 'admin';
+  if (s.includes('项目管理员') || s.includes('项目经理') || s.includes('技术负责人')) return 'project_manager';
   if (s.includes('开发人员')) return 'developer';
-  if (s.includes('审计')) return 'auditor';
+  if (s.includes('审计') || s.includes('安全管理员')) return 'auditor';
   return null;
 }
 
