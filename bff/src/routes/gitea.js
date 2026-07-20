@@ -184,6 +184,73 @@ router.get('/repos/:owner/:repo/pulls/:index/reviews', authenticate, async (req,
 });
 
 // ============================================================
+// 分支保护专用路由：PUT → POST(创建) / PATCH(更新)，Gitea 不支持 PUT
+// :branch(*) 允许分支名包含斜杠 (如 feature/login)
+// ============================================================
+router.put('/repos/:owner/:repo/branch_protections/:branch(*)', authenticate, async (req, res, next) => {
+  try {
+    const { owner, repo, branch } = req.params;
+    const giteaToken = req.user?.giteaToken || '';
+    const authHeader = giteaToken || req.headers.authorization || '';
+
+    // 探活：检查保护规则是否已存在
+    const getUrl = `${config.gitea.url}/api/v1/repos/${owner}/${repo}/branch_protections/${encodeURIComponent(branch)}`;
+    const getResp = await fetch(getUrl, {
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+    });
+
+    let giteaUrl, method;
+    if (getResp.ok) {
+      // 已存在 → PATCH 更新
+      giteaUrl = getUrl;
+      method = 'PATCH';
+    } else if (getResp.status === 404) {
+      // 不存在 → POST 创建，branch_name 放在 body 中
+      giteaUrl = `${config.gitea.url}/api/v1/repos/${owner}/${repo}/branch_protections`;
+      method = 'POST';
+    } else {
+      // 其他错误（401/500等）直接返回
+      const errBody = await getResp.json().catch(() => ({}));
+      return res.status(getResp.status).json({
+        code: getResp.status,
+        message: errBody.message || `获取分支保护状态失败 (HTTP ${getResp.status})`,
+      });
+    }
+
+    // 透传前端 body，仅在创建时补 branch_name
+    const body = { ...req.body };
+    if (method === 'POST') {
+      body.branch_name = branch;
+    }
+
+    const response = await fetch(giteaUrl, {
+      method,
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    let result;
+    if (contentType.includes('application/json')) {
+      result = await response.json();
+    } else {
+      result = await response.text();
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        code: response.status,
+        message: typeof result === 'object' ? (result.message || '分支保护操作失败') : String(result).substring(0, 200),
+      });
+    }
+
+    res.json({ code: 200, data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
 // 仓库创建专用路由：创建后自动添加同部门成员为协作者
 // ============================================================
 router.post('/repos', authenticate, async (req, res, next) => {
