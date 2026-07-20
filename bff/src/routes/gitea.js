@@ -380,7 +380,8 @@ router.all('/*', authenticate, async (req, res, next) => {
     if (queryString) giteaUrl += '?' + queryString;
 
     // 使用用户自己的 Gitea token（同部门仓库已自动添加协作者）
-    const giteaToken = req.user?.giteaToken || '';
+    const rawToken = req.user?.giteaToken || '';
+    const giteaToken = rawToken.startsWith('Basic ') ? rawToken : (rawToken ? `token ${rawToken}` : '');
     const authHeader = giteaToken || req.headers.authorization || '';
 
     // 清除条件请求头，防止 Gitea 返回 304 空响应
