@@ -35,7 +35,7 @@
     </el-card>
 
     <div class="table-responsive">
-      <el-table :data="versionList" v-loading="loading" stripe border>
+      <el-table :data="versionList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column label="版本号" width="150">
         <template #default="{ row }">
           <div class="version-cell">
@@ -69,10 +69,15 @@
           {{ formatTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewVersionDetail(row)"><el-icon><View /></el-icon> 详情</el-button>
-          <el-button type="primary" link @click="downloadVersion(row)"><el-icon><Download /></el-icon> 下载</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="viewVersionDetail(row)"><el-icon><View /></el-icon> 详情</el-button>
+            <el-button type="primary" link @click="downloadVersion(row)"><el-icon><Download /></el-icon> 下载</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -159,6 +164,13 @@
         <el-button type="primary" @click="downloadVersion(activeVersion)"><el-icon><Download /></el-icon> 下载 ZIP</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu
+      :visible="visible"
+      :position="position"
+      :actions="currentRow ? getActions(currentRow) : []"
+      @close="closeMenu"
+    />
   </div>
 </template>
 
@@ -170,7 +182,9 @@ import { getFilteredRepos } from '@/api/bff'
 import { createApproval } from '@/api/bff'
 import request from '@/api'
 import { downloadRepoArchive } from '@/utils/download'
-import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link } from '@element-plus/icons-vue'
+import { Collection, Plus, Search, Refresh, CircleCheck, View, Download, VideoPlay, Link, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const loading = ref(false)
 const createTagDialogVisible = ref(false)
@@ -181,6 +195,15 @@ const activeVersion = ref(null)
 
 const filterForm = reactive({ repoId: '', type: '', secretLevel: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '详情', icon: View, onClick: () => viewVersionDetail(row) },
+    { label: '下载', icon: Download, onClick: () => downloadVersion(row) },
+  ]
+}
 
 const versionList = ref([])
 const repoList = ref([])
@@ -404,6 +427,10 @@ function downloadVersion(row) {
   }
 }
 
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function getAuthorName(author) {
   if (!author) return '-'
   
@@ -457,4 +484,23 @@ function formatTime(time) {
 .release-body { max-height:300px; overflow-y:auto; padding:8px; background:#fafafa; border-radius:4px; font-size:13px; line-height:1.6; word-break:break-word; }
 .release-body :deep(img) { max-width:100%; }
 .version-detail { min-height:100px; }
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
+}
 </style>

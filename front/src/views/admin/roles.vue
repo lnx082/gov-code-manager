@@ -5,7 +5,7 @@
     </div>
 
     <div class="table-responsive">
-      <el-table :data="roleList" stripe border>
+      <el-table :data="roleList" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column label="角色名称" width="150">
         <template #default="{ row }">
           {{ row.role_name || row.name || '-' }}
@@ -31,9 +31,14 @@
           {{ getPermissionCount(row.permissions) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="handleViewPermissions(row)">查看权限</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="handleViewPermissions(row)">查看权限</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -50,12 +55,17 @@
         </div>
       </div>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { View, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { getRoleList } from '@/api/admin'
 
 const roleList = ref([])
@@ -85,6 +95,19 @@ function getPermissionCount(permissions) {
   if (permissions === '*') return '全部'
   return permissions.length
 }
+
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '查看权限', icon: View, onClick: () => handleViewPermissions(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -101,5 +124,24 @@ function getPermissionCount(permissions) {
 
 .permission-tag {
   margin: 5px;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

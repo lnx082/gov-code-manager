@@ -17,7 +17,7 @@
     </el-alert>
 
     <div class="table-responsive">
-      <el-table :data="baselineList" v-loading="loading" stripe border class="baseline-table">
+      <el-table :data="baselineList" v-loading="loading" stripe border class="baseline-table" @row-contextmenu.prevent="openMenu">
       <el-table-column label="基线名称" width="200">
         <template #default="{ row }">
           <div class="baseline-cell">
@@ -46,12 +46,17 @@
           {{ formatTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
-          <el-button type="primary" link @click="handleChange(row)" v-if="row.status === 'active'">变更</el-button>
-          <el-button type="danger" link @click="handleFreeze(row)" v-if="row.status === 'active'">冻结</el-button>
-          <el-button type="warning" link @click="handleUnfreeze(row)" v-if="row.status === 'frozen' && isAdmin">解冻</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
+            <el-button type="primary" link @click="handleChange(row)" v-if="row.status === 'active'">变更</el-button>
+            <el-button type="danger" link @click="handleFreeze(row)" v-if="row.status === 'active'">冻结</el-button>
+            <el-button type="warning" link @click="handleUnfreeze(row)" v-if="row.status === 'frozen' && isAdmin">解冻</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -143,6 +148,13 @@
         <el-button type="primary" @click="submitChange">提交审批</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu
+      :visible="visible"
+      :position="position"
+      :actions="currentRow ? getActions(currentRow) : []"
+      @close="closeMenu"
+    />
   </div>
 </template>
 
@@ -150,14 +162,28 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { MoreFilled, View, Edit, Lock, Unlock } from '@element-plus/icons-vue'
 import { getBaselineList, createBaseline, freezeBaseline, unfreezeBaseline } from '@/api/admin'
 import { getTags, getMyRepos } from '@/api/gitea'
 import { createApproval } from '@/api/bff'
 import { useUserStore } from '@/stores/user'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const router = useRouter()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.role === 'admin')
+
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '详情', icon: View, onClick: () => viewDetail(row) },
+    { label: '变更', icon: Edit, visible: row.status === 'active', onClick: () => handleChange(row) },
+    { label: '冻结', icon: Lock, type: 'danger', visible: row.status === 'active', onClick: () => handleFreeze(row) },
+    { label: '解冻', icon: Unlock, type: 'warning', visible: row.status === 'frozen' && userStore.role === 'admin', onClick: () => handleUnfreeze(row) },
+  ]
+}
 
 const loading = ref(false)
 const createDialogVisible = ref(false)
@@ -447,6 +473,10 @@ async function handleUnfreeze(row) {
   }
 }
 
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function formatTime(time) {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
@@ -480,11 +510,30 @@ function formatTime(time) {
     border-radius: 6px;
     line-height: 1.6;
   }
-  
+
   .history-user {
     font-size: 12px;
     color: #909399;
     margin-top: 5px;
+  }
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
   }
 }
 </style>

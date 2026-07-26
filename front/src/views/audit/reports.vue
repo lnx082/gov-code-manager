@@ -77,7 +77,7 @@
           <span>最近报表</span>
         </div>
       </template>
-      <el-table :data="reportList" stripe border>
+      <el-table :data="reportList" stripe border @row-contextmenu.prevent="openMenu">
         <el-table-column prop="name" label="报表名称" min-width="200" />
         <el-table-column prop="dateRange" label="时间范围" width="200" />
         <el-table-column label="生成时间" width="160">
@@ -85,10 +85,15 @@
             {{ row.createdAt || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right" class="action-col">
           <template #default="{ row }">
-            <el-button type="primary" link @click="downloadReport(row)">下载</el-button>
-            <el-button type="danger" link @click="deleteReport(row)">删除</el-button>
+            <span class="action-btns-desktop">
+              <el-button type="primary" link @click="downloadReport(row)">下载</el-button>
+              <el-button type="danger" link @click="deleteReport(row)">删除</el-button>
+            </span>
+            <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+              <el-icon><MoreFilled /></el-icon>
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -164,12 +169,17 @@
         <el-button @click="showActiveDialog = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Download, Delete, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { getAuditReports, generateReport } from '@/api/audit'
 import { getAuditStats } from '@/api/bff'
 import { API_BASE_URL } from '@/config'
@@ -374,6 +384,20 @@ function formatTime(time) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '下载', icon: Download, onClick: () => downloadReport(row) },
+    { label: '删除', icon: Delete, type: 'danger', divided: true, onClick: () => deleteReport(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 </script>
 
 <style lang="scss" scoped>
@@ -429,5 +453,24 @@ function formatTime(time) {
 
 .report-card {
   margin-bottom: 20px;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

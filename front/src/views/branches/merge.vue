@@ -34,7 +34,7 @@
     </el-card>
 
     <div class="table-responsive">
-      <el-table :data="mergeRequestList" v-loading="loading" stripe border>
+      <el-table :data="mergeRequestList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column label="编号" width="80">
         <template #default="{ row }">
           <span class="mr-id">#{{ row.bffApprovalId || row.id }}</span>
@@ -74,10 +74,15 @@
           {{ formatTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewDetail(row)">查看</el-button>
-          <el-button type="warning" link @click="handleWithdraw(row)" v-if="row.status === 'pending' && (row.author === userStore.username || row.applicant_username === userStore.username)">撤回请求</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="viewDetail(row)">查看</el-button>
+            <el-button type="warning" link @click="handleWithdraw(row)" v-if="row.status === 'pending' && (row.author === userStore.username || row.applicant_username === userStore.username)">撤回请求</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -218,6 +223,8 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="menuRow ? getActions(menuRow) : []" @close="closeMenu" />
   </div>
 </template>
 
@@ -225,16 +232,32 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Link } from '@element-plus/icons-vue'
+import { MoreFilled, View, Back, Link } from '@element-plus/icons-vue'
 import { getPullRequests, getMyRepos, getBranches, createPullRequest, mergePullRequest, closePullRequest, getPullRequestFiles, getPullRequestReviews, submitPullRequestReview } from '@/api/gitea'
 import { getApprovalFlows, createApproval, processApproval, withdrawApproval } from '@/api/bff'
 import { API_BASE_URL } from '@/config'
 import { getMergeApprovals } from '@/api/approval'
 import { getUserList } from '@/api/user'
 import { useUserStore } from '@/stores/user'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const route = useRoute()
 const userStore = useUserStore()
+
+const { visible, position, currentRow: menuRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '查看', icon: View, onClick: () => viewDetail(row) },
+    { label: '撤回请求', icon: Back, type: 'warning', visible: row.status === 'pending' && (row.author === userStore.username || row.applicant_username === userStore.username), onClick: () => handleWithdraw(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 const canApprove = computed(() => {
   const role = userStore.userInfo?.role || ''
   return role === 'admin' || role === 'project_manager'
@@ -995,31 +1018,50 @@ function formatTime(time) {
     gap: 15px;
     padding: 15px;
     border-bottom: 1px solid #ebeef5;
-    
+
     .record-content {
       flex: 1;
-      
+
       .record-header {
         display: flex;
         align-items: center;
         gap: 10px;
         margin-bottom: 5px;
-        
+
         .reviewer {
           font-weight: 500;
         }
       }
-      
+
       .record-comment {
         color: #606266;
         margin-bottom: 5px;
       }
-      
+
       .record-time {
         font-size: 12px;
         color: #909399;
       }
     }
+  }
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
   }
 }
 </style>

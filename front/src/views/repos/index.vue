@@ -35,7 +35,7 @@
 
     <!-- 仓库列表 -->
     <div class="table-responsive">
-      <el-table :data="repoList" v-loading="loading" stripe border>
+      <el-table :data="repoList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column type="selection" width="50" />
       <el-table-column prop="name" label="仓库名称" min-width="180">
         <template #default="{ row }">
@@ -72,15 +72,20 @@
           {{ formatTime(row.updated_at || row.updated) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="230" fixed="right">
+      <el-table-column label="操作" width="230" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewRepo(row)">查看</el-button>
-          <el-button type="primary" link @click="cloneRepo(row)">克隆</el-button>
-          <el-button
-            v-if="userStore.hasPermission('admin:manage')"
-            type="danger" link
-            @click="handleDeleteRepo(row)"
-          >删除</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="viewRepo(row)">查看</el-button>
+            <el-button type="primary" link @click="cloneRepo(row)">克隆</el-button>
+            <el-button
+              v-if="userStore.hasPermission('admin:manage')"
+              type="danger" link
+              @click="handleDeleteRepo(row)"
+            >删除</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -121,18 +126,27 @@
         <el-button type="primary" @click="cloneDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu
+      :visible="visible"
+      :position="position"
+      :actions="currentRow ? getActions(currentRow) : []"
+      @close="closeMenu"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { Folder, Plus, Refresh } from '@element-plus/icons-vue'
+import { Folder, Plus, Refresh, MoreFilled, View, Download, Delete } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getFilteredRepos } from '@/api/bff'
 import { deleteRepo } from '@/api/gitea'
 import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -159,6 +173,16 @@ const pagination = reactive({
   pageSize: 10,
   total: 0
 })
+
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '查看', icon: View, onClick: () => viewRepo(row) },
+    { label: '克隆', icon: Download, onClick: () => cloneRepo(row) },
+    { label: '删除', icon: Delete, type: 'danger', divided: true, visible: userStore.hasPermission('admin:manage'), onClick: () => handleDeleteRepo(row) },
+  ]
+}
 
 onMounted(() => {
   loadRepos()
@@ -281,6 +305,10 @@ function getSecretLevelName(level) {
   return map[level] || level || '未知'
 }
 
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function formatTime(time) {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
@@ -327,12 +355,31 @@ function formatTime(time) {
   background: #282c34;
   border-radius: 6px;
   padding: 12px;
-  
+
   pre {
     margin: 0;
     color: #abb2bf;
     font-family: 'Monaco', monospace;
     font-size: 13px;
+  }
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
   }
 }
 </style>

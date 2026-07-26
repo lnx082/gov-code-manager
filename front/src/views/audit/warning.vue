@@ -41,7 +41,8 @@
       </el-form>
     </el-card>
 
-    <el-table :data="warningList" v-loading="loading" stripe border>
+    <div class="table-responsive">
+      <el-table :data="warningList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column label="级别" width="100">
         <template #default="{ row }">
           <el-tag :type="getLevelTagType(row.level)" size="small">
@@ -74,14 +75,20 @@
           {{ row.handler || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="handleWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">处理</el-button>
-          <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
-          <el-button type="danger" link @click="ignoreWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">忽略</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="handleWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">处理</el-button>
+            <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
+            <el-button type="danger" link @click="ignoreWarning(row)" v-if="row.status === 'unhandled' || row.status === 'pending'">忽略</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="pagination-wrapper">
       <el-pagination
@@ -133,13 +140,18 @@
         <el-button @click="showDetailDialog = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="menuRow ? getActions(menuRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { MoreFilled, View, Check, Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getRiskWarnings, handleRiskWarning } from '@/api/bff'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const loading = ref(false)
 const handleDialogVisible = ref(false)
@@ -164,6 +176,20 @@ const handleForm = reactive({
   action: 'notify',
   comment: ''
 })
+
+const { visible, position, currentRow: menuRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '处理', icon: Check, visible: row.status === 'unhandled' || row.status === 'pending', onClick: () => handleWarning(row) },
+    { label: '详情', icon: View, onClick: () => viewDetail(row) },
+    { label: '忽略', icon: Close, type: 'danger', divided: true, visible: row.status === 'unhandled' || row.status === 'pending', onClick: () => ignoreWarning(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
 
 const warningCount = computed(() => warningList.value.filter(w => w.status === 'pending').length)
 
@@ -299,5 +325,24 @@ function getStatusName(status) {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

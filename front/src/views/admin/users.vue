@@ -31,7 +31,7 @@
     </el-card>
 
     <div class="table-responsive">
-      <el-table :data="userList" v-loading="loading" stripe border>
+      <el-table :data="userList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column prop="gitea_username" label="用户名" min-width="150">
         <template #default="{ row }">
           <div class="user-cell">
@@ -76,15 +76,20 @@
           {{ formatTime(row.last_login_time) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right" class="action-col">
         <template #default="{ row }">
           <template v-if="row.role_code !== 'admin'">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="warning" link @click="handleResetPassword(row)">重置密码</el-button>
-            <el-button type="danger" link @click="handleLock(row)">
-              {{ row.account_locked ? '解锁' : '锁定' }}
+            <span class="action-btns-desktop">
+              <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+              <el-button type="warning" link @click="handleResetPassword(row)">重置密码</el-button>
+              <el-button type="danger" link @click="handleLock(row)">
+                {{ row.account_locked ? '解锁' : '锁定' }}
+              </el-button>
+              <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            </span>
+            <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+              <el-icon><MoreFilled /></el-icon>
             </el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
           <el-tag v-else type="danger" size="small">系统管理员不可操作</el-tag>
         </template>
@@ -220,13 +225,17 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UserFilled } from '@element-plus/icons-vue'
+import { UserFilled, MoreFilled, Edit, Lock, Unlock, Delete } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { getUserList, createUser, updateUser, deleteUser, lockUser, resetUserPassword } from '@/api/bff'
 import { getRoles } from '@/api/bff'
 import { getDepartments } from '@/api/bff'
@@ -560,6 +569,23 @@ const roleNameMap = {
 function getRoleName(row) {
   return row.role_name || roleNameMap[row.role_code] || '开发人员'
 }
+
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  if (row.role_code === 'admin') return []
+  return [
+    { label: '编辑', icon: Edit, onClick: () => handleEdit(row) },
+    { label: '重置密码', icon: Lock, onClick: () => handleResetPassword(row) },
+    { label: row.account_locked ? '解锁' : '锁定', icon: row.account_locked ? Unlock : Lock, type: 'danger', onClick: () => handleLock(row) },
+    { label: '删除', icon: Delete, type: 'danger', divided: true, onClick: () => handleDelete(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -590,5 +616,24 @@ function getRoleName(row) {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

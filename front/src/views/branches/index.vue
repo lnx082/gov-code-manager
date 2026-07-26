@@ -59,7 +59,7 @@
     </el-card>
 
     <div class="table-responsive">
-      <el-table :data="branchList" v-loading="loading" stripe border>
+      <el-table :data="branchList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column label="分支名称" min-width="180">
         <template #default="{ row }">
           <div class="branch-cell">
@@ -89,13 +89,18 @@
           {{ formatTime(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right" class="action-col">
         <template #default="{ row }">
-          <div class="action-buttons">
-            <el-button size="small" @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
-            <el-button size="small" type="success" plain @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
-            <el-button size="small" type="danger" plain @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
-          </div>
+          <span class="action-btns-desktop">
+            <div class="action-buttons">
+              <el-button size="small" @click="viewBranch(row)"><el-icon><View /></el-icon> 查看</el-button>
+              <el-button size="small" type="success" plain @click="createMerge(row)"><el-icon><Connection /></el-icon> 合并</el-button>
+              <el-button size="small" type="danger" plain @click="deleteBranch(row)"><el-icon><Delete /></el-icon> 删除</el-button>
+            </div>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -131,6 +136,13 @@
         <el-button type="danger" @click="handleCreateBranch">创建</el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu
+      :visible="visible"
+      :position="position"
+      :actions="currentRow ? getActions(currentRow) : []"
+      @close="closeMenu"
+    />
   </div>
 </template>
 
@@ -140,7 +152,9 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBranches as getGiteaBranches } from '@/api/gitea'
 import { getFilteredRepos } from '@/api/bff'
-import { Share, Plus, Search, Refresh, View, Connection, Delete } from '@element-plus/icons-vue'
+import { Share, Plus, Search, Refresh, View, Connection, Delete, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const router = useRouter()
 const loading = ref(false)
@@ -151,6 +165,16 @@ const stats = reactive({ total: 0, protected: 0, active: 0, pending: 0 })
 const filterForm = reactive({ repoId: '', type: '' })
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '查看', icon: View, onClick: () => viewBranch(row) },
+    { label: '合并', icon: Connection, onClick: () => createMerge(row) },
+    { label: '删除', icon: Delete, type: 'danger', divided: true, onClick: () => deleteBranch(row) },
+  ]
+}
 
 const branchList = ref([])
 const repoList = ref([])
@@ -297,6 +321,10 @@ function deleteBranch(row) {
     })
 }
 
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function formatTime(time) {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
@@ -341,5 +369,24 @@ function formatTime(time) {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

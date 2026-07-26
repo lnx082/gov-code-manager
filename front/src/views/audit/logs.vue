@@ -61,7 +61,7 @@
     </el-alert>
 
     <div class="table-responsive">
-      <el-table :data="logList" v-loading="loading" stripe border>
+      <el-table :data="logList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column type="index" width="50" />
       <el-table-column label="时间" width="180">
         <template #default="{ row }">
@@ -90,9 +90,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="100" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -131,12 +136,17 @@
         </el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { View, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { getAuditLogs, exportAuditLogs } from '@/api/audit'
 import { getUserList, getFilteredRepos } from '@/api/bff'
 
@@ -306,6 +316,19 @@ function formatTime(time) {
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
+
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '详情', icon: View, onClick: () => viewDetail(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
 </script>
 
 <style lang="scss" scoped>
@@ -346,5 +369,24 @@ function formatTime(time) {
   overflow-x: auto;
   max-height: 200px;
   margin: 0;
+}
+
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
 }
 </style>

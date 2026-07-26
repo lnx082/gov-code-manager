@@ -9,7 +9,7 @@
     </div>
 
     <div class="table-responsive">
-      <el-table :data="deptList" stripe border row-key="dept_id">
+      <el-table :data="deptList" stripe border row-key="dept_id" @row-contextmenu.prevent="openMenu">
       <el-table-column prop="name" label="部门名称" />
       <el-table-column prop="leader" label="负责人" width="120" />
       <el-table-column prop="description" label="描述" show-overflow-tooltip />
@@ -20,10 +20,15 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right" class="action-col">
         <template #default="{ row }">
-          <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-          <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          <span class="action-btns-desktop">
+            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          </span>
+          <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -53,12 +58,17 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Edit, Delete, MoreFilled } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { getDeptList, createDept, updateDept, deleteDept } from '@/api/admin'
 
 const deptList = ref([])
@@ -170,4 +180,39 @@ async function handleDelete(row) {
     }
   }
 }
+
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '编辑', icon: Edit, onClick: () => handleEdit(row) },
+    { label: '删除', icon: Delete, type: 'danger', divided: true, onClick: () => handleDelete(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
 </script>
+
+<style lang="scss" scoped>
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
+@media (max-width: 768px) {
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
+  }
+}
+</style>
