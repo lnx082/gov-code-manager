@@ -55,18 +55,25 @@
         <span>会话管理</span>
       </template>
       <div class="table-responsive">
-        <el-table :data="sessions" stripe>
+        <el-table :data="sessions" stripe @row-contextmenu.prevent="openMenu">
           <el-table-column prop="ip_address" label="登录IP" />
           <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip />
           <el-table-column prop="created_at" label="登录时间" />
-          <el-table-column label="操作">
+          <el-table-column label="操作" class="action-col">
             <template #default="{ row }">
-              <el-button type="danger" link @click="handleDeleteSession(row)">删除</el-button>
+              <span class="action-btns-desktop">
+                <el-button type="danger" link @click="handleDeleteSession(row)">删除</el-button>
+              </span>
+              <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+                <el-icon><MoreFilled /></el-icon>
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
       </div>
     </el-card>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
@@ -79,6 +86,9 @@
  */
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { MoreFilled, Delete } from '@element-plus/icons-vue'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 import { useUserStore } from '@/stores/user'
 import { getMySessions, deleteSession, updateUser, changePassword, getUserInfo } from '@/api/user'
 import { useResponsive } from '@/composables/useResponsive'
@@ -190,6 +200,19 @@ async function handleDeleteSession(row) {
   }
 }
 
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  return [
+    { label: '删除', icon: Delete, type: 'danger', onClick: () => handleDeleteSession(row) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function getSecretLevelName(level) {
   const map = { 'public': '公开', 'internal': '秘密', 'secret': '秘密', 'confidential': '机密', 'top-secret': '绝密' }
   return map[level] || level || '秘密'
@@ -206,9 +229,25 @@ function formatTime(time) {
   margin-top: 20px;
 }
 
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
 @media (max-width: 768px) {
   .profile-container {
     padding: 12px;
+  }
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
   }
 }
 </style>

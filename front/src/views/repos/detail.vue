@@ -111,15 +111,20 @@
             </el-form>
           </el-card>
           <el-card style="margin-top:16px"><template #header>分支保护</template>
-            <el-table :data="branchList" stripe>
+            <el-table :data="branchList" stripe @row-contextmenu.prevent="openMenu">
               <el-table-column prop="name" label="分支名称" width="200" />
               <el-table-column label="保护状态" width="120">
                 <template #default="{ row }"><el-tag :type="row.isProtected?'danger':'info'" size="small">{{ row.isProtected?'已保护':'未保护' }}</el-tag></template>
               </el-table-column>
-              <el-table-column label="操作" width="200">
+              <el-table-column label="操作" width="200" class="action-col">
                 <template #default="{ row }">
-                  <el-button v-if="!row.isProtected" type="primary" size="small" @click="toggleBranchProtect(row, true)">启用保护</el-button>
-                  <el-button v-else type="warning" size="small" @click="toggleBranchProtect(row, false)">取消保护</el-button>
+                  <span class="action-btns-desktop">
+                    <el-button v-if="!row.isProtected" type="primary" size="small" @click="toggleBranchProtect(row, true)">启用保护</el-button>
+                    <el-button v-else type="warning" size="small" @click="toggleBranchProtect(row, false)">取消保护</el-button>
+                  </span>
+                  <el-button class="action-more-btn" size="small" @click.stop="onTrigger(row, $event)">
+                    <el-icon><MoreFilled /></el-icon>
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -205,6 +210,8 @@
       </el-form>
       <template #footer><el-button @click="addMemberDialogVisible=false">取消</el-button><el-button type="primary" @click="handleAddMember" :loading="addMemberLoading">添加</el-button></template>
     </el-dialog>
+
+    <RowContextMenu :visible="visible" :position="position" :actions="currentRow ? getActions(currentRow) : []" @close="closeMenu" />
   </div>
 </template>
 
@@ -212,13 +219,15 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Connection, Link, Right, Avatar, Plus, Setting } from '@element-plus/icons-vue'
+import { FolderOpened, Folder, User, Clock, Download, Document, Share, Collection, View, Connection, Link, Right, Avatar, Plus, Setting, MoreFilled, Lock, Unlock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getRepo, getContents, getBranches, getTags, getCommits, getFileContent, getCommitDiff, getPullRequests, getRepoMembers, addRepoMember, updateRepo, getBranchProtection, updateBranchProtection, getTag, getReleases } from '@/api/gitea'
 import { getLastCommits } from '@/api/bff'
 import { GITEA_URL, GITEA_SSH_HOST } from '@/config'
 import { downloadRepoArchive } from '@/utils/download'
 import { useResponsive } from '@/composables/useResponsive'
+import RowContextMenu from '@/components/RowContextMenu.vue'
+import { useRowContextMenu } from '@/composables/useRowContextMenu'
 
 const route = useRoute(), router = useRouter(), userStore = useUserStore()
 const { isMobile } = useResponsive()
@@ -528,6 +537,24 @@ async function handleAddMember() {
   finally{addMemberLoading.value=false}
 }
 
+// 移动端溢出菜单
+const { visible, position, currentRow, openMenu, closeMenu } = useRowContextMenu()
+
+function getActions(row) {
+  if (row.isProtected) {
+    return [
+      { label: '取消保护', icon: Unlock, type: 'warning', onClick: () => toggleBranchProtect(row, false) }
+    ]
+  }
+  return [
+    { label: '启用保护', icon: Lock, type: 'primary', onClick: () => toggleBranchProtect(row, true) }
+  ]
+}
+
+function onTrigger(row, event) {
+  openMenu(row, event)
+}
+
 function getAuthorName(author) { if(!author)return'-'; if(typeof author==='string'){ try{ const p=JSON.parse(author); return p.login||p.username||'-' }catch{ return author } } return author.login||author.username||'-' }
 function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-CN') }
 </script>
@@ -601,6 +628,9 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
   100% { background-position: -200% 0; }
 }
 
+.action-btns-desktop { display: inline; }
+.action-more-btn { display: none; }
+
 @media (max-width: 768px) {
   .repo-header {
     flex-direction: column;
@@ -645,6 +675,19 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
   .diff-patch {
     max-height: 200px;
     font-size: 11px;
+  }
+  .action-btns-desktop { display: none; }
+  .action-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+  }
+  :deep(.action-col) {
+    width: 50px !important;
+    min-width: 50px !important;
   }
 }
 </style>
