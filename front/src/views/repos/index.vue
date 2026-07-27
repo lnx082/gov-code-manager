@@ -45,29 +45,29 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="主管部门" width="120">
+      <el-table-column label="主管部门" width="120" class="col-hide-mobile">
         <template #default="{ row }">
           {{ row.department || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="保密等级" width="100" align="center">
+      <el-table-column label="保密等级" width="100" align="center" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getSecretLevelTagType(row.secretLevel)" size="small">
             {{ getSecretLevelName(row.secretLevel) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="分支" width="80" align="center">
+      <el-table-column label="分支" width="80" align="center" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag type="info" size="small">{{ row.branches_count || 0 }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Stars" width="80" align="center">
+      <el-table-column label="Stars" width="80" align="center" class="col-hide-mobile">
         <template #default="{ row }">
           <span>{{ row.stars_count || 0 }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="更新时间" width="160">
+      <el-table-column label="更新时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.updated_at || row.updated) }}
         </template>
@@ -376,10 +376,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

@@ -39,7 +39,7 @@
     <div class="table-responsive">
       <el-table :data="myRequests" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column type="index" width="50" />
-      <el-table-column label="类型" width="100">
+      <el-table-column label="类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getTypeTagType(row.operation_type)" size="small">
             {{ getTypeName(row.operation_type) }}
@@ -55,26 +55,26 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column label="状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getStatusTagType(row.status)" size="small">
             {{ getStatusName(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="审批进度" width="150">
+      <el-table-column label="审批进度" width="150" class="col-hide-mobile">
         <template #default="{ row }">
           <el-progress :percentage="getProgress(row)" :color="getProgressColor(getProgress(row))" />
         </template>
       </el-table-column>
-      <el-table-column label="紧急程度" width="100">
+      <el-table-column label="紧急程度" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getUrgencyType(row.urgency)" size="small">
             {{ getUrgencyName(row.urgency) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="申请时间" width="160">
+      <el-table-column label="申请时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.created_at) }}
         </template>
@@ -333,10 +333,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

@@ -11,22 +11,22 @@
           {{ row.role_name || row.name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" show-overflow-tooltip min-width="200" />
-      <el-table-column label="类型" width="100">
+      <el-table-column prop="description" label="描述" show-overflow-tooltip min-width="200" class="col-hide-mobile" />
+      <el-table-column label="类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.is_system ? 'primary' : 'info'" size="small">
             {{ row.is_system ? '系统' : '自定义' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column label="状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
             {{ row.is_active ? '启用' : '禁用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="权限数量" width="100">
+      <el-table-column label="权限数量" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           {{ getPermissionCount(row.permissions) }}
         </template>
@@ -138,10 +138,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

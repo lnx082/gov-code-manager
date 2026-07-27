@@ -11,9 +11,9 @@
     <div class="table-responsive">
       <el-table :data="deptList" stripe border row-key="dept_id" @row-contextmenu.prevent="openMenu">
       <el-table-column prop="name" label="部门名称" />
-      <el-table-column prop="leader" label="负责人" width="120" />
-      <el-table-column prop="description" label="描述" show-overflow-tooltip />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="leader" label="负责人" width="120" class="col-hide-mobile" />
+      <el-table-column prop="description" label="描述" show-overflow-tooltip class="col-hide-mobile" />
+      <el-table-column label="状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
             {{ row.is_active ? '启用' : '禁用' }}
@@ -209,10 +209,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

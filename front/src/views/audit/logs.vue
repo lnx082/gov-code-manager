@@ -63,13 +63,13 @@
     <div class="table-responsive">
       <el-table :data="logList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column type="index" width="50" />
-      <el-table-column label="时间" width="180">
+      <el-table-column label="时间" width="180" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.timestamp) }}
         </template>
       </el-table-column>
-      <el-table-column prop="username" label="操作用户" width="120" />
-      <el-table-column label="操作类型" width="100">
+      <el-table-column prop="username" label="操作用户" width="120" class="col-hide-mobile" />
+      <el-table-column label="操作类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getActionTypeTag(row.actionType)" size="small">{{ getActionTypeName(row.actionType) }}</el-tag>
         </template>
@@ -82,8 +82,8 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="ip" label="IP地址" width="140" />
-      <el-table-column label="结果" width="100">
+      <el-table-column prop="ip" label="IP地址" width="140" class="col-hide-mobile" />
+      <el-table-column label="结果" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.success ? 'success' : 'danger'" size="small">
             {{ row.success ? '成功' : '失败' }}
@@ -383,10 +383,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

@@ -43,14 +43,14 @@
 
     <div class="table-responsive">
       <el-table :data="warningList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
-      <el-table-column label="级别" width="100">
+      <el-table-column label="级别" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getLevelTagType(row.level)" size="small">
             {{ getLevelName(row.level) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="120">
+      <el-table-column label="类型" width="120" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag type="warning" size="small">{{ getTypeName(row.type) }}</el-tag>
         </template>
@@ -63,14 +63,14 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column label="状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="(row.status === 'unhandled' || row.status === 'pending') ? 'warning' : 'info'" size="small">
             {{ getStatusName(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="处理人" width="100">
+      <el-table-column label="处理人" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           {{ row.handler || '-' }}
         </template>
@@ -339,10 +339,6 @@ function getStatusName(status) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

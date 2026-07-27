@@ -57,7 +57,7 @@
       <div class="table-responsive">
         <el-table :data="sessions" stripe @row-contextmenu.prevent="openMenu">
           <el-table-column prop="ip_address" label="登录IP" />
-          <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip />
+          <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip class="col-hide-mobile" />
           <el-table-column prop="created_at" label="登录时间" />
           <el-table-column label="操作" class="action-col">
             <template #default="{ row }">
@@ -244,10 +244,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

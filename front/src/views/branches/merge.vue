@@ -52,7 +52,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="repoName" label="仓库" width="180" />
+      <el-table-column prop="repoName" label="仓库" width="180" class="col-hide-mobile" />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="getStatusType(row.status)" size="small">
@@ -60,7 +60,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="审批进度" width="150">
+      <el-table-column label="审批进度" width="150" class="col-hide-mobile">
         <template #default="{ row }">
           <div class="approval-progress">
             <el-progress :percentage="row.approvalRate" :color="getProgressColor(row.approvalRate)" />
@@ -68,8 +68,8 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="author" label="申请人" width="100" />
-      <el-table-column label="创建时间" width="160">
+      <el-table-column prop="author" label="申请人" width="100" class="col-hide-mobile" />
+      <el-table-column label="创建时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.createdAt) }}
         </template>
@@ -1058,10 +1058,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

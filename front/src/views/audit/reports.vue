@@ -79,8 +79,8 @@
       </template>
       <el-table :data="reportList" stripe border @row-contextmenu.prevent="openMenu">
         <el-table-column prop="name" label="报表名称" min-width="200" />
-        <el-table-column prop="dateRange" label="时间范围" width="200" />
-        <el-table-column label="生成时间" width="160">
+        <el-table-column prop="dateRange" label="时间范围" width="200" class="col-hide-mobile" />
+        <el-table-column label="生成时间" width="160" class="col-hide-mobile">
           <template #default="{ row }">
             {{ row.createdAt || '-' }}
           </template>
@@ -467,10 +467,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

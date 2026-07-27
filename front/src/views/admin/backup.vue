@@ -11,33 +11,33 @@
     <div class="table-responsive">
       <el-table :data="backupList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column prop="name" label="备份名称" />
-      <el-table-column label="类型" width="100">
+      <el-table-column label="类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.type === 'manual' ? 'primary' : 'info'" size="small">
             {{ row.type === 'manual' ? '手动' : '自动' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="大小" width="120">
+      <el-table-column label="大小" width="120" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatSize(row.file_size) }}
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column label="状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getStatusType(row.status)" size="small">
             {{ getStatusName(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="进度" width="150">
+      <el-table-column label="进度" width="150" class="col-hide-mobile">
         <template #default="{ row }">
           <el-progress v-if="row.status === 'running'" :percentage="row.progress" />
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="created_by" label="创建人" width="120" />
-      <el-table-column label="创建时间" width="160">
+      <el-table-column prop="created_by" label="创建人" width="120" class="col-hide-mobile" />
+      <el-table-column label="创建时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.start_time) }}
         </template>
@@ -200,10 +200,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

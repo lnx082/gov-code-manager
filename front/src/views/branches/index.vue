@@ -70,12 +70,12 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="所属仓库" width="180">
+      <el-table-column label="所属仓库" width="180" class="col-hide-mobile">
         <template #default="{ row }">
           {{ row.displayName || row.repoName }}
         </template>
       </el-table-column>
-      <el-table-column label="最新提交" min-width="200">
+      <el-table-column label="最新提交" min-width="200" class="col-hide-mobile">
         <template #default="{ row }">
           <div class="commit-cell">
             <el-tag type="info" size="small">{{ row.sha?.substring(0, 7) }}</el-tag>
@@ -83,8 +83,8 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="author" label="创建者" width="100" />
-      <el-table-column label="更新时间" width="160">
+      <el-table-column prop="author" label="创建者" width="100" class="col-hide-mobile" />
+      <el-table-column label="更新时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.updatedAt) }}
         </template>
@@ -383,10 +383,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

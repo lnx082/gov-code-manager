@@ -113,7 +113,7 @@
           <el-card style="margin-top:16px"><template #header>分支保护</template>
             <el-table :data="branchList" stripe @row-contextmenu.prevent="openMenu">
               <el-table-column prop="name" label="分支名称" width="200" />
-              <el-table-column label="保护状态" width="120">
+              <el-table-column label="保护状态" width="120" class="col-hide-mobile">
                 <template #default="{ row }"><el-tag :type="row.isProtected?'danger':'info'" size="small">{{ row.isProtected?'已保护':'未保护' }}</el-tag></template>
               </el-table-column>
               <el-table-column label="操作" width="200" class="action-col">
@@ -684,10 +684,6 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

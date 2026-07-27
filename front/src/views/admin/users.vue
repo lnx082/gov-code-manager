@@ -40,17 +40,17 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="角色" width="120">
+      <el-table-column label="角色" width="120" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag type="primary" size="small">{{ getRoleName(row) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="department_name" label="部门" width="120">
+      <el-table-column prop="department_name" label="部门" width="120" class="col-hide-mobile">
         <template #default="{ row }">
           {{ row.department_name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="保密权限" width="100">
+      <el-table-column label="保密权限" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getSecretLevelType(row.secret_level)" size="small">
             {{ getSecretLevelName(row.secret_level) }}
@@ -64,14 +64,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="账户状态" width="100">
+      <el-table-column label="账户状态" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.account_locked ? 'danger' : 'success'" size="small">
             {{ row.account_locked ? '已锁定' : '正常' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="最后登录" width="160">
+      <el-table-column label="最后登录" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.last_login_time) }}
         </template>
@@ -630,10 +630,6 @@ function onTrigger(row, event) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

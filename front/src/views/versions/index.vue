@@ -44,27 +44,27 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="message" label="版本说明" min-width="200" show-overflow-tooltip />
-      <el-table-column label="所属仓库" width="180">
+      <el-table-column prop="message" label="版本说明" min-width="200" show-overflow-tooltip class="col-hide-mobile" />
+      <el-table-column label="所属仓库" width="180" class="col-hide-mobile">
         <template #default="{ row }">
           {{ row.displayName || row.repoName }}
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="100">
+      <el-table-column label="类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="row.type === 'release' ? 'success' : 'warning'" size="small">
             {{ row.type === 'release' ? '正式' : '测试' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="是否基线" width="100">
+      <el-table-column label="是否基线" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag v-if="row.isBaseline" type="success" size="small"><el-icon><CircleCheck /></el-icon> 基线</el-tag>
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="author" label="创建者" width="100" />
-      <el-table-column label="创建时间" width="160">
+      <el-table-column prop="author" label="创建者" width="100" class="col-hide-mobile" />
+      <el-table-column label="创建时间" width="160" class="col-hide-mobile">
         <template #default="{ row }">
           {{ formatTime(row.createdAt) }}
         </template>
@@ -497,10 +497,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>

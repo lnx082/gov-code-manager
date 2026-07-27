@@ -29,7 +29,7 @@
     <div class="table-responsive">
       <el-table :data="pendingList" v-loading="loading" stripe border @row-contextmenu.prevent="openMenu">
       <el-table-column type="index" width="50" label="序号" />
-      <el-table-column label="类型" width="100">
+      <el-table-column label="类型" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getTypeTagType(row.operation_type)" size="small">
             {{ getTypeName(row.operation_type) }}
@@ -46,7 +46,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="紧急程度" width="100">
+      <el-table-column label="紧急程度" width="100" class="col-hide-mobile">
         <template #default="{ row }">
           <el-tag :type="getUrgencyType(row.urgency)" size="small">
             {{ getUrgencyName(row.urgency) }}
@@ -382,10 +382,6 @@ function formatTime(time) {
     min-width: 32px;
     height: 28px;
     padding: 0 6px;
-  }
-  :deep(.action-col) {
-    width: 50px !important;
-    min-width: 50px !important;
   }
 }
 </style>
