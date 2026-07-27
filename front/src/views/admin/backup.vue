@@ -42,7 +42,7 @@
           {{ formatTime(row.start_time) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right" class="action-col">
+      <el-table-column label="操作" width="50" fixed="right" class="action-col">
         <template #default="{ row }">
           <span class="action-btns-desktop">
             <el-button type="primary" link @click="handleRestore(row)" :disabled="row.status !== 'completed'">恢复</el-button>
@@ -201,5 +201,8 @@ function onTrigger(row, event) {
     height: 28px;
     padding: 0 6px;
   }
+}
+@media (min-width: 769px) {
+  .action-col { width: 200px !important; }
 }
 </style>

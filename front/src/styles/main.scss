@@ -864,11 +864,23 @@ html, body {
     }
   }
 
-  /* ② fixed="right" 包裹层：宽度与列匹配，底部裁掉一截留给横向滚动条 */
-  .el-table__fixed-right {
+  /* ② fixed="right" 包裹层 + 内部表格 + colgroup：全部锁死 36px */
+  .el-table__fixed-right,
+  .el-table__fixed-right-patch {
     width: 36px !important;
     height: calc(100% - 12px) !important;
     bottom: 12px !important;
+  }
+  .el-table__fixed-right .el-table__fixed-header-wrapper,
+  .el-table__fixed-right .el-table__fixed-body-wrapper {
+    width: 36px !important;
+    overflow: hidden;
+  }
+  .el-table__fixed-right table {
+    width: 36px !important;
+  }
+  .el-table__fixed-right colgroup col:last-child {
+    width: 36px !important;
   }
 
   /* ③ 去掉 fixed 右侧的阴影分隔线 */

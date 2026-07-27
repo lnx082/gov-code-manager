@@ -79,7 +79,7 @@
           {{ formatTime(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right" class="action-col">
+      <el-table-column label="操作" width="50" fixed="right" class="action-col">
         <template #default="{ row }">
           <span class="action-btns-desktop">
             <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
@@ -334,5 +334,8 @@ function formatTime(time) {
     height: 28px;
     padding: 0 6px;
   }
+}
+@media (min-width: 769px) {
+  .action-col { width: 180px !important; }
 }
 </style>

@@ -116,7 +116,7 @@
               <el-table-column label="保护状态" width="120" class="col-hide-mobile">
                 <template #default="{ row }"><el-tag :type="row.isProtected?'danger':'info'" size="small">{{ row.isProtected?'已保护':'未保护' }}</el-tag></template>
               </el-table-column>
-              <el-table-column label="操作" width="200" class="action-col">
+              <el-table-column label="操作" width="50" class="action-col">
                 <template #default="{ row }">
                   <span class="action-btns-desktop">
                     <el-button v-if="!row.isProtected" type="primary" size="small" @click="toggleBranchProtect(row, true)">启用保护</el-button>
@@ -685,5 +685,8 @@ function formatTime(t) { if(!t)return'-'; return new Date(t).toLocaleString('zh-
     height: 28px;
     padding: 0 6px;
   }
+}
+@media (min-width: 769px) {
+  .action-col { width: 200px !important; }
 }
 </style>

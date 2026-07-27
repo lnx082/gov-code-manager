@@ -76,7 +76,7 @@
           {{ formatTime(row.last_login_time) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right" class="action-col">
+      <el-table-column label="操作" width="50" fixed="right" class="action-col">
         <template #default="{ row }">
           <template v-if="row.role_code !== 'admin'">
             <span class="action-btns-desktop">
@@ -631,5 +631,8 @@ function onTrigger(row, event) {
     height: 28px;
     padding: 0 6px;
   }
+}
+@media (min-width: 769px) {
+  .action-col { width: 280px !important; }
 }
 </style>
