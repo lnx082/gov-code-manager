@@ -72,7 +72,7 @@
           {{ formatTime(row.updated_at || row.updated) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="50" fixed="right" class="action-col">
+      <el-table-column label="操作" width="230" fixed="right" class="action-col">
         <template #default="{ row }">
           <span class="action-btns-desktop">
             <el-button type="primary" link @click="viewRepo(row)">查看</el-button>
@@ -377,8 +377,5 @@ function formatTime(time) {
     height: 28px;
     padding: 0 6px;
   }
-}
-@media (min-width: 769px) {
-  .action-col { width: 230px !important; }
 }
 </style>

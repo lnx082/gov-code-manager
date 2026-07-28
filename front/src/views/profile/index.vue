@@ -59,7 +59,7 @@
           <el-table-column prop="ip_address" label="登录IP" />
           <el-table-column prop="user_agent" label="登录设备" show-overflow-tooltip class="col-hide-mobile" />
           <el-table-column prop="created_at" label="登录时间" />
-          <el-table-column label="操作" width="50" class="action-col">
+          <el-table-column label="操作" class="action-col">
             <template #default="{ row }">
               <span class="action-btns-desktop">
                 <el-button type="danger" link @click="handleDeleteSession(row)">删除</el-button>

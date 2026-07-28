@@ -834,56 +834,78 @@ html, body {
     font-size: 13px;
   }
 
-  /* ── 操作列手机端极窄化：红色⋮ 36px，固定右列不挡滚动条 ── */
+  /* ── 操作列手机端极窄化：44px 白底红框 ⋮ ── */
 
-  /* ① 列头+单元格：强制极窄宽度 */
+  /* ① 干掉隐形杀手：表头"操作"文字 + 默认 padding → 最小宽度飙到 48px+ */
+  .el-table th.action-col {
+    padding: 0 !important;
+    .cell {
+      padding: 0 !important;
+      font-size: 0 !important;   /* 抹掉"操作"文字，释放源头压力 */
+    }
+  }
+
+  /* ② 列+单元格：44px 锁死，Flex 居中按钮 */
   .el-table .action-col {
-    width: 36px !important;
-    min-width: 36px !important;
-    max-width: 36px !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
 
     .cell {
       padding: 0 !important;
-      display: flex;
+      display: flex !important;
       justify-content: center;
       align-items: center;
     }
 
     .action-more-btn {
-      width: 24px;
-      height: 24px;
-      min-width: 24px;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
       padding: 0;
-      font-size: 16px;
+      font-size: 18px;
       color: #c62828;
       border-color: #c62828;
       background: #fff;
+      flex-shrink: 0;
       &:hover { background: #ffebee; }
     }
   }
 
-  /* ② fixed="right" 包裹层 + 内部表格 + colgroup：全部锁死 36px */
+  /* ③ fixed="right" 包裹层 + 内部 table + colgroup：全部锁死 44px，强制贴右 */
   .el-table__fixed-right,
   .el-table__fixed-right-patch {
-    width: 36px !important;
+    position: absolute !important;
+    right: 0 !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
     height: calc(100% - 12px) !important;
     bottom: 12px !important;
+    overflow: hidden !important;
   }
   .el-table__fixed-right .el-table__fixed-header-wrapper,
   .el-table__fixed-right .el-table__fixed-body-wrapper {
-    width: 36px !important;
-    overflow: hidden;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    overflow: hidden !important;
   }
   .el-table__fixed-right table {
-    width: 36px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
   }
-  .el-table__fixed-right colgroup col:last-child {
-    width: 36px !important;
+  .el-table__fixed-right colgroup col {
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+  .el-table__fixed-right .gutter {
+    display: none !important;
   }
 
-  /* ③ 去掉 fixed 右侧的阴影分隔线 */
+  /* ④ 去掉 fixed 右侧阴影 */
   .el-table__fixed-right::before {
     display: none !important;
   }
@@ -891,16 +913,5 @@ html, body {
   /* ── 手机端隐藏次要数据列，让主要内容列占满宽度 ── */
   .el-table .col-hide-mobile {
     display: none !important;
-  }
-
-  /* 手机端表格用 auto 布局：内容列自适应扩展，操作列保持最窄 */
-  .el-table {
-    table-layout: auto !important;
-  }
-
-  /* 手机端：非操作列去掉固定宽度限制，内容优先分配空间 */
-  .el-table .el-table__header-wrapper th:not(.action-col),
-  .el-table .el-table__body-wrapper td:not(.action-col) {
-    width: auto !important;
   }
 }

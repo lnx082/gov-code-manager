@@ -89,7 +89,7 @@
           {{ formatTime(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="50" fixed="right" class="action-col">
+      <el-table-column label="操作" width="240" fixed="right" class="action-col">
         <template #default="{ row }">
           <span class="action-btns-desktop">
             <div class="action-buttons">
@@ -384,8 +384,5 @@ function formatTime(time) {
     height: 28px;
     padding: 0 6px;
   }
-}
-@media (min-width: 769px) {
-  .action-col { width: 240px !important; }
 }
 </style>
